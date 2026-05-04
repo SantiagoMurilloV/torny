@@ -60,10 +60,30 @@ function mapMatchRow(row: Record<string, unknown>): Match {
   };
 }
 
+// Columns that the public listing returns. We deliberately omit `logo`
+// from the bulk SELECT because logos are stored as base64 data URLs
+// (often 50–500 KB each) — including them in `/teams` ballooned the
+// response to ~9 MB for a midsize tournament, which dominated the
+// response time of the public client's initial fetch and also blew
+// past the in-memory cache's serialization cost.
+//
+// Consumers that need the logo (admin team form, public team detail)
+// fetch `GET /teams/:id` which still returns the full row. The match
+// card / bracket / standings views in the React app render team
+// chips with `initials + colors`, so dropping the logo here doesn't
+// change the visible UI.
+const TEAM_LIST_COLUMNS = `
+  id, name, initials, primary_color, secondary_color, city, department,
+  category, captain_username, credentials_generated_at, owner_id,
+  created_at, updated_at
+`;
+
 export class TeamService {
   async getAll(): Promise<Team[]> {
     const pool = getPool();
-    const result = await pool.query('SELECT * FROM teams ORDER BY name');
+    const result = await pool.query(
+      `SELECT ${TEAM_LIST_COLUMNS} FROM teams ORDER BY name`,
+    );
     return result.rows.map(mapRow);
   }
 

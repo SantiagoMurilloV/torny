@@ -159,7 +159,13 @@ describe('TeamService CRUD operations', () => {
 
       const result = await service.getAll();
 
-      expect(queryFn).toHaveBeenCalledWith('SELECT * FROM teams ORDER BY name');
+      // The bulk SELECT excludes `logo` to keep the public response
+      // small (logos are base64 data URLs that ballooned `/teams` to
+      // ~9 MB on Stress Test). We only check that the query string
+      // mentions the teams table + ORDER BY name + does NOT pull logo.
+      const callArg = queryFn.mock.calls[0][0] as string;
+      expect(callArg).toMatch(/FROM teams ORDER BY name/);
+      expect(callArg).not.toMatch(/\blogo\b/);
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('uuid-1');
       expect(result[0].primaryColor).toBe('#FF0000');

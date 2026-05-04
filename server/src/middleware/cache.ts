@@ -86,10 +86,18 @@ export function cacheGet(ttlSeconds: number, options: CacheOptions = {}) {
   // fresh; shared caches (Fastly/Vercel) cache for s-maxage seconds.
   const cacheControl = `public, max-age=0, s-maxage=${ttlSeconds}, stale-while-revalidate=${swr}`;
   const cdnHeader = `public, s-maxage=${ttlSeconds}, stale-while-revalidate=${swr}`;
+  // `Surrogate-Control` is the Fastly-native cache directive — it
+  // bypasses the `Vary: Origin` quirk that prevents Fastly from
+  // caching responses with a CORS-aware Vary header. Railway ships a
+  // Fastly edge in front of every service for free; without this
+  // header the edge serves every request as MISS even though our
+  // origin emits a clean Cache-Control.
+  const surrogateControl = `max-age=${ttlSeconds}`;
 
   function applyEdgeHeaders(res: Response): void {
     res.setHeader('Cache-Control', cacheControl);
     res.setHeader('CDN-Cache-Control', cdnHeader);
+    res.setHeader('Surrogate-Control', surrogateControl);
     // Vary on Origin so a request from one domain doesn't poison the
     // CORS response for another. Express+cors already sets this on
     // most responses but cached entries won't unless we're explicit.
