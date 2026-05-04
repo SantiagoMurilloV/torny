@@ -22,15 +22,26 @@ import { Request, Response, NextFunction } from 'express';
  *   - Any non-2xx response — we don't want to stick a 503 in the cache.
  *   - Non-GET requests.
  *
- * CDN-Cache-Control:
- *   We also emit `CDN-Cache-Control: public, s-maxage=N, stale-while-
- *   revalidate=M`. This is honoured by Vercel's edge layer when the
- *   request comes through `/api/*` rewrites — for visitors hitting the
- *   site via spike-cup.vercel.app, the response can be served straight
- *   from the edge without ever touching Railway. We deliberately don't
- *   set the legacy `Cache-Control` header because the React app does its
- *   own polling cadence and we don't want browser caches holding stale
- *   data forever; the SWR window gives Vercel a soft refresh signal.
+ * Edge-cache headers:
+ *   We emit two cache directives so any CDN sitting in front of the
+ *   service honours them:
+ *
+ *     Cache-Control: public, max-age=0, s-maxage=N, stale-while-revalidate=M
+ *     CDN-Cache-Control: public, s-maxage=N, stale-while-revalidate=M
+ *
+ *   - `max-age=0` keeps browsers from holding stale data — the React
+ *     app does its own polling cadence and we don't want a phone
+ *     showing yesterday's bracket because of a long-lived cache.
+ *   - `s-maxage=N` is honoured by shared/proxy caches: Railway's
+ *     bundled Fastly edge AND Vercel's edge cache. So a stadium full
+ *     of visitors hitting either spike-cup.vercel.app or the Railway
+ *     URL directly get the same edge-cached response.
+ *   - `stale-while-revalidate` lets the edge serve a slightly stale
+ *     response while it refreshes asynchronously — no client ever
+ *     waits for the origin during a soft expiry.
+ *   - `CDN-Cache-Control` is the Vercel-specific override (takes
+ *     precedence on Vercel only) so we can tune their edge separately
+ *     in the future if needed without touching browser behaviour.
  *
  * Memory bounds:
  *   Each entry stores the JSON body as a string. A periodic sweep every
@@ -71,7 +82,19 @@ export interface CacheOptions {
  */
 export function cacheGet(ttlSeconds: number, options: CacheOptions = {}) {
   const swr = options.swrSeconds ?? ttlSeconds * 2;
+  // Browsers must NOT cache (max-age=0) so polling clients always pull
+  // fresh; shared caches (Fastly/Vercel) cache for s-maxage seconds.
+  const cacheControl = `public, max-age=0, s-maxage=${ttlSeconds}, stale-while-revalidate=${swr}`;
   const cdnHeader = `public, s-maxage=${ttlSeconds}, stale-while-revalidate=${swr}`;
+
+  function applyEdgeHeaders(res: Response): void {
+    res.setHeader('Cache-Control', cacheControl);
+    res.setHeader('CDN-Cache-Control', cdnHeader);
+    // Vary on Origin so a request from one domain doesn't poison the
+    // CORS response for another. Express+cors already sets this on
+    // most responses but cached entries won't unless we're explicit.
+    res.setHeader('Vary', 'Origin, Accept-Encoding');
+  }
 
   return function cacheMiddleware(req: Request, res: Response, next: NextFunction): void {
     if (req.method !== 'GET') return next();
@@ -86,7 +109,7 @@ export function cacheGet(ttlSeconds: number, options: CacheOptions = {}) {
     if (cached && cached.expiresAt > now) {
       res.setHeader('Content-Type', cached.contentType);
       res.setHeader('X-Cache', 'HIT');
-      res.setHeader('CDN-Cache-Control', cdnHeader);
+      applyEdgeHeaders(res);
       res.status(cached.status).send(cached.body);
       return;
     }
@@ -113,7 +136,7 @@ export function cacheGet(ttlSeconds: number, options: CacheOptions = {}) {
         }
       }
       res.setHeader('X-Cache', 'MISS');
-      res.setHeader('CDN-Cache-Control', cdnHeader);
+      applyEdgeHeaders(res);
       return originalJson(body);
     };
 
