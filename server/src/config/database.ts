@@ -17,7 +17,14 @@ let pool: Pool | null = null;
  *     database, matching the local dev setup.
  */
 function buildPoolConfig(): PoolConfig {
-  const max = parseInt(process.env.DB_POOL_SIZE || '20', 10);
+  // Default 50: a 400-spectator burst (5 parallel fetches each = 2000
+  // concurrent queries) overwhelms a pool of 20, causing the 5s
+  // connectionTimeoutMillis to fire and pile up 5xx errors. 50 is the
+  // sweet spot for Railway's managed Postgres (default max_connections
+  // is 100; we leave half for migrations, the keep-alive ping, and
+  // headroom). Override with DB_POOL_SIZE env var if your Postgres
+  // tier is bigger or smaller.
+  const max = parseInt(process.env.DB_POOL_SIZE || '50', 10);
 
   // Shared pool tuning. The defaults of `pg` close idle connections after
   // ~10 s, which on Railway means every burst of traffic after a quiet

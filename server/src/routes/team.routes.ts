@@ -17,18 +17,21 @@ import {
   remove as removePlayer,
 } from '../controllers/player.controller';
 import { requireRole, requireTeamAccess } from '../middleware/auth';
+import { cacheGet } from '../middleware/cache';
 
 const router = Router();
 
-// CRUD
-router.get('/', getAll);
-router.get('/:id', getById);
+// CRUD — `/teams` is the heaviest read endpoint of the public flow
+// (carries logos as base64 data URLs), so we cache it the longest.
+// Teams change rarely once a tournament is set up.
+router.get('/', cacheGet(60), getAll);
+router.get('/:id', cacheGet(60), getById);
 router.post('/', create);
 router.put('/:id', update);
 router.delete('/:id', remove);
 
 // Team sub-resources
-router.get('/:id/matches', getMatches);
+router.get('/:id/matches', cacheGet(10), getMatches);
 
 // Captain credentials — admins (and super_admins) can look up, (re)generate
 // a team captain's login.
@@ -50,8 +53,8 @@ router.post(
 // Roster — nested under /teams/:teamId/players
 // GET is public (read-only); POST/PUT/DELETE require an authenticated caller
 // who either has global access (admin/super_admin) or is the team's captain.
-router.get('/:teamId/players', listPlayers);
-router.get('/:teamId/players/:playerId', getPlayerById);
+router.get('/:teamId/players', cacheGet(60), listPlayers);
+router.get('/:teamId/players/:playerId', cacheGet(60), getPlayerById);
 router.post('/:teamId/players', requireTeamAccess, createPlayer);
 router.put('/:teamId/players/:playerId', requireTeamAccess, updatePlayer);
 router.delete('/:teamId/players/:playerId', requireTeamAccess, removePlayer);

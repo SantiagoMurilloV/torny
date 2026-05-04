@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { getPool } from '../config/database';
 import { bracketGenerator } from '../services/bracket.service';
+import { cacheGet } from '../middleware/cache';
 import {
   getAll,
   getById,
@@ -24,21 +25,30 @@ import {
 
 const router = Router();
 
-// CRUD
-router.get('/', getAll);
-router.get('/:id', getById);
+// CRUD — public GETs go through the in-memory cache so a stadium full
+// of spectators sharing the same tournament view triggers one DB query
+// instead of N. TTLs are tuned per endpoint:
+//   /tournaments      30 s (the index changes when admins create one)
+//   /tournaments/:id  15 s (metadata edits are infrequent)
+//   /matches           5 s (live scores; clients also poll every 25 s)
+//   /standings        10 s
+//   /bracket          10 s
+//   /teams (enrolled) 30 s
+// Authed callers (admins/judges) bypass the cache automatically.
+router.get('/', cacheGet(30), getAll);
+router.get('/:id', cacheGet(15), getById);
 router.post('/', create);
 router.put('/:id', update);
 router.delete('/:id', remove);
 
 // Tournament sub-resources
-router.get('/:id/matches', getMatches);
-router.get('/:id/standings', getStandings);
+router.get('/:id/matches', cacheGet(5, { swrSeconds: 30 }), getMatches);
+router.get('/:id/standings', cacheGet(10), getStandings);
 router.post('/:id/standings/recalculate', recalculateStandings);
-router.get('/:id/bracket', getBracket);
+router.get('/:id/bracket', cacheGet(10), getBracket);
 
 // Team enrollment
-router.get('/:id/teams', getEnrolledTeams);
+router.get('/:id/teams', cacheGet(30), getEnrolledTeams);
 router.post('/:id/teams', enrollTeam);
 router.delete('/:id/teams/:teamId', unenrollTeam);
 
