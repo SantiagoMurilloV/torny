@@ -68,7 +68,27 @@ export function triggerUnauthorized(path: string): void {
 
 // ── Base fetch helper ──────────────────────────────────────────────
 
-export const API_BASE = '/api';
+/**
+ * Where the backend lives. Two modes:
+ *
+ *   1. `VITE_API_URL` env var (production) → absolute Railway URL.
+ *      The frontend talks to Railway directly so Vercel only serves
+ *      static HTML/JS/CSS and never sits in the path of /api/* requests.
+ *      That avoids Vercel's WAF / Attack Challenge Mode auto-activating
+ *      whenever a tournament has 200+ concurrent spectators (the WAF
+ *      treats the burst as a DDoS attempt and serves a JS challenge to
+ *      every visitor until manually disabled).
+ *
+ *   2. `/api` relative (dev / fallback) → vite dev server proxies it
+ *      to the local Express backend. Same path used by older builds
+ *      that relied on the vercel.json rewrite.
+ *
+ * `import.meta.env.VITE_API_URL` is replaced at build time by Vite, so
+ * production bundles ship with the absolute URL hard-coded — no runtime
+ * lookup overhead per request.
+ */
+export const API_BASE =
+  (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? '/api';
 
 export async function request<T>(
   path: string,

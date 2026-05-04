@@ -5,15 +5,7 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://spike-production-6ba4.up.railway.app/api/:path*"
-    },
-    {
-      "source": "/uploads/:path*",
-      "destination": "https://spike-production-6ba4.up.railway.app/uploads/:path*"
-    },
-    {
-      "source": "/((?!api|uploads).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
