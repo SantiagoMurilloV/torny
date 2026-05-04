@@ -130,10 +130,17 @@ export function AdminTournamentDetail() {
     setLoading(true);
     setError(null);
     try {
-      const [t, enrolled, teams, tournamentMatches, bracket, standingsData] = await Promise.all([
+      // Load teams first so the api/transformers cache is primed before
+      // matches/bracket/standings transformers run. Without this the
+      // parallel fetches race and rows would render with the neutral
+      // placeholder team (id mismatch in the transformers cache).
+      // The api/* getters now also self-prime via ensureTeamsCached(),
+      // but doing it explicitly here also gives us `setAllTeams(teams)`.
+      const teams = await api.getTeams();
+
+      const [t, enrolled, tournamentMatches, bracket, standingsData] = await Promise.all([
         api.getTournament(id),
         api.getEnrolledTeams(id),
-        api.getTeams(),
         api.getTournamentMatches(id),
         api.getTournamentBracket(id),
         api.getTournamentStandings(id),

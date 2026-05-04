@@ -1,7 +1,12 @@
 import { request } from './client';
 import type { Team, Match, TeamCredentialsReceipt } from '../../types';
 import type { BackendTeam, BackendMatch } from './backend-shapes';
-import { toFrontendTeam, toFrontendMatch, updateTeamsCache } from './transformers';
+import {
+  toFrontendTeam,
+  toFrontendMatch,
+  updateTeamsCache,
+  ensureTeamsCached,
+} from './transformers';
 import type { CreateTeamDto, UpdateTeamDto } from './dtos';
 
 /**
@@ -43,6 +48,7 @@ export const teamsApi = {
   },
 
   async getTeamMatches(id: string): Promise<Match[]> {
+    await ensureTeamsCached();
     const data = await request<BackendMatch[]>(`/teams/${id}/matches`);
     return data.map(toFrontendMatch);
   },

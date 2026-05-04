@@ -20,6 +20,7 @@ import {
   toFrontendStandingsRow,
   toFrontendBracketMatch,
   toFrontendTeam,
+  ensureTeamsCached,
 } from './transformers';
 import type { CreateTournamentDto, UpdateTournamentDto } from './dtos';
 
@@ -82,11 +83,13 @@ export const tournamentsApi = {
   },
 
   async getTournamentMatches(id: string): Promise<Match[]> {
+    await ensureTeamsCached();
     const data = await request<BackendMatch[]>(`/tournaments/${id}/matches`);
     return data.map(toFrontendMatch);
   },
 
   async getTournamentStandings(id: string): Promise<StandingsRow[]> {
+    await ensureTeamsCached();
     const data = await request<BackendStandingsRow[]>(`/tournaments/${id}/standings`);
     return data.map(toFrontendStandingsRow);
   },
@@ -96,6 +99,7 @@ export const tournamentsApi = {
    * Use after a scoring-rule change or when the UI shows stale numbers.
    */
   async recalculateStandings(id: string): Promise<StandingsRow[]> {
+    await ensureTeamsCached();
     const data = await request<BackendStandingsRow[]>(
       `/tournaments/${id}/standings/recalculate`,
       { method: 'POST' },
@@ -104,6 +108,7 @@ export const tournamentsApi = {
   },
 
   async getTournamentBracket(id: string): Promise<BracketMatch[]> {
+    await ensureTeamsCached();
     const data = await request<BackendBracketMatch[]>(`/tournaments/${id}/bracket`);
     return data.map(toFrontendBracketMatch);
   },

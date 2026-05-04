@@ -1,0 +1,117 @@
+# Keep the SetPoint Railway backend warm so the first user request
+# after a quiet period doesn't pay a cold-start penalty.
+#
+# What this does:
+#   - Runs every 5 minutes (the lowest cron granularity GitHub Actions
+#     supports — actual fire time can drift a few minutes when the
+#     hosted runner pool is busy, which is fine for a warm-up).
+#   - Hits the public /health endpoint of the Railway service. The
+#     handler does a Postgres ping and returns 200/503 in JSON. We
+#     `--fail` on non-2xx so a degraded response shows up red in the
+#     Actions tab and you get an email from GitHub by default.
+#   - Also pings the Vercel rewrite path (/api/health) so we exercise
+#     the full Vercel → Railway proxy path, catching the case where
+#     Railway is healthy but the rewrite is broken.
+#
+# Why not the .vercel.app health check only? The rewrite goes through
+# Vercel's edge — if it's cached or the rewrite is misconfigured the
+# Railway container could still cool down. Hitting Railway directly
+# guarantees we wake the actual node.
+#
+# Cost: free (GitHub Actions public-repo minutes are unlimited and
+# private-repo Hobby gets 2000 min/mo; this job uses ~5s × 288 runs/day
+# = 24 min/day = 720 min/mo, well under the cap).
+#
+# To disable: comment out the schedule trigger or delete this file.
+# To pause temporarily: go to the Actions tab → "Keep backend warm" →
+# "Disable workflow".
+
+name: Keep backend warm
+
+on:
+  schedule:
+    # Every 5 minutes. GitHub may delay during high load — that's OK,
+    # we just want to keep the container from going fully idle.
+    - cron: '*/5 * * * *'
+  # Lets you fire it on-demand from the Actions tab to debug.
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    # Persist which step failed so the notify step can include it in
+    # the message body. `continue-on-error` keeps the job alive so we
+    # always reach the notify step — we still mark the job as failed
+    # at the end if any ping failed.
+    steps:
+      - name: Ping Railway directly
+        id: railway
+        continue-on-error: true
+        run: |
+          curl --fail --show-error --silent --max-time 30 \
+            https://spike-production-6ba4.up.railway.app/api/health \
+            && echo "" && echo "Railway /api/health OK"
+
+      - name: Ping via Vercel rewrite
+        id: vercel
+        continue-on-error: true
+        run: |
+          curl --fail --show-error --silent --max-time 30 \
+            https://spike-cup.vercel.app/api/health \
+            && echo "" && echo "Vercel → Railway /api/health OK"
+
+      # Telegram alert — only fires when at least one ping failed.
+      # Skipped silently if the secrets aren't configured yet, so the
+      # workflow keeps running while you set up the bot.
+      #
+      # Setup (one-time, ~5 minutes):
+      #   1. Open Telegram → search @BotFather → send /newbot
+      #   2. Pick a name (e.g. "SetPoint Health") and a unique username
+      #      ending in "bot" (e.g. setpoint_health_bot).
+      #   3. BotFather replies with an HTTP API token. Copy it.
+      #   4. Search your new bot in Telegram, hit "Start" so it can DM you.
+      #   5. Open https://api.telegram.org/bot<TOKEN>/getUpdates in a browser
+      #      → look for "chat":{"id":<NUMBER>,…}. That number is your chat id.
+      #   6. In GitHub repo → Settings → Secrets and variables → Actions:
+      #        - TELEGRAM_BOT_TOKEN  = the bot token from step 3
+      #        - TELEGRAM_CHAT_ID    = the chat id from step 5
+      #
+      # That's it. Push, wait for the next 5-min tick, and if anything is
+      # red you'll get a Telegram notification on your phone.
+      - name: Notify Telegram on failure
+        if: steps.railway.outcome == 'failure' || steps.vercel.outcome == 'failure'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RAILWAY_STATUS: ${{ steps.railway.outcome }}
+          VERCEL_STATUS: ${{ steps.vercel.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram secrets not set — skipping notification."
+            exit 0
+          fi
+
+          # Plain-text message (no Markdown to avoid escaping headaches).
+          MESSAGE="SetPoint backend health check FAILED
+          Railway direct: ${RAILWAY_STATUS}
+          Vercel rewrite: ${VERCEL_STATUS}
+          ${RUN_URL}"
+
+          curl --fail --silent --show-error \
+            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=${MESSAGE}" \
+            --data-urlencode "disable_web_page_preview=true" \
+            > /dev/null
+          echo "Telegram notification sent."
+
+      # Re-fail the job at the end so GitHub marks the run red and you
+      # also get the default email alert (Settings → Notifications →
+      # Actions → "Send notifications for failed workflows").
+      - name: Mark job as failed if any ping failed
+        if: steps.railway.outcome == 'failure' || steps.vercel.outcome == 'failure'
+        run: |
+          echo "One or more health pings failed — see steps above."
+          exit 1

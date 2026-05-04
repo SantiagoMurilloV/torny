@@ -1,7 +1,7 @@
 import { request } from './client';
 import type { BracketMatch } from '../../types';
 import type { BackendBracketMatch } from './backend-shapes';
-import { toFrontendBracketMatch } from './transformers';
+import { toFrontendBracketMatch, ensureTeamsCached } from './transformers';
 
 /** Diagnostic snapshot returned by the bracket materializer. */
 export interface BracketMaterializeReport {
@@ -29,6 +29,7 @@ export const bracketApi = {
       sets?: Array<{ setNumber: number; team1Points: number; team2Points: number }>;
     },
   ): Promise<BracketMatch[]> {
+    await ensureTeamsCached();
     const raw = await request<BackendBracketMatch[]>(
       `/tournaments/${tournamentId}/bracket/${matchId}`,
       {
@@ -49,6 +50,7 @@ export const bracketApi = {
     bracket: BracketMatch[];
     materialize: BracketMaterializeReport | null;
   }> {
+    await ensureTeamsCached();
     const raw = await request<{
       bracket: BackendBracketMatch[];
       materialize: BracketMaterializeReport | null;
@@ -72,6 +74,7 @@ export const bracketApi = {
     seeds: Array<{ position: number; label: string }>,
     options: { categoryFilter?: string; bracketTier?: 'gold' | 'silver' } = {},
   ): Promise<BracketMatch[]> {
+    await ensureTeamsCached();
     const raw = await request<{ bracketMatches: BackendBracketMatch[]; generatedAt: string }>(
       `/tournaments/${tournamentId}/generate-bracket-crossings`,
       {

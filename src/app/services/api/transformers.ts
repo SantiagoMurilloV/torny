@@ -1,3 +1,4 @@
+import { request } from './client';
 import type { Tournament, Team, Match, StandingsRow, BracketMatch } from '../../types';
 import type {
   BackendTeam,
@@ -21,22 +22,68 @@ import type {
 
 let teamsCache: Map<string, Team> = new Map();
 
+// In-flight fetch shared across concurrent callers so we never hit
+// /teams more than once at a time when several getters race to prime
+// the cache (matches + bracket + standings firing in parallel).
+let inflightTeamsFetch: Promise<void> | null = null;
+
 /** Called by the teams module after a successful /teams fetch so the
  *  match/bracket transformers can attach full Team objects to rows. */
 export function updateTeamsCache(teams: Team[]): void {
   teamsCache = new Map(teams.map((t) => [t.id, t]));
 }
 
+/**
+ * Guarantees the teams cache is populated before transformers run.
+ *
+ * Match/bracket/standings transformers attach full Team objects by id
+ * lookup. If the cache is empty when they execute (e.g. a page that
+ * fires `Promise.all([getTeams, getMatches])` and `/matches` lands
+ * first), every team would render as the placeholder.
+ *
+ * This helper dedupes concurrent calls — N parallel getters trigger a
+ * single `/teams` request and all of them await the same promise.
+ *
+ * Direct `request<BackendTeam[]>` instead of importing teamsApi to
+ * avoid a circular dependency (teams.ts ↔ transformers.ts).
+ */
+export async function ensureTeamsCached(): Promise<void> {
+  if (teamsCache.size > 0) return;
+  if (inflightTeamsFetch) return inflightTeamsFetch;
+
+  inflightTeamsFetch = (async () => {
+    try {
+      const data = await request<BackendTeam[]>('/teams');
+      updateTeamsCache(data.map(toFrontendTeam));
+    } finally {
+      inflightTeamsFetch = null;
+    }
+  })();
+
+  return inflightTeamsFetch;
+}
+
+/**
+ * Last-resort placeholder when a team id isn't in the cache (network
+ * failure on /teams, or a stale id pointing at a deleted team).
+ *
+ * Visual goal: blank-but-tidy. We deliberately avoid loud strings like
+ * "???" or "Equipo desconocido" because they make the UI look broken
+ * to the end-user. An em-dash + soft grey reads as "still loading" and
+ * keeps the layout intact.
+ *
+ * Callers that need to detect this case can check `id === ''` is false
+ * AND the team isn't in `teamsCache` — but the rendered output is
+ * always safe.
+ */
 function resolveTeam(id: string): Team {
   const cached = teamsCache.get(id);
   if (cached) return cached;
-  // Fallback placeholder when team isn't cached yet — better than
-  // throwing, and the UI can still render something sensible.
   return {
     id,
-    name: 'Equipo desconocido',
-    initials: '???',
-    colors: { primary: '#888888', secondary: '#CCCCCC' },
+    name: '—',
+    initials: '—',
+    colors: { primary: '#E5E7EB', secondary: '#F3F4F6' },
   };
 }
 
