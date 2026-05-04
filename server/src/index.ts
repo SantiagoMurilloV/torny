@@ -126,21 +126,42 @@ app.use((req, _res, next) => {
 //
 // We use a short statement_timeout so a wedged DB doesn't hold the
 // health endpoint open and trip the monitor's own timeout.
+// Build identifier injected via Railway's RAILWAY_GIT_COMMIT_SHA env
+// var (auto-set on every deploy). Lets the keep-alive cron and humans
+// confirm a redeploy actually rolled out without needing dashboard
+// access.
+const BUILD_SHA = (process.env.RAILWAY_GIT_COMMIT_SHA || 'dev').slice(0, 7);
+const BUILD_TIME = new Date().toISOString();
+
 app.get('/api/health', async (_req, res) => {
   try {
-    const client = await getPool().connect();
+    const pool = getPool();
+    const client = await pool.connect();
     try {
       await client.query('SET LOCAL statement_timeout = 2000');
       await client.query('SELECT 1');
     } finally {
       client.release();
     }
-    res.json({ status: 'ok', db: 'ok', timestamp: new Date().toISOString() });
+    res.json({
+      status: 'ok',
+      db: 'ok',
+      build: BUILD_SHA,
+      bootedAt: BUILD_TIME,
+      poolMax: (pool as unknown as { options?: { max?: number } }).options?.max ?? null,
+      timestamp: new Date().toISOString(),
+    });
   } catch (err) {
     console.error('[health] DB ping failed:', err);
     res
       .status(503)
-      .json({ status: 'degraded', db: 'down', timestamp: new Date().toISOString() });
+      .json({
+        status: 'degraded',
+        db: 'down',
+        build: BUILD_SHA,
+        bootedAt: BUILD_TIME,
+        timestamp: new Date().toISOString(),
+      });
   }
 });
 
