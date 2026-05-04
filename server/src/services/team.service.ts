@@ -74,7 +74,7 @@ function mapMatchRow(row: Record<string, unknown>): Match {
 // change the visible UI.
 const TEAM_LIST_COLUMNS = `
   id, name, initials, primary_color, secondary_color, city, department,
-  category, captain_username, credentials_generated_at, owner_id,
+  category, captain_username, credentials_generated_at,
   created_at, updated_at
 `;
 
