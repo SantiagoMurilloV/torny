@@ -42,10 +42,18 @@ router.put('/:id', update);
 router.delete('/:id', remove);
 
 // Tournament sub-resources
-router.get('/:id/matches', cacheGet(5, { swrSeconds: 30 }), getMatches);
-router.get('/:id/standings', cacheGet(10), getStandings);
+//
+// /matches TTL was raised from 5 s to 15 s after the load test showed
+// that 400 concurrent spectators polling every 25 s saturated Vercel's
+// rate limit when the 5 s cache window expired and the burst hit the
+// origin every 5 s. With 15 s + swr=60 s, the front-edge collapses
+// the polling crowd into ~1 origin hit per 15 s and serves the stale
+// snapshot for up to 60 s while refreshing in the background. Visible
+// score lag stays under the polling cadence, so end users don't notice.
+router.get('/:id/matches', cacheGet(15, { swrSeconds: 60 }), getMatches);
+router.get('/:id/standings', cacheGet(15, { swrSeconds: 60 }), getStandings);
 router.post('/:id/standings/recalculate', recalculateStandings);
-router.get('/:id/bracket', cacheGet(10), getBracket);
+router.get('/:id/bracket', cacheGet(15, { swrSeconds: 60 }), getBracket);
 
 // Team enrollment
 router.get('/:id/teams', cacheGet(30), getEnrolledTeams);
