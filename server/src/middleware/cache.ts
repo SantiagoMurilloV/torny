@@ -128,9 +128,9 @@ export function cacheGet(ttlSeconds: number, options: CacheOptions = {}) {
     // interactions with file/stream responses elsewhere.
     const originalJson = res.json.bind(res);
     res.json = function cachedJson(body: unknown): Response {
-      // Only stash success responses in the cache — never lock in a 4xx
-      // or 5xx for the next 30 s.
-      if (res.statusCode >= 200 && res.statusCode < 300) {
+      const isSuccess = res.statusCode >= 200 && res.statusCode < 300;
+
+      if (isSuccess) {
         try {
           const serialised = JSON.stringify(body);
           store.set(key, {
@@ -142,9 +142,19 @@ export function cacheGet(ttlSeconds: number, options: CacheOptions = {}) {
         } catch {
           // If body isn't serialisable for some reason, just don't cache.
         }
+        res.setHeader('X-Cache', 'MISS');
+        applyEdgeHeaders(res);
+      } else {
+        // Errors (4xx/5xx) MUST NOT carry the cache headers — otherwise
+        // Fastly/Vercel would happily cache a transient 500 for the
+        // next minute, locking the public view into an error state.
+        // We learned this the hard way when a typo in TEAM_LIST_COLUMNS
+        // produced a 500 that Fastly cached and served to every
+        // spectator until the cache expired.
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('X-Cache', 'BYPASS');
       }
-      res.setHeader('X-Cache', 'MISS');
-      applyEdgeHeaders(res);
+
       return originalJson(body);
     };
 
