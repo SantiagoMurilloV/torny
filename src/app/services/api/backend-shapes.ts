@@ -43,6 +43,10 @@ export interface BackendTournament {
   bracketMode?: 'manual' | 'divisions';
   goldClassifiersPerGroup?: number;
   silverClassifiersPerGroup?: number;
+  /** Texto del reglamento (opcional). */
+  regulationText?: string;
+  /** PDF del reglamento como data URL (opcional). */
+  regulationPdf?: string;
   /** Real counts decorated by the LIST_SELECT in tournament.service. */
   enrolledCount?: number;
   matchesCount?: number;

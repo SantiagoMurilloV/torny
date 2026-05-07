@@ -14,6 +14,7 @@ import {
 import { getErrorMessage } from '../../../lib/errors';
 
 const MAX_COVER_BYTES = 10 * 1024 * 1024;
+const MAX_REGULATION_PDF_BYTES = 10 * 1024 * 1024;
 
 /**
  * Encapsulates every piece of state the tournament form needs:
@@ -45,6 +46,14 @@ export function useTournamentForm({
   const [uploadingCover, setUploadingCover] = useState(false);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
+  // PDF del reglamento — mismo patrón que cover: el archivo nuevo
+  // espera en memoria hasta el submit, donde lo subimos vía
+  // /upload/document y reemplazamos la data URL persistida.
+  const [regulationPdfFile, setRegulationPdfFile] = useState<File | null>(null);
+  const [regulationPdfFileName, setRegulationPdfFileName] = useState<string>('');
+  const [uploadingRegulationPdf, setUploadingRegulationPdf] = useState(false);
+  const regulationPdfInputRef = useRef<HTMLInputElement>(null);
+
   const categoryOptions = withCurrentCategories(CATEGORIES, formData.categories);
 
   // Hydrate when a tournament prop appears (edit flow).
@@ -74,12 +83,16 @@ export function useTournamentForm({
       bracketMode: tournament.bracketMode ?? 'manual',
       goldClassifiersPerGroup: tournament.goldClassifiersPerGroup ?? 2,
       silverClassifiersPerGroup: tournament.silverClassifiersPerGroup ?? 2,
+      regulationText: tournament.regulationText ?? '',
+      regulationPdfUrl: tournament.regulationPdf ?? '',
     });
     setCoverFile(null);
     setCoverPreview(tournament.coverImage ?? null);
+    setRegulationPdfFile(null);
+    setRegulationPdfFileName('');
   }, [tournament]);
 
-  // Reset errors + cover when opening for "create" flow.
+  // Reset errors + cover + reglamento when opening for "create" flow.
   useEffect(() => {
     if (!isOpen) return;
     setErrors({});
@@ -87,6 +100,8 @@ export function useTournamentForm({
     if (!tournament) {
       setCoverFile(null);
       setCoverPreview(null);
+      setRegulationPdfFile(null);
+      setRegulationPdfFileName('');
     }
   }, [isOpen, tournament]);
 
@@ -135,6 +150,27 @@ export function useTournamentForm({
     if (coverInputRef.current) coverInputRef.current.value = '';
   }, []);
 
+  const handleRegulationPdfSelect = useCallback((file: File | null) => {
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('El reglamento debe ser un PDF');
+      return;
+    }
+    if (file.size > MAX_REGULATION_PDF_BYTES) {
+      toast.error('El PDF no puede superar 10MB');
+      return;
+    }
+    setRegulationPdfFile(file);
+    setRegulationPdfFileName(file.name);
+  }, []);
+
+  const clearRegulationPdf = useCallback(() => {
+    setRegulationPdfFile(null);
+    setRegulationPdfFileName('');
+    setFormData((prev) => ({ ...prev, regulationPdfUrl: '' }));
+    if (regulationPdfInputRef.current) regulationPdfInputRef.current.value = '';
+  }, []);
+
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
@@ -176,6 +212,24 @@ export function useTournamentForm({
         coverImageUrl = undefined;
       }
 
+      // Upload del PDF de reglamento (si hay archivo nuevo). Si no hay
+      // archivo nuevo, conservamos el regulationPdfUrl del estado, que
+      // puede haber sido vaciado por clearRegulationPdf.
+      let regulationPdfUrl: string | undefined = formData.regulationPdfUrl || undefined;
+      if (regulationPdfFile) {
+        try {
+          setUploadingRegulationPdf(true);
+          regulationPdfUrl = await api.uploadDocument(regulationPdfFile);
+        } catch {
+          toast.error('Error al subir el PDF del reglamento');
+          setSubmitting(false);
+          setUploadingRegulationPdf(false);
+          return;
+        } finally {
+          setUploadingRegulationPdf(false);
+        }
+      }
+
       const newTournament: Tournament = {
         id: tournament?.id || `tournament-${Date.now()}`,
         name: formData.name,
@@ -205,6 +259,8 @@ export function useTournamentForm({
           formData.bracketMode === 'divisions'
             ? formData.silverClassifiersPerGroup
             : undefined,
+        regulationText: formData.regulationText.trim() || undefined,
+        regulationPdf: regulationPdfUrl,
       };
 
       try {
@@ -223,7 +279,7 @@ export function useTournamentForm({
         setSubmitting(false);
       }
     },
-    [formData, tournament, coverFile, coverPreview, inline, onSubmit, onClose],
+    [formData, tournament, coverFile, coverPreview, regulationPdfFile, inline, onSubmit, onClose],
   );
 
   return {
@@ -234,6 +290,13 @@ export function useTournamentForm({
     coverPreview,
     coverInputRef,
     categoryOptions,
+    // Reglamento
+    uploadingRegulationPdf,
+    regulationPdfFileName,
+    regulationPdfHasFile: !!regulationPdfFile || !!formData.regulationPdfUrl,
+    regulationPdfInputRef,
+    handleRegulationPdfSelect,
+    clearRegulationPdf,
     patch,
     setErrors,
     toggleCategory,

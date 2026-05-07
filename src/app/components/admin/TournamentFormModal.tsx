@@ -5,6 +5,7 @@ import { useTournamentForm } from './tournament-form/useTournamentForm';
 import { CategoriesField } from './tournament-form/fields/CategoriesField';
 import { CoverImageField } from './tournament-form/fields/CoverImageField';
 import { CourtsField } from './tournament-form/fields/CourtsField';
+import { RegulationField } from './tournament-form/fields/RegulationField';
 import type { FieldErrors } from './tournament-form/types';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
@@ -162,21 +163,26 @@ export function TournamentFormModal({
         </div>
       </div>
 
-      <SelectField
-        label="Formato *"
-        value={form.formData.format}
-        onChange={(v) =>
-          form.patch({
-            format: v as 'groups' | 'knockout' | 'groups+knockout' | 'league',
-          })
-        }
-        options={[
-          { value: 'groups', label: 'Solo Grupos' },
-          { value: 'knockout', label: 'Solo Eliminatoria' },
-          { value: 'groups+knockout', label: 'Grupos + Eliminatoria' },
-          { value: 'league', label: 'Liga' },
-        ]}
-      />
+      <div>
+        <SelectField
+          label="Sistema de juego *"
+          value={form.formData.format}
+          onChange={(v) =>
+            form.patch({
+              format: v as 'groups' | 'knockout' | 'groups+knockout' | 'league',
+            })
+          }
+          options={[
+            { value: 'groups', label: 'Solo Grupos' },
+            { value: 'knockout', label: 'Solo Eliminatoria' },
+            { value: 'groups+knockout', label: 'Grupos + Eliminatoria' },
+            { value: 'league', label: 'Liga' },
+          ]}
+        />
+        <p className="mt-1 text-xs text-black/50">
+          Define cómo se generan los partidos (grupos, llaves, liga). El reglamento que comuniquen los espectadores se configura más abajo.
+        </p>
+      </div>
 
       {(form.formData.format === 'groups+knockout' || form.formData.format === 'knockout') && (
         <div className="space-y-4">
@@ -252,6 +258,16 @@ export function TournamentFormModal({
         onChange={(next) => form.patch({ courts: next }, ['courts'])}
       />
 
+      <RegulationField
+        text={form.formData.regulationText}
+        onTextChange={(v) => form.patch({ regulationText: v })}
+        hasFile={form.regulationPdfHasFile}
+        fileName={form.regulationPdfFileName}
+        inputRef={form.regulationPdfInputRef}
+        onSelect={form.handleRegulationPdfSelect}
+        onClear={form.clearRegulationPdf}
+      />
+
       <div className="flex gap-3 pt-4 border-t border-black/10">
         {!inline && (
           <button
@@ -272,14 +288,16 @@ export function TournamentFormModal({
           } px-4 py-3 bg-spk-red text-white hover:bg-spk-red-dark font-bold rounded-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2`}
           style={FONT}
         >
-          {(form.submitting || form.uploadingCover) && (
+          {(form.submitting || form.uploadingCover || form.uploadingRegulationPdf) && (
             <Loader2 className="w-4 h-4 animate-spin" />
           )}
           {form.uploadingCover
             ? 'Subiendo imagen…'
-            : tournament
-              ? 'Guardar Cambios'
-              : 'Crear Torneo'}
+            : form.uploadingRegulationPdf
+              ? 'Subiendo reglamento…'
+              : tournament
+                ? 'Guardar Cambios'
+                : 'Crear Torneo'}
         </button>
       </div>
     </form>

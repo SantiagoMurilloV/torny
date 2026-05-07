@@ -91,6 +91,8 @@ function mapRow(row: Record<string, unknown>): Tournament {
       (row.gold_classifiers_per_group as number | null) ?? undefined,
     silverClassifiersPerGroup:
       (row.silver_classifiers_per_group as number | null) ?? undefined,
+    regulationText: (row.regulation_text as string | null) ?? undefined,
+    regulationPdf: (row.regulation_pdf as string | null) ?? undefined,
     enrolledCount:
       typeof enrolledRaw === 'number'
         ? enrolledRaw
@@ -278,8 +280,8 @@ export class TournamentService {
     const goldClassifiers = clampInt(data.goldClassifiersPerGroup, 1, 8, 2);
     const silverClassifiers = clampInt(data.silverClassifiersPerGroup, 0, 8, 2);
     const result = await pool.query(
-      `INSERT INTO tournaments (name, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+      `INSERT INTO tournaments (name, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
        RETURNING *`,
       [
         data.name,
@@ -302,6 +304,8 @@ export class TournamentService {
         bracketMode,
         goldClassifiers,
         silverClassifiers,
+        data.regulationText || null,
+        data.regulationPdf || null,
       ],
     );
     return mapRow(result.rows[0]);
@@ -343,6 +347,8 @@ export class TournamentService {
       bracketMode: 'bracket_mode',
       goldClassifiersPerGroup: 'gold_classifiers_per_group',
       silverClassifiersPerGroup: 'silver_classifiers_per_group',
+      regulationText: 'regulation_text',
+      regulationPdf: 'regulation_pdf',
     };
 
     for (const [key, column] of Object.entries(columnMap)) {
@@ -362,6 +368,12 @@ export class TournamentService {
           stored = clampInt(rawValue as number | null | undefined, 1, 8, 2);
         } else if (key === 'silverClassifiersPerGroup') {
           stored = clampInt(rawValue as number | null | undefined, 0, 8, 2);
+        } else if (key === 'regulationText' || key === 'regulationPdf') {
+          // Normaliza '' → null para que "limpiar" desde el form deje
+          // la columna realmente vacía en vez de un string vacío. El
+          // frontend manda undefined cuando el campo no cambia (no entra
+          // al loop) y null cuando lo borró explícitamente.
+          stored = rawValue === '' || rawValue == null ? null : rawValue;
         }
         values.push(stored);
         idx++;

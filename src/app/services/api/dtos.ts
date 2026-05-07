@@ -31,6 +31,10 @@ export interface CreateTournamentDto {
    *  VNL Oro/Plata driven by the standings table. Defaults to 'manual'
    *  on the server. */
   bracketMode?: 'manual' | 'divisions';
+  /** Reglamento del torneo en texto plano. null para borrar; undefined para no tocar. */
+  regulationText?: string | null;
+  /** Reglamento como PDF data URL. null para borrar; undefined para no tocar. */
+  regulationPdf?: string | null;
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

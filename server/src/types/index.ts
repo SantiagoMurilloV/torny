@@ -58,6 +58,18 @@ export interface Tournament {
   goldClassifiersPerGroup?: number;
   silverClassifiersPerGroup?: number;
   /**
+   * Reglamento del torneo, mostrado en la pestaña pública "Info" (la
+   * sección que antes era "FORMATO"). Ambos opcionales y combinables —
+   * el admin puede mandar texto, un PDF, ambos o ninguno.
+   *   · regulationText → texto plano largo (markdown-ish, render como pre-wrap).
+   *   · regulationPdf  → data URL (`data:application/pdf;base64,...`)
+   *                       producida por POST /api/upload/document. Mismo
+   *                       patrón que coverImage / logo para sobrevivir
+   *                       redeploys de Railway (filesystem efímero).
+   */
+  regulationText?: string;
+  regulationPdf?: string;
+  /**
    * Decorated by the SELECT in tournament.service (LIST_SELECT). The
    * home cards / public detail use these instead of the static
    * `teamsCount` cap so the numbers reflect reality.
@@ -227,6 +239,10 @@ export interface CreateTournamentDto {
   /** Divisions-only: classifiers per group going to Oro / Plata. */
   goldClassifiersPerGroup?: number;
   silverClassifiersPerGroup?: number;
+  /** Reglamento en texto plano. Opcional. */
+  regulationText?: string | null;
+  /** Reglamento en PDF (data URL). Opcional. */
+  regulationPdf?: string | null;
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

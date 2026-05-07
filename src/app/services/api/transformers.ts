@@ -128,6 +128,8 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
     bracketMode: t.bracketMode ?? 'manual',
     goldClassifiersPerGroup: t.goldClassifiersPerGroup,
     silverClassifiersPerGroup: t.silverClassifiersPerGroup,
+    regulationText: t.regulationText,
+    regulationPdf: t.regulationPdf,
     enrolledCount: t.enrolledCount,
     matchesCount: t.matchesCount,
   };

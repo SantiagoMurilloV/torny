@@ -149,6 +149,17 @@ export interface Tournament {
   goldClassifiersPerGroup?: number;
   silverClassifiersPerGroup?: number;
   /**
+   * Reglamento del torneo (mostrado en la pestaña pública "Info" en
+   * lugar de la copia automática del formato técnico). Ambos campos son
+   * opcionales y combinables — el admin puede cargar texto, un PDF, los
+   * dos o ninguno.
+   *   · regulationText → texto plano, render con `whitespace-pre-wrap`.
+   *   · regulationPdf  → data URL (`data:application/pdf;base64,...`)
+   *                       producida por POST /api/upload/document.
+   */
+  regulationText?: string;
+  regulationPdf?: string;
+  /**
    * Real counts populated by the backend SELECT (LIST_SELECT) — used by
    * the home cards and the public detail hero so the numbers reflect
    * actual enrollment / scheduled matches instead of the cap configured

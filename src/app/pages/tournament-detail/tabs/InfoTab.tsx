@@ -1,21 +1,21 @@
 import { motion } from 'motion/react';
-import { MapPin } from 'lucide-react';
+import { MapPin, FileText, ExternalLink } from 'lucide-react';
 import type { Tournament } from '../../../types';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
-const FORMAT_COPY: Record<Tournament['format'], string> = {
-  'groups+knockout': 'Fase de grupos seguida de eliminatorias',
-  knockout: 'Eliminación directa',
-  groups: 'Fase de grupos',
-  league: 'Liga todos contra todos',
-};
-
 const DAY_MS = 1000 * 60 * 60 * 24;
 
 /**
- * "Info" tab — static tournament metadata: description, courts list,
- * format, headline counters (teams / matches / courts / days).
+ * "Info" tab — static tournament metadata: descripción, canchas,
+ * reglamento (texto y/o PDF) y los contadores de cabecera.
+ *
+ * Antes había un bloque "Formato" que mostraba la copia automática del
+ * enum técnico del torneo (groups / knockout / etc). Ese campo se sigue
+ * usando internamente para generar fixtures pero no aporta información
+ * real al espectador, así que lo reemplazamos por un Reglamento que el
+ * admin compone — texto, PDF, ambos o ninguno. Si no hay nada, ocultamos
+ * la sección entera para no dejar un hueco vacío.
  */
 export function InfoTab({
   tournament,
@@ -30,6 +30,10 @@ export function InfoTab({
     (tournament.endDate.getTime() - tournament.startDate.getTime()) / DAY_MS,
   );
 
+  const regulationText = tournament.regulationText?.trim();
+  const regulationPdf = tournament.regulationPdf;
+  const hasRegulation = Boolean(regulationText || regulationPdf);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -43,7 +47,7 @@ export function InfoTab({
         <p className="text-lg text-black/70 leading-relaxed">{tournament.description}</p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-8">
+      <div className={hasRegulation ? 'grid md:grid-cols-2 gap-8' : ''}>
         <div>
           <h4 className="text-xl font-bold mb-4" style={FONT}>
             CANCHAS
@@ -58,14 +62,31 @@ export function InfoTab({
           </div>
         </div>
 
-        <div>
-          <h4 className="text-xl font-bold mb-4" style={FONT}>
-            FORMATO
-          </h4>
-          <p className="text-lg text-black/70">
-            {FORMAT_COPY[tournament.format] ?? tournament.format}
-          </p>
-        </div>
+        {hasRegulation && (
+          <div>
+            <h4 className="text-xl font-bold mb-4" style={FONT}>
+              REGLAMENTO
+            </h4>
+            {regulationText && (
+              <p className="text-base text-black/70 leading-relaxed whitespace-pre-wrap mb-4">
+                {regulationText}
+              </p>
+            )}
+            {regulationPdf && (
+              <a
+                href={regulationPdf}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-spk-red text-white hover:bg-spk-red-dark font-bold rounded-sm transition-colors text-sm"
+                style={FONT}
+              >
+                <FileText className="w-4 h-4" />
+                Ver reglamento (PDF)
+                <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="pt-8 border-t border-black/10">

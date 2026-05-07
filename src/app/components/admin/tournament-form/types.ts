@@ -41,6 +41,15 @@ export interface TournamentFormState {
   goldClassifiersPerGroup: number;
   /** Divisions-only: next M of each group go to Plata (0 disables it). */
   silverClassifiersPerGroup: number;
+  /** Reglamento del torneo (texto plano). Vacío = sin texto. */
+  regulationText: string;
+  /**
+   * Data URL del PDF del reglamento ya subido (si existe). El campo
+   * `regulationPdfFile` (en el hook, no en el state) representa un PDF
+   * recién seleccionado que aún no se subió. Al hacer submit, si hay
+   * archivo nuevo se sube y se reemplaza esta URL.
+   */
+  regulationPdfUrl: string;
 }
 
 export const DEFAULT_COURTS: CourtEntry[] = [
@@ -66,5 +75,7 @@ export function emptyForm(): TournamentFormState {
     bracketMode: 'manual',
     goldClassifiersPerGroup: 2,
     silverClassifiersPerGroup: 2,
+    regulationText: '',
+    regulationPdfUrl: '',
   };
 }
