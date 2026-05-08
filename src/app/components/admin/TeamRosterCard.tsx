@@ -20,6 +20,7 @@ import { ConfirmDialog } from '../ConfirmDialog';
 import { TeamCredentialsModal } from './TeamCredentialsModal';
 import { useTeamCaptainCredentials } from '../../hooks/useTeamCaptainCredentials';
 import { getErrorMessage } from '../../lib/errors';
+import { openPdfFromDataUrl } from '../../lib/openPdf';
 
 interface TeamRosterCardProps {
   team: Team;
@@ -381,15 +382,21 @@ export function TeamRosterCard({
                           {p.documentFile && (
                             <>
                               <span className="text-black/30">·</span>
-                              <a
-                                href={p.documentFile}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const ok = openPdfFromDataUrl(p.documentFile);
+                                  if (!ok) {
+                                    toast.error('No se pudo abrir el PDF. Permití pop-ups y reintentá.');
+                                  }
+                                }}
                                 className="inline-flex items-center gap-1 text-spk-blue hover:underline"
+                                aria-label="Abrir documento PDF"
                               >
                                 <FileText className="w-3 h-3" aria-hidden="true" />
                                 PDF
-                              </a>
+                              </button>
                             </>
                           )}
                         </div>

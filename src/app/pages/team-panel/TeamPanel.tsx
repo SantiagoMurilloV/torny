@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Loader2,
   Plus,
@@ -8,6 +8,8 @@ import {
   FileText,
   Users,
   Info,
+  Upload,
+  Camera,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Player } from '../../types';
@@ -16,6 +18,7 @@ import { useAuth } from '../../context/AuthContext';
 import { PlayerFormModal } from '../../components/admin/PlayerFormModal';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { getErrorMessage } from '../../lib/errors';
+import { openPdfFromDataUrl } from '../../lib/openPdf';
 
 /**
  * TeamPanel — the captain's home. Shows the team identity plus the full
@@ -47,6 +50,8 @@ export function TeamPanel() {
   const [editingPlayer, setEditingPlayer] = useState<Player | undefined>();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Always read the team id from the freshly-fetched /auth/me payload so
   // an old session object in localStorage (from before the `teamId` field
@@ -116,6 +121,32 @@ export function TeamPanel() {
     toast.success(editingPlayer ? 'Jugador@ actualizad@' : 'Jugador@ agregad@');
   };
 
+  const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset the input so re-picking the same file fires onChange again.
+    if (logoInputRef.current) logoInputRef.current.value = '';
+    if (!file || !teamId) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('El archivo debe ser una imagen');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('La imagen no puede superar 2MB');
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const url = await api.uploadLogo(file);
+      const updated = await api.updateTeamLogo(teamId, url);
+      setTeamInfo((prev) => (prev ? { ...prev, logo: updated.logo } : prev));
+      toast.success('Logo actualizado');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Error al subir el logo'));
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!pendingDeleteId || !teamId) return;
     const id = pendingDeleteId;
@@ -159,25 +190,71 @@ export function TeamPanel() {
 
   return (
     <div className="max-w-[1200px] mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
-      {/* Team identity banner */}
+      {/* Team identity banner — the avatar doubles as a logo uploader so the
+          captain can drop their crest in without bothering the admin. The
+          hint copy below it keeps the affordance discoverable on touch
+          (where there's no hover state to reveal the overlay). */}
       <section className="bg-white border border-black/10 rounded-sm p-4 sm:p-6 flex items-center gap-4 sm:gap-5">
-        {teamInfo.logo ? (
-          <img
-            src={teamInfo.logo}
-            alt={teamInfo.name}
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-sm object-cover border border-black/10 flex-shrink-0"
-          />
-        ) : (
-          <div
-            className="w-16 h-16 sm:w-20 sm:h-20 rounded-sm flex items-center justify-center text-white font-bold text-xl sm:text-2xl flex-shrink-0"
-            style={{
-              backgroundColor: teamInfo.primaryColor,
-              fontFamily: 'Barlow Condensed, sans-serif',
-            }}
+        <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => logoInputRef.current?.click()}
+            disabled={uploadingLogo}
+            aria-label={teamInfo.logo ? 'Cambiar logo del equipo' : 'Subir logo del equipo'}
+            title={teamInfo.logo ? 'Tocá para cambiar el logo' : 'Tocá para subir el logo'}
+            className="relative group rounded-sm overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-spk-red disabled:opacity-60"
           >
-            {teamInfo.initials}
-          </div>
-        )}
+            {teamInfo.logo ? (
+              <img
+                src={teamInfo.logo}
+                alt={teamInfo.name}
+                className="w-20 h-20 sm:w-24 sm:h-24 rounded-sm object-cover border border-black/10"
+              />
+            ) : (
+              <div
+                className="w-20 h-20 sm:w-24 sm:h-24 rounded-sm flex items-center justify-center text-white font-bold text-2xl sm:text-3xl border border-black/10"
+                style={{
+                  backgroundColor: teamInfo.primaryColor,
+                  fontFamily: 'Barlow Condensed, sans-serif',
+                }}
+              >
+                {teamInfo.initials}
+              </div>
+            )}
+            {/* Overlay — solid on touch (no hover state), fades in on hover
+                for desktop. Uses bg-black/55 so the icons read on any logo
+                color. */}
+            <span
+              className="absolute inset-0 flex items-center justify-center bg-black/55 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+              aria-hidden="true"
+            >
+              {uploadingLogo ? (
+                <Loader2 className="w-6 h-6 text-white animate-spin" />
+              ) : teamInfo.logo ? (
+                <Camera className="w-6 h-6 text-white" />
+              ) : (
+                <Upload className="w-6 h-6 text-white" />
+              )}
+            </span>
+          </button>
+          <span
+            className="text-[10px] uppercase font-bold tracking-wider text-black/55 text-center leading-tight"
+            style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.08em' }}
+          >
+            {uploadingLogo
+              ? 'Subiendo…'
+              : teamInfo.logo
+                ? 'Tocá para cambiar'
+                : 'Tocá para subir el logo'}
+          </span>
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleLogoSelect}
+            className="hidden"
+          />
+        </div>
         <div className="min-w-0">
           <h1
             className="text-xl sm:text-3xl font-bold uppercase truncate"
@@ -290,15 +367,21 @@ export function TeamPanel() {
                     {p.documentFile && (
                       <>
                         <span className="text-black/30">·</span>
-                        <a
-                          href={p.documentFile}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const ok = openPdfFromDataUrl(p.documentFile);
+                            if (!ok) {
+                              toast.error('No se pudo abrir el PDF. Permití pop-ups y reintentá.');
+                            }
+                          }}
                           className="inline-flex items-center gap-1 text-spk-blue hover:underline"
+                          aria-label="Abrir documento PDF"
                         >
                           <FileText className="w-3 h-3" aria-hidden="true" />
                           PDF
-                        </a>
+                        </button>
                       </>
                     )}
                   </div>

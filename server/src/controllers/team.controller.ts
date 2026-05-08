@@ -42,6 +42,40 @@ export async function update(req: Request, res: Response, next: NextFunction): P
   }
 }
 
+/**
+ * PUT /api/teams/:teamId/logo
+ *
+ * Captain-friendly logo upload. Accepts a partial body of `{ logo: string | null }`
+ * where `logo` is a `data:image/...;base64,...` URL produced by `/api/upload/logo`.
+ * Uses the same `update()` path as the admin form so the persisted shape and
+ * cache invalidation behave identically; the route restricts the body to the
+ * logo field so a captain can't accidentally rename their team or change colors
+ * via this endpoint.
+ *
+ * Auth is enforced at the route level via `requireTeamAccess` so admins,
+ * super_admins, and the team's own captain can call this; everyone else 403s.
+ */
+export async function updateLogo(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const teamId = req.params.teamId as string;
+    validateUUID(teamId, 'ID de equipo');
+    const body = req.body as { logo?: string | null };
+    if (!('logo' in (body ?? {}))) {
+      res.status(400).json({ error: 'Falta el campo "logo"' });
+      return;
+    }
+    // The service writes `data.logo || null`, so an empty/null logo here
+    // effectively clears the column — this lets a captain remove the logo
+    // by sending `{ logo: null }` from the panel.
+    const update = { logo: body.logo ?? undefined } as Record<string, unknown>;
+    if (body.logo === null) update.logo = null;
+    const team = await teamService.update(teamId, update as Parameters<typeof teamService.update>[1]);
+    res.json(team);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function remove(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const id = req.params.id as string;

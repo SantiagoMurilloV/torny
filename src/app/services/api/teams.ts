@@ -43,6 +43,21 @@ export const teamsApi = {
     return toFrontendTeam(data);
   },
 
+  /**
+   * Captain-friendly logo update. Hits the dedicated PUT /:teamId/logo route
+   * (gated by requireTeamAccess) instead of the full team update, so a team
+   * captain can change their crest without needing admin role. Pass `null`
+   * to clear the logo, or a `data:image/...;base64,...` URL produced by
+   * `api.uploadLogo()` to set a new one.
+   */
+  async updateTeamLogo(id: string, logo: string | null): Promise<Team> {
+    const data = await request<BackendTeam>(`/teams/${id}/logo`, {
+      method: 'PUT',
+      body: JSON.stringify({ logo }),
+    });
+    return toFrontendTeam(data);
+  },
+
   async deleteTeam(id: string): Promise<void> {
     await request<void>(`/teams/${id}`, { method: 'DELETE' });
   },

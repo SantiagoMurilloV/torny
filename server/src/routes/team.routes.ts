@@ -4,6 +4,7 @@ import {
   getById,
   create,
   update,
+  updateLogo,
   remove,
   getMatches,
   generateCredentials,
@@ -29,6 +30,11 @@ router.get('/:id', cacheGet(60), getById);
 router.post('/', create);
 router.put('/:id', update);
 router.delete('/:id', remove);
+
+// Logo-only update — gated by requireTeamAccess so the team's captain can
+// upload their own crest from the team panel without exposing the rest of
+// the team mutation surface (name, colors, captain credentials, etc).
+router.put('/:teamId/logo', requireTeamAccess, updateLogo);
 
 // Team sub-resources
 router.get('/:id/matches', cacheGet(10), getMatches);
