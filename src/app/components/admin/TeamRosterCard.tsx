@@ -20,7 +20,7 @@ import { ConfirmDialog } from '../ConfirmDialog';
 import { TeamCredentialsModal } from './TeamCredentialsModal';
 import { useTeamCaptainCredentials } from '../../hooks/useTeamCaptainCredentials';
 import { getErrorMessage } from '../../lib/errors';
-import { openPdfFromDataUrl } from '../../lib/openPdf';
+import { PdfViewerModal } from '../PdfViewerModal';
 
 interface TeamRosterCardProps {
   team: Team;
@@ -67,6 +67,11 @@ export function TeamRosterCard({
   const [editingPlayer, setEditingPlayer] = useState<Player | undefined>();
   const [pendingDeletePlayerId, setPendingDeletePlayerId] = useState<string | null>(null);
   const [deletingPlayerId, setDeletingPlayerId] = useState<string | null>(null);
+  // PDF preview — abre el PdfViewerModal con el documento de la jugadora
+  // que el admin pulse, sin sacarlo del flujo del listado.
+  const [pdfPreview, setPdfPreview] = useState<
+    { url: string; title: string; fileName: string } | null
+  >(null);
 
   // Captain credentials — extracted to a hook so this card stays slim.
   const creds = useTeamCaptainCredentials(team);
@@ -386,13 +391,19 @@ export function TeamRosterCard({
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  const ok = openPdfFromDataUrl(p.documentFile);
-                                  if (!ok) {
-                                    toast.error('No se pudo abrir el PDF. Permití pop-ups y reintentá.');
-                                  }
+                                  const slug = `${p.firstName} ${p.lastName}`
+                                    .toLowerCase()
+                                    .normalize('NFD')
+                                    .replace(/[\u0300-\u036f]/g, '')
+                                    .replace(/\s+/g, '-');
+                                  setPdfPreview({
+                                    url: p.documentFile!,
+                                    title: `Documento — ${p.firstName} ${p.lastName}`,
+                                    fileName: `documento-${slug || 'jugadora'}.pdf`,
+                                  });
                                 }}
                                 className="inline-flex items-center gap-1 text-spk-blue hover:underline"
-                                aria-label="Abrir documento PDF"
+                                aria-label="Ver documento PDF"
                               >
                                 <FileText className="w-3 h-3" aria-hidden="true" />
                                 PDF
@@ -471,6 +482,14 @@ export function TeamRosterCard({
         receipt={creds.receipt}
         onClose={creds.closeReceipt}
         onRegenerate={creds.requestRegenerate}
+      />
+
+      <PdfViewerModal
+        isOpen={pdfPreview !== null}
+        onClose={() => setPdfPreview(null)}
+        pdfDataUrl={pdfPreview?.url ?? ''}
+        title={pdfPreview?.title ?? 'Documento'}
+        downloadFileName={pdfPreview?.fileName ?? 'documento.pdf'}
       />
     </div>
   );

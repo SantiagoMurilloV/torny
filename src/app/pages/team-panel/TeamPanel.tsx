@@ -17,8 +17,8 @@ import { api, ApiError } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { PlayerFormModal } from '../../components/admin/PlayerFormModal';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { PdfViewerModal } from '../../components/PdfViewerModal';
 import { getErrorMessage } from '../../lib/errors';
-import { openPdfFromDataUrl } from '../../lib/openPdf';
 
 /**
  * TeamPanel — the captain's home. Shows the team identity plus the full
@@ -52,6 +52,11 @@ export function TeamPanel() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  // PDF preview — abre el PdfViewerModal con el documento de la jugadora
+  // que el capitán pulse, sin sacarlo del panel.
+  const [pdfPreview, setPdfPreview] = useState<
+    { url: string; title: string; fileName: string } | null
+  >(null);
 
   // Always read the team id from the freshly-fetched /auth/me payload so
   // an old session object in localStorage (from before the `teamId` field
@@ -371,13 +376,19 @@ export function TeamPanel() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const ok = openPdfFromDataUrl(p.documentFile);
-                            if (!ok) {
-                              toast.error('No se pudo abrir el PDF. Permití pop-ups y reintentá.');
-                            }
+                            const slug = `${p.firstName} ${p.lastName}`
+                              .toLowerCase()
+                              .normalize('NFD')
+                              .replace(/[\u0300-\u036f]/g, '')
+                              .replace(/\s+/g, '-');
+                            setPdfPreview({
+                              url: p.documentFile!,
+                              title: `Documento — ${p.firstName} ${p.lastName}`,
+                              fileName: `documento-${slug || 'jugadora'}.pdf`,
+                            });
                           }}
                           className="inline-flex items-center gap-1 text-spk-blue hover:underline"
-                          aria-label="Abrir documento PDF"
+                          aria-label="Ver documento PDF"
                         >
                           <FileText className="w-3 h-3" aria-hidden="true" />
                           PDF
@@ -436,6 +447,14 @@ export function TeamPanel() {
         confirmLabel="Eliminar"
         loading={deletingId !== null}
         onConfirm={confirmDelete}
+      />
+
+      <PdfViewerModal
+        isOpen={pdfPreview !== null}
+        onClose={() => setPdfPreview(null)}
+        pdfDataUrl={pdfPreview?.url ?? ''}
+        title={pdfPreview?.title ?? 'Documento'}
+        downloadFileName={pdfPreview?.fileName ?? 'documento.pdf'}
       />
     </div>
   );
