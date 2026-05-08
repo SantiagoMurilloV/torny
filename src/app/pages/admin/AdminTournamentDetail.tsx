@@ -197,6 +197,8 @@ export function AdminTournamentDetail() {
       enrollmentDeadline: updated.enrollmentDeadline ?? null,
       playersPerTeam: updated.playersPerTeam,
       bracketMode: updated.bracketMode,
+      regulationText: updated.regulationText ?? null,
+      regulationPdf: updated.regulationPdf ?? null,
     };
     const fresh = await updateTournament(tournament.id, dto);
     setTournament(fresh);
