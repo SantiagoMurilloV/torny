@@ -158,7 +158,28 @@ export function GroupMatrix({ groupName, matches, standings }: GroupMatrixProps)
             </thead>
             <tbody>
               {standings.map((row) => {
-                const ratio = row.setsAgainst > 0 ? (row.setsFor / row.setsAgainst).toFixed(2) : row.setsFor > 0 ? '∞' : '0.00';
+                // Set quotient (FIVB tiebreaker) = sets_for / sets_against.
+                //
+                // The literal `∞` we used to render when sets_against = 0
+                // looked broken next to the rest of the numeric column.
+                // We mirror the convention the rest of the project already
+                // uses for ordering — see fixture.service.ts:595 (bracket
+                // seeder) and StandingsTab.tsx:303 (public table sort) —
+                // which falls back to the numerator when the denominator
+                // is zero. In display terms: a sweep-only team (e.g. 8/0)
+                // surfaces as "8.00" instead of "∞", which still places
+                // them above any finite ratio in the visual scan and
+                // keeps the column tabular-aligned.
+                //
+                // SF = SC = 0 (team yet to play a set) renders as "—"
+                // rather than "0.00" because the latter wrongly implies a
+                // loss of every set.
+                const ratio =
+                  row.setsAgainst > 0
+                    ? (row.setsFor / row.setsAgainst).toFixed(2)
+                    : row.setsFor > 0
+                      ? row.setsFor.toFixed(2)
+                      : '—';
                 return (
                   <tr
                     key={row.team.id}
