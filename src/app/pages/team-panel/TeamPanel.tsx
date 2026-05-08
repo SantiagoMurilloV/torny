@@ -19,6 +19,7 @@ import { PlayerFormModal } from '../../components/admin/PlayerFormModal';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { PdfViewerModal } from '../../components/PdfViewerModal';
 import { getErrorMessage } from '../../lib/errors';
+import { compressLogoImage } from '../../lib/compressImage';
 
 /**
  * TeamPanel — the captain's home. Shows the team identity plus the full
@@ -141,7 +142,11 @@ export function TeamPanel() {
     }
     setUploadingLogo(true);
     try {
-      const url = await api.uploadLogo(file);
+      // Resize + recompress in the browser so the data URL we persist
+      // in Postgres is small enough to ship in the public /teams
+      // listing — same compressLogoImage helper the admin form uses.
+      const compressed = await compressLogoImage(file);
+      const url = await api.uploadLogo(compressed);
       const updated = await api.updateTeamLogo(teamId, url);
       setTeamInfo((prev) => (prev ? { ...prev, logo: updated.logo } : prev));
       toast.success('Logo actualizado');

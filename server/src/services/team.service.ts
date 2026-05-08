@@ -60,20 +60,29 @@ function mapMatchRow(row: Record<string, unknown>): Match {
   };
 }
 
-// Columns that the public listing returns. We deliberately omit `logo`
-// from the bulk SELECT because logos are stored as base64 data URLs
-// (often 50–500 KB each) — including them in `/teams` ballooned the
-// response to ~9 MB for a midsize tournament, which dominated the
-// response time of the public client's initial fetch and also blew
-// past the in-memory cache's serialization cost.
+// Columns the public listing returns. `logo` is intentionally INCLUDED
+// because every match card / bracket / standings row needs to render
+// the team's logo, and the React `teamsCache` is fed exclusively from
+// this listing — without it those views fall back to the initials chip
+// even though the avatar component supports logos.
 //
-// Consumers that need the logo (admin team form, public team detail)
-// fetch `GET /teams/:id` which still returns the full row. The match
-// card / bracket / standings views in the React app render team
-// chips with `initials + colors`, so dropping the logo here doesn't
-// change the visible UI.
+// Why this is safe (it wasn't, until 2026-05-08):
+//   The previous version dropped `logo` because uncompressed PNGs
+//   straight from a phone camera were landing in Postgres at 200–500 KB
+//   each, which ballooned `/teams` to 9 MB for a midsize tournament and
+//   broke a 400-spectator stress test.
+//
+//   We now compress every uploaded logo in the browser (256×256 WebP at
+//   q=0.82, see src/app/lib/compressImage.ts) before it hits the
+//   server, so a typical logo lands at 5–25 KB. With 32 teams that's
+//   <1 MB across the listing — well within the cache + payload budget.
+//
+//   Logos uploaded BEFORE that change still live uncompressed in
+//   Postgres; they'll trickle out as captains/admins re-upload them.
+//   The listing tolerates the mix because it's still cached behind a
+//   short TTL and gzipped on the wire.
 const TEAM_LIST_COLUMNS = `
-  id, name, initials, primary_color, secondary_color, city, department,
+  id, name, initials, logo, primary_color, secondary_color, city, department,
   category, captain_username, credentials_generated_at,
   created_at, updated_at
 `;

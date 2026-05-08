@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ApiError, api } from '../../services/api';
 import { CATEGORIES, withCurrentCategories } from '../../lib/categories';
 import { getErrorMessage } from '../../lib/errors';
+import { compressLogoImage } from '../../lib/compressImage';
 
 interface TeamFormModalProps {
   isOpen: boolean;
@@ -164,7 +165,12 @@ export function TeamFormModal({
     if (logoFile) {
       try {
         setUploadingLogo(true);
-        logoUrl = await api.uploadLogo(logoFile);
+        // Resize + recompress in the browser before uploading. Brings a
+        // typical phone-photo PNG (~1.5 MB) down to ~10 KB so it's safe
+        // to ship in the public /teams listing without blowing the
+        // payload budget.
+        const compressed = await compressLogoImage(logoFile);
+        logoUrl = await api.uploadLogo(compressed);
       } catch {
         toast.error('Error al subir el logo');
         setSubmitting(false);

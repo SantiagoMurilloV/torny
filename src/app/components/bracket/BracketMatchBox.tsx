@@ -142,6 +142,18 @@ function BracketTeamSlot({
   const truncatedName =
     team.name.length > MAX_NAME_CHARS ? team.name.slice(0, MAX_NAME_CHARS) + '…' : team.name;
 
+  // Logo support inside the bracket SVG. We can't drop a <TeamAvatar>
+  // (DOM div) into an <svg>, so we mirror its rendering rules with SVG
+  // primitives: tinted backdrop + the uploaded image clipped to the
+  // same rounded square. Per-slot clipPath id derived from absolute
+  // coordinates (each slot lives at a unique (x,y) in the SVG) so two
+  // different teams' logos don't reuse a clip path. Falls back to the
+  // initials chip when no logo is set or while the cache is warming.
+  const avatarX = x + avatarPadX;
+  const avatarY = cy - AVATAR_SIZE / 2;
+  const hasLogo = Boolean(team.logo);
+  const clipId = `bracket-logo-clip-${avatarX}-${avatarY}`;
+
   return (
     <g>
       <rect
@@ -161,23 +173,48 @@ function BracketTeamSlot({
         />
       )}
       <rect
-        x={x + avatarPadX}
-        y={cy - AVATAR_SIZE / 2}
+        x={avatarX}
+        y={avatarY}
         width={AVATAR_SIZE}
         height={AVATAR_SIZE}
         rx={4}
         fill={team.colors.primary}
       />
-      <text
-        x={x + avatarPadX + AVATAR_SIZE / 2}
-        y={cy + 1}
-        dominantBaseline="central"
-        textAnchor="middle"
-        className="fill-white font-bold uppercase"
-        style={{ ...FONT, letterSpacing: '0.02em', fontSize: TEAM_INITIALS_FONT }}
-      >
-        {team.initials}
-      </text>
+      {hasLogo ? (
+        <>
+          <defs>
+            <clipPath id={clipId}>
+              <rect
+                x={avatarX}
+                y={avatarY}
+                width={AVATAR_SIZE}
+                height={AVATAR_SIZE}
+                rx={4}
+              />
+            </clipPath>
+          </defs>
+          <image
+            href={team.logo}
+            x={avatarX}
+            y={avatarY}
+            width={AVATAR_SIZE}
+            height={AVATAR_SIZE}
+            preserveAspectRatio="xMidYMid meet"
+            clipPath={`url(#${clipId})`}
+          />
+        </>
+      ) : (
+        <text
+          x={avatarX + AVATAR_SIZE / 2}
+          y={cy + 1}
+          dominantBaseline="central"
+          textAnchor="middle"
+          className="fill-white font-bold uppercase"
+          style={{ ...FONT, letterSpacing: '0.02em', fontSize: TEAM_INITIALS_FONT }}
+        >
+          {team.initials}
+        </text>
+      )}
       <text
         x={x + nameX}
         y={cy - (label ? 6 : 0)}

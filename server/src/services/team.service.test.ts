@@ -159,13 +159,15 @@ describe('TeamService CRUD operations', () => {
 
       const result = await service.getAll();
 
-      // The bulk SELECT excludes `logo` to keep the public response
-      // small (logos are base64 data URLs that ballooned `/teams` to
-      // ~9 MB on Stress Test). We only check that the query string
-      // mentions the teams table + ORDER BY name + does NOT pull logo.
+      // The bulk SELECT now INCLUDES `logo` because match cards /
+      // bracket / standings need it to render the team avatar from the
+      // shared teamsCache. Logos are compressed client-side (256×256
+      // WebP, see src/app/lib/compressImage.ts) before upload, so the
+      // payload stays under the cache budget that the 2026-05-04
+      // stress test set as the floor.
       const callArg = queryFn.mock.calls[0][0] as string;
       expect(callArg).toMatch(/FROM teams ORDER BY name/);
-      expect(callArg).not.toMatch(/\blogo\b/);
+      expect(callArg).toMatch(/\blogo\b/);
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('uuid-1');
       expect(result[0].primaryColor).toBe('#FF0000');
