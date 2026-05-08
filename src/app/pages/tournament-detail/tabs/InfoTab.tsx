@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { motion } from 'motion/react';
-import { MapPin, FileText, ExternalLink } from 'lucide-react';
+import { MapPin, FileText } from 'lucide-react';
 import type { Tournament } from '../../../types';
+import { PdfViewerModal } from '../../../components/PdfViewerModal';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
@@ -16,6 +18,12 @@ const DAY_MS = 1000 * 60 * 60 * 24;
  * real al espectador, así que lo reemplazamos por un Reglamento que el
  * admin compone — texto, PDF, ambos o ninguno. Si no hay nada, ocultamos
  * la sección entera para no dejar un hueco vacío.
+ *
+ * El PDF se muestra en un visor inline (PdfViewerModal) en lugar de
+ * abrirse en pestaña nueva — Chrome bloquea la apertura directa de
+ * data URLs grandes y el resultado era una pestaña en blanco. El modal
+ * convierte el data URL a blob URL y lo embebe en un iframe usando el
+ * visor PDF nativo del browser.
  */
 export function InfoTab({
   tournament,
@@ -33,6 +41,8 @@ export function InfoTab({
   const regulationText = tournament.regulationText?.trim();
   const regulationPdf = tournament.regulationPdf;
   const hasRegulation = Boolean(regulationText || regulationPdf);
+
+  const [pdfOpen, setPdfOpen] = useState(false);
 
   return (
     <motion.div
@@ -73,17 +83,15 @@ export function InfoTab({
               </p>
             )}
             {regulationPdf && (
-              <a
-                href={regulationPdf}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => setPdfOpen(true)}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-spk-red text-white hover:bg-spk-red-dark font-bold rounded-sm transition-colors text-sm"
                 style={FONT}
               >
                 <FileText className="w-4 h-4" />
                 Ver reglamento (PDF)
-                <ExternalLink className="w-3.5 h-3.5 opacity-70" />
-              </a>
+              </button>
             )}
           </div>
         )}
@@ -97,6 +105,16 @@ export function InfoTab({
           <Counter label="Días" value={days} />
         </div>
       </div>
+
+      {regulationPdf && (
+        <PdfViewerModal
+          isOpen={pdfOpen}
+          onClose={() => setPdfOpen(false)}
+          pdfDataUrl={regulationPdf}
+          title={`Reglamento — ${tournament.name}`}
+          downloadFileName={`reglamento-${tournament.name.toLowerCase().replace(/\s+/g, '-')}.pdf`}
+        />
+      )}
     </motion.div>
   );
 }
