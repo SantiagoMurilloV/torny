@@ -11,6 +11,7 @@ import { checkConnection, getPool, runMigrations } from './config/database';
 import { ensureReady as ensurePushReady } from './services/push.service';
 import { ensureSuperAdmin } from './services/platformBootstrap';
 import { touchUser, touchVisitor } from './services/presence';
+import { startPresenceReporter } from './services/telegram-reporter';
 import { errorHandler } from './middleware/errorHandler';
 import { authMiddleware } from './middleware/auth';
 import authRoutes from './routes/auth.routes';
@@ -344,6 +345,9 @@ async function startServer() {
 
   app.listen(PORT, () => {
     console.log(`Servidor Torny corriendo en puerto ${PORT}`);
+    // Arranca el reporter de Telegram — silencioso si TELEGRAM_BOT_TOKEN
+    // / TELEGRAM_CHAT_ID no están en env. Cron interno cada N min.
+    startPresenceReporter();
   });
 }
 
