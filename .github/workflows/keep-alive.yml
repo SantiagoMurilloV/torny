@@ -58,7 +58,7 @@ jobs:
         continue-on-error: true
         run: |
           curl --fail --show-error --silent --max-time 30 \
-            https://spike-cup.vercel.app/api/health \
+            https://torny.app/api/health \
             && echo "" && echo "Vercel → Railway /api/health OK"
 
       # Telegram alert — only fires when at least one ping failed.

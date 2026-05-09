@@ -34,7 +34,7 @@ import { Request, Response, NextFunction } from 'express';
  *     showing yesterday's bracket because of a long-lived cache.
  *   - `s-maxage=N` is honoured by shared/proxy caches: Railway's
  *     bundled Fastly edge AND Vercel's edge cache. So a stadium full
- *     of visitors hitting either spike-cup.vercel.app or the Railway
+ *     of visitors hitting either torny.app or the Railway
  *     URL directly get the same edge-cached response.
  *   - `stale-while-revalidate` lets the edge serve a slightly stale
  *     response while it refreshes asynchronously — no client ever
