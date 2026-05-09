@@ -28,12 +28,14 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 // ── CORS whitelist ────────────────────────────────────────────────
-// Accepts three buckets of origins, in order:
+// Accepts four buckets of origins, in order:
 //   1. Anything in the explicit `CORS_ORIGINS` env var (comma-separated).
 //   2. Any `https://*.vercel.app` origin — we deploy the frontend there
 //      and Vercel rotates preview URLs per deployment. Hardcoding each
 //      one is painful, so we trust the whole subdomain family.
-//   3. In non-production (`NODE_ENV !== 'production'`), everything.
+//   3. The production custom domain `torny.app` and any of its subdomains
+//      (`www.torny.app`, future staging/preview hosts, etc).
+//   4. In non-production (`NODE_ENV !== 'production'`), everything.
 // Requests without an Origin header (same-origin, curl, server-to-server)
 // are always allowed.
 const corsOrigins = (process.env.CORS_ORIGINS ?? '')
@@ -51,12 +53,24 @@ function isVercelOrigin(origin: string): boolean {
   }
 }
 
+/** Returns true for `https://torny.app` and any `https://*.torny.app` subdomain. */
+function isTornyOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== 'https:') return false;
+    return url.hostname === 'torny.app' || url.hostname.endsWith('.torny.app');
+  } catch {
+    return false;
+  }
+}
+
 const corsOptions: cors.CorsOptions = IS_PROD
   ? {
       origin: (origin, cb) => {
         if (!origin) return cb(null, true);
         if (corsOrigins.includes(origin)) return cb(null, true);
         if (isVercelOrigin(origin)) return cb(null, true);
+        if (isTornyOrigin(origin)) return cb(null, true);
         cb(new Error(`CORS: origin ${origin} not allowed`));
       },
       credentials: true,
