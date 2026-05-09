@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
-import { Trophy, LogIn, UserPlus } from 'lucide-react';
-import { toast } from 'sonner';
+import { Trophy } from 'lucide-react';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
 /**
  * Fixed top navigation for the public home. Transparent at the top,
- * darkens with a blur as the user scrolls past the hero. Secondary
- * "Registrarse" is a placeholder until the public-registration flow
- * ships.
+ * darkens with a blur as the user scrolls past the hero. The login
+ * entry-point is rendered as an invisible hit-area on the right edge:
+ * deliberately undiscoverable for casual visitors, accessible by
+ * keyboard and to anyone who knows where to click.
  */
 export function HomeHeader() {
   const navigate = useNavigate();
@@ -63,35 +63,18 @@ export function HomeHeader() {
             </div>
           </motion.div>
 
-          <div className="flex items-center gap-2">
-            <motion.button
-              type="button"
-              onClick={() =>
-                toast('Registro disponible pronto', {
-                  description:
-                    'Estamos terminando el flujo público. Por ahora contactá al club.',
-                })
-              }
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.97 }}
-              className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-transparent border border-white/20 text-white text-xs sm:text-sm font-bold uppercase tracking-[0.08em] rounded-sm hover:bg-white/5 hover:border-white/40 transition-colors"
-              style={FONT}
-            >
-              <UserPlus className="w-4 h-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Registrarse</span>
-            </motion.button>
-            <motion.button
-              type="button"
-              onClick={() => navigate('/login')}
-              whileHover={{ scale: 1.04 }}
-              whileTap={{ scale: 0.97 }}
-              className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-white text-black text-xs sm:text-sm font-bold uppercase tracking-[0.08em] rounded-sm hover:bg-white/90 transition-colors"
-              style={FONT}
-            >
-              <LogIn className="w-4 h-4" aria-hidden="true" />
-              <span className="hidden sm:inline">Iniciar sesión</span>
-            </motion.button>
-          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/login')}
+            aria-label="Acceso administrador"
+            title=""
+            className="group relative h-9 w-9 rounded-sm bg-transparent outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+          >
+            <span
+              aria-hidden="true"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-1 w-1 rounded-full bg-spk-red opacity-0 transition-opacity duration-300 group-hover:opacity-60 group-focus-visible:opacity-80"
+            />
+          </button>
         </div>
       </div>
     </motion.header>
