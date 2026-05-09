@@ -52,7 +52,7 @@ export function HomeHeader() {
                 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tighter leading-none truncate"
                 style={FONT}
               >
-                SetPoint
+                Torny
               </h1>
               <motion.div
                 className="h-0.5 bg-spk-red mt-1"

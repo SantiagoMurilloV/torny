@@ -343,7 +343,7 @@ async function startServer() {
   }
 
   app.listen(PORT, () => {
-    console.log(`Servidor SetPoint corriendo en puerto ${PORT}`);
+    console.log(`Servidor Torny corriendo en puerto ${PORT}`);
   });
 }
 

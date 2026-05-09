@@ -25,8 +25,8 @@ export default defineConfig({
       },
       includeAssets: ['icon-192.png', 'icon-512.png', 'spk-cup-logo-v4.svg', 'spk-cup-logo-horizontal.svg'],
       manifest: {
-        name: 'SetPoint — Sistema de Torneos',
-        short_name: 'SetPoint',
+        name: 'Torny — Sistema de Torneos',
+        short_name: 'Torny',
         description: 'Sistema completo de gestión de torneos deportivos para voleibol',
         start_url: '/',
         display: 'standalone',

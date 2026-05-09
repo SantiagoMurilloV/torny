@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 /**
  * Tiny in-memory rate limiter for auth-critical endpoints.
  *
- * Scope: single Express instance. SetPoint runs as one Railway container
+ * Scope: single Express instance. Torny runs as one Railway container
  * today; if we ever scale horizontally we'd need to swap this for a
  * Redis-backed limiter (e.g. `rate-limiter-flexible` with Upstash).
  *

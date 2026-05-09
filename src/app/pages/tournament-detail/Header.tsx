@@ -7,7 +7,7 @@ const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
 /**
  * Fixed top-of-page chrome for the public tournament-detail view.
- * Shows the SetPoint mark + a back button + the follow CTA. The
+ * Shows the Torny mark + a back button + the follow CTA. The
  * backdrop darkens as the user scrolls past the hero.
  */
 export function Header({
@@ -60,7 +60,7 @@ export function Header({
                 className="text-base sm:text-lg md:text-xl font-bold tracking-tighter leading-none text-white truncate"
                 style={FONT}
               >
-                SetPoint
+                Torny
               </h1>
             </div>
           </div>

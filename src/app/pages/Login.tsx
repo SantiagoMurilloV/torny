@@ -69,7 +69,7 @@ export function Login() {
                 className="text-2xl sm:text-3xl font-bold tracking-tighter"
                 style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
               >
-                SetPoint
+                Torny
               </h1>
             </div>
             <div className="w-20 h-1 bg-spk-red" />

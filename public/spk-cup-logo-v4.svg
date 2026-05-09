@@ -1,13 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0C0C0E"></stop>
-      <stop offset="100%" stop-color="#111318"></stop>
+      <stop offset="0%" stop-color="#0B1746"></stop>
+      <stop offset="100%" stop-color="#00072E"></stop>
     </linearGradient>
+    <linearGradient id="glass" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.14"></stop>
+      <stop offset="38%" stop-color="#FFFFFF" stop-opacity="0.04"></stop>
+      <stop offset="62%" stop-color="#FFFFFF" stop-opacity="0"></stop>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"></stop>
+    </linearGradient>
+    <radialGradient id="hotspot" cx="28%" cy="18%" r="55%">
+      <stop offset="0%" stop-color="#7BA8FF" stop-opacity="0.18"></stop>
+      <stop offset="60%" stop-color="#7BA8FF" stop-opacity="0.04"></stop>
+      <stop offset="100%" stop-color="#7BA8FF" stop-opacity="0"></stop>
+    </radialGradient>
   </defs>
 
-  
+
   <rect width="500" height="500" rx="28" fill="url(#bg)"></rect>
+  <rect width="500" height="500" rx="28" fill="url(#hotspot)"></rect>
+  <rect width="500" height="500" rx="28" fill="url(#glass)"></rect>
 
   
   <polygon points="0,310 500,170 500,200 0,340" fill="#E31E24" opacity="0.07"></polygon>
@@ -29,20 +42,13 @@
   <rect x="40" y="236" width="420" height="3" rx="1.5" fill="#E31E24"></rect>
 
 
-  <text x="250" y="358" font-family="&#39;Arial Black&#39;,&#39;Impact&#39;,&#39;Haettenschweiler&#39;,sans-serif" font-weight="900" font-size="128" letter-spacing="-2" text-anchor="middle" dominant-baseline="auto" fill="#FFFFFF">SET</text>
+  <text x="250" y="378" font-family="&#39;Arial Black&#39;,&#39;Impact&#39;,&#39;Haettenschweiler&#39;,sans-serif" font-weight="900" font-size="116" letter-spacing="-1" text-anchor="middle" dominant-baseline="auto" fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>
 
 
-  <rect x="40" y="374" width="420" height="0.75" rx="0.5" fill="#FFFFFF" opacity="0.10"></rect>
+  <rect x="40" y="404" width="420" height="0.75" rx="0.5" fill="#FFFFFF" opacity="0.10"></rect>
 
 
-  <text x="250" y="432" font-family="&#39;Arial&#39;,&#39;Helvetica Neue&#39;,sans-serif" font-weight="400" font-size="26" letter-spacing="14" text-anchor="middle" dominant-baseline="auto" fill="#E31E24">POINT</text>
-
-
-  <circle cx="106" cy="420" r="3" fill="#E31E24" opacity="0.55"></circle>
-  <circle cx="394" cy="420" r="3" fill="#E31E24" opacity="0.55"></circle>
-
-
-  <text x="250" y="468" font-family="&#39;Arial&#39;,sans-serif" font-weight="400" font-size="11" letter-spacing="5" text-anchor="middle" fill="#FFFFFF" opacity="0.22">VOLLEYBALL TOURNAMENTS</text>
+  <text x="250" y="448" font-family="&#39;Arial&#39;,sans-serif" font-weight="400" font-size="11" letter-spacing="5" text-anchor="middle" fill="#FFFFFF" opacity="0.22">VOLLEYBALL TOURNAMENTS</text>
 
   
   <g stroke="#E31E24" stroke-width="2.5" fill="none" opacity="0.8" stroke-linecap="round">

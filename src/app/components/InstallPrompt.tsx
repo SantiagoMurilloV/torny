@@ -29,7 +29,7 @@ export function InstallPrompt() {
         transition={{ type: 'spring', damping: 22, stiffness: 240 }}
         className="fixed bottom-6 left-4 right-4 md:left-auto md:right-6 md:max-w-sm z-40"
         role="dialog"
-        aria-label="Instalar SetPoint"
+        aria-label="Instalar Torny"
       >
         <div className="relative bg-spk-black text-white rounded-sm shadow-[0_20px_60px_rgba(0,0,0,0.32)] overflow-hidden border border-white/10">
           {/* red accent rail */}
@@ -45,7 +45,7 @@ export function InstallPrompt() {
                 className="text-sm font-bold uppercase text-white"
                 style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.08em' }}
               >
-                Instala SetPoint
+                Instala Torny
               </h3>
               {isIOS ? (
                 <p className="text-[11px] text-white/70 mt-1 leading-relaxed">

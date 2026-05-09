@@ -52,7 +52,7 @@ export function SuperAdminLayout() {
             </div>
             <div>
               <h1 className="font-bold text-white text-lg" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-                SetPoint · SUPER
+                Torny · SUPER
               </h1>
               <p className="text-xs text-white/60">Plataforma</p>
             </div>
@@ -79,7 +79,7 @@ export function SuperAdminLayout() {
               className="text-2xl font-bold text-white tracking-tighter"
               style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
             >
-              SetPoint
+              Torny
             </h1>
             <div className="w-16 h-0.5 bg-spk-red mt-1" />
             <p className="text-xs text-white/60 mt-1 uppercase tracking-wider">

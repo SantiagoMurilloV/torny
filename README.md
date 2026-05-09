@@ -1,5 +1,5 @@
 
-  # SetPoint — Tournament System
+  # Torny — Tournament System
 
   ## Running the code
 

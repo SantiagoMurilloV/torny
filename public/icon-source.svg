@@ -13,8 +13,8 @@
   -->
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0C0C0E" />
-      <stop offset="100%" stop-color="#111318" />
+      <stop offset="0%" stop-color="#0B1746" />
+      <stop offset="100%" stop-color="#00072E" />
     </linearGradient>
   </defs>
 
@@ -40,16 +40,6 @@
   <!-- Hairline divider above the wordmark. -->
   <rect x="56" y="244" width="400" height="3" rx="1.5" fill="#E31E24" />
 
-  <!-- "SET" — main wordmark. -->
-  <text x="256" y="368" font-family="'Arial Black','Impact','Haettenschweiler',sans-serif" font-weight="900" font-size="120" letter-spacing="-2" text-anchor="middle" fill="#FFFFFF">SET</text>
-
-  <!-- Thin hairline between SET and POINT. -->
-  <rect x="56" y="382" width="400" height="0.75" rx="0.5" fill="#FFFFFF" opacity="0.10" />
-
-  <!-- "POINT" — secondary, red, wider tracking. -->
-  <text x="256" y="438" font-family="'Arial','Helvetica Neue',sans-serif" font-weight="400" font-size="26" letter-spacing="14" text-anchor="middle" fill="#E31E24">POINT</text>
-
-  <!-- Decorative dots flanking the secondary. -->
-  <circle cx="112" cy="426" r="3" fill="#E31E24" opacity="0.55" />
-  <circle cx="400" cy="426" r="3" fill="#E31E24" opacity="0.55" />
+  <!-- "TORNY" — main wordmark (Y final en rojo como acento). -->
+  <text x="256" y="388" font-family="'Arial Black','Impact','Haettenschweiler',sans-serif" font-weight="900" font-size="108" letter-spacing="-1" text-anchor="middle" fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>
 </svg>

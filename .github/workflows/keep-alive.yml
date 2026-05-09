@@ -1,4 +1,4 @@
-# Keep the SetPoint Railway backend warm so the first user request
+# Keep the Torny Railway backend warm so the first user request
 # after a quiet period doesn't pay a cold-start penalty.
 #
 # What this does:
@@ -72,7 +72,7 @@ jobs:
       #
       # Setup (one-time, ~5 minutes):
       #   1. Open Telegram → search @BotFather → send /newbot
-      #   2. Pick a name (e.g. "SetPoint Health") and a unique username
+      #   2. Pick a name (e.g. "Torny Health") and a unique username
       #      ending in "bot" (e.g. setpoint_health_bot).
       #   3. BotFather replies with an HTTP API token. Copy it.
       #   4. Search your new bot in Telegram, hit "Start" so it can DM you.
@@ -99,7 +99,7 @@ jobs:
           fi
 
           # Plain-text message (no Markdown to avoid escaping headaches).
-          MESSAGE="SetPoint backend health check FAILED
+          MESSAGE="Torny backend health check FAILED
           Railway direct: ${RAILWAY_STATUS}
           Vercel rewrite: ${VERCEL_STATUS}
           ${RUN_URL}"

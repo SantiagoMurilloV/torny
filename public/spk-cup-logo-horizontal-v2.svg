@@ -1,13 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 90" width="720" height="180">
   <defs>
     <linearGradient id="bg2" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#0C0C0E"/>
-      <stop offset="100%" stop-color="#111318"/>
+      <stop offset="0%" stop-color="#0B1746"/>
+      <stop offset="100%" stop-color="#00072E"/>
     </linearGradient>
+    <linearGradient id="glass2" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="45%" stop-color="#FFFFFF" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="hotspot2" cx="20%" cy="15%" r="60%">
+      <stop offset="0%" stop-color="#7BA8FF" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#7BA8FF" stop-opacity="0"/>
+    </radialGradient>
   </defs>
 
-  <!-- Fondo -->
+  <!-- Fondo + capa avidriada -->
   <rect width="360" height="90" rx="12" fill="url(#bg2)"/>
+  <rect width="360" height="90" rx="12" fill="url(#hotspot2)"/>
+  <rect width="360" height="90" rx="12" fill="url(#glass2)"/>
 
   <!-- Copa geométrica -->
   <g transform="translate(40, 45)">
@@ -24,34 +35,20 @@
   <!-- Línea vertical separadora -->
   <line x1="72" y1="18" x2="72" y2="72" stroke="#FFFFFF" stroke-width="0.5" opacity="0.18"/>
 
-  <!-- SPK + CUP centrados verticalmente en el espacio restante -->
+  <!-- TORNY centrado verticalmente en el espacio restante -->
   <!-- Centro horizontal del área de texto: desde x=80 hasta x=348, centro = 214 -->
   <!-- Centro vertical: 45 -->
 
-  <!-- SPK -->
+  <!-- TORNY (Y final en rojo como acento) -->
   <text
-    x="176"
+    x="214"
     y="58"
     font-family="'Arial Black','Impact','Haettenschweiler',sans-serif"
     font-weight="900"
     font-size="52"
-    letter-spacing="-2"
-    text-anchor="end"
-    fill="#FFFFFF">SPK</text>
-
-  <!-- Guión rojo -->
-  <rect x="182" y="40" width="14" height="4" rx="2" fill="#E31E24"/>
-
-  <!-- CUP -->
-  <text
-    x="202"
-    y="58"
-    font-family="'Arial Black','Impact','Haettenschweiler',sans-serif"
-    font-weight="900"
-    font-size="52"
-    letter-spacing="-2"
-    text-anchor="start"
-    fill="#E31E24">CUP</text>
+    letter-spacing="-1"
+    text-anchor="middle"
+    fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>
 
   <!-- Tagline debajo centrada -->
   <text
@@ -63,7 +60,7 @@
     letter-spacing="4"
     text-anchor="middle"
     fill="#FFFFFF"
-    opacity="0.25">SPIKE VOLLEY CLUB</text>
+    opacity="0.25">VOLLEYBALL TOURNAMENTS</text>
 
   <!-- Esquinas decorativas -->
   <g stroke="#E31E24" stroke-width="1.8" fill="none" opacity="0.7" stroke-linecap="round">

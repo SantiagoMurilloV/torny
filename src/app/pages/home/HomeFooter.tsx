@@ -15,7 +15,7 @@ export function HomeFooter() {
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <img
               src={spkLogo}
-              alt="SetPoint Logo"
+              alt="Torny Logo"
               className="w-10 h-10 sm:w-14 sm:h-14 md:w-16 md:h-16 flex-shrink-0"
             />
             <div className="min-w-0">

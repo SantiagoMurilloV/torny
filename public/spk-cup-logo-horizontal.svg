@@ -1,13 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 90" width="720" height="180">
   <defs>
     <linearGradient id="bg2" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#0C0C0E"></stop>
-      <stop offset="100%" stop-color="#111318"></stop>
+      <stop offset="0%" stop-color="#0B1746"></stop>
+      <stop offset="100%" stop-color="#00072E"></stop>
     </linearGradient>
+    <linearGradient id="glass2" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.16"></stop>
+      <stop offset="45%" stop-color="#FFFFFF" stop-opacity="0.04"></stop>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"></stop>
+    </linearGradient>
+    <radialGradient id="hotspot2" cx="20%" cy="15%" r="60%">
+      <stop offset="0%" stop-color="#7BA8FF" stop-opacity="0.22"></stop>
+      <stop offset="100%" stop-color="#7BA8FF" stop-opacity="0"></stop>
+    </radialGradient>
   </defs>
 
-  
+
   <rect width="360" height="90" rx="12" fill="url(#bg2)"></rect>
+  <rect width="360" height="90" rx="12" fill="url(#hotspot2)"></rect>
+  <rect width="360" height="90" rx="12" fill="url(#glass2)"></rect>
 
   
   <g transform="translate(40, 45)">
@@ -29,13 +40,7 @@
   
 
   
-  <text x="166" y="58" font-family="&#39;Arial Black&#39;,&#39;Impact&#39;,&#39;Haettenschweiler&#39;,sans-serif" font-weight="900" font-size="52" letter-spacing="-2" text-anchor="end" fill="#FFFFFF">SET</text>
-
-
-  <rect x="172" y="40" width="14" height="4" rx="2" fill="#E31E24"></rect>
-
-
-  <text x="192" y="58" font-family="&#39;Arial Black&#39;,&#39;Impact&#39;,&#39;Haettenschweiler&#39;,sans-serif" font-weight="900" font-size="52" letter-spacing="-2" text-anchor="start" fill="#E31E24">POINT</text>
+  <text x="220" y="58" font-family="&#39;Arial Black&#39;,&#39;Impact&#39;,&#39;Haettenschweiler&#39;,sans-serif" font-weight="900" font-size="52" letter-spacing="-1" text-anchor="middle" fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>
 
 
   <text x="220" y="78" font-family="&#39;Arial&#39;,sans-serif" font-weight="400" font-size="9" letter-spacing="4" text-anchor="middle" fill="#FFFFFF" opacity="0.25">VOLLEYBALL TOURNAMENTS</text>

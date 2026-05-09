@@ -1,13 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0C0C0E"/>
-      <stop offset="100%" stop-color="#111318"/>
+      <stop offset="0%" stop-color="#0B1746"/>
+      <stop offset="100%" stop-color="#00072E"/>
     </linearGradient>
+    <linearGradient id="glass" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="38%" stop-color="#FFFFFF" stop-opacity="0.04"/>
+      <stop offset="62%" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="hotspot" cx="28%" cy="18%" r="55%">
+      <stop offset="0%" stop-color="#7BA8FF" stop-opacity="0.18"/>
+      <stop offset="60%" stop-color="#7BA8FF" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#7BA8FF" stop-opacity="0"/>
+    </radialGradient>
   </defs>
 
-  <!-- Fondo -->
+  <!-- Fondo + capa avidriada -->
   <rect width="500" height="500" rx="28" fill="url(#bg)"/>
+  <rect width="500" height="500" rx="28" fill="url(#hotspot)"/>
+  <rect width="500" height="500" rx="28" fill="url(#glass)"/>
 
   <!-- Franja diagonal sutil -->
   <polygon points="0,310 500,170 500,200 0,340" fill="#E31E24" opacity="0.07"/>
@@ -28,48 +41,32 @@
   <!-- Línea roja separadora -->
   <rect x="40" y="236" width="420" height="3" rx="1.5" fill="#E31E24"/>
 
-  <!-- ── SPK centrado con text-anchor middle ── -->
+  <!-- ── TORNY centrado (Y final en rojo como acento) ── -->
   <text
     x="250"
-    y="358"
+    y="378"
     font-family="'Arial Black','Impact','Haettenschweiler',sans-serif"
     font-weight="900"
-    font-size="128"
-    letter-spacing="-2"
+    font-size="116"
+    letter-spacing="-1"
     text-anchor="middle"
     dominant-baseline="auto"
-    fill="#FFFFFF">SPK</text>
+    fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>
 
   <!-- Línea separadora blanca sutil -->
-  <rect x="40" y="374" width="420" height="0.75" rx="0.5" fill="#FFFFFF" opacity="0.10"/>
-
-  <!-- ── CUP centrado ── -->
-  <text
-    x="250"
-    y="432"
-    font-family="'Arial','Helvetica Neue',sans-serif"
-    font-weight="400"
-    font-size="26"
-    letter-spacing="22"
-    text-anchor="middle"
-    dominant-baseline="auto"
-    fill="#E31E24">CUP</text>
-
-  <!-- Puntos decorativos flanqueando CUP -->
-  <circle cx="106" cy="420" r="3" fill="#E31E24" opacity="0.55"/>
-  <circle cx="394" cy="420" r="3" fill="#E31E24" opacity="0.55"/>
+  <rect x="40" y="404" width="420" height="0.75" rx="0.5" fill="#FFFFFF" opacity="0.10"/>
 
   <!-- Tagline -->
   <text
     x="250"
-    y="468"
+    y="448"
     font-family="'Arial',sans-serif"
     font-weight="400"
     font-size="11"
     letter-spacing="5"
     text-anchor="middle"
     fill="#FFFFFF"
-    opacity="0.22">SPIKE VOLLEY CLUB</text>
+    opacity="0.22">VOLLEYBALL TOURNAMENTS</text>
 
   <!-- Esquinas decorativas -->
   <g stroke="#E31E24" stroke-width="2.5" fill="none" opacity="0.8" stroke-linecap="round">

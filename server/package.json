@@ -2,7 +2,7 @@
   "name": "spk-cup-server",
   "version": "1.0.0",
   "private": true,
-  "description": "SetPoint Tournament App - Express.js Backend",
+  "description": "Torny Tournament App - Express.js Backend",
   "scripts": {
     "dev": "nodemon --exec ts-node src/index.ts",
     "build": "tsc && npm run copy-sql",
