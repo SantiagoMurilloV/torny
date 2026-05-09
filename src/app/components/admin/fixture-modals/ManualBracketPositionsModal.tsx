@@ -114,14 +114,14 @@ export function ManualBracketPositionsModal({
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           <p className="text-sm text-black/60 mb-4">
-            Definí el tamaño del bracket de eliminación final y vinculá qué posición de cada
+            Definí el tamaño del cruce de eliminación final y vinculá qué posición de cada
             grupo ocupará cada lugar (Ej: 1° Grupo A). Las posiciones se emparejan: 1 vs 2, 3
             vs 4.
           </p>
 
           <div className="mb-6">
             <label className="text-xs font-bold text-black/60 block mb-1">
-              Tamaño del Bracket (Clasificados totales)
+              Tamaño del Cruce (Clasificados totales)
             </label>
             <Select value={bracketSize.toString()} onValueChange={(v) => setBracketSize(parseInt(v))}>
               <SelectTrigger className="w-32">

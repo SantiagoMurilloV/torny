@@ -109,7 +109,7 @@ export function TournamentDetail() {
     { id: 'grupos', label: 'Grupos', count: standings.length },
     { id: 'matches', label: 'Partidos', count: matches.length },
     { id: 'standings', label: 'Clasificación', count: standings.length },
-    { id: 'bracket', label: 'Bracket' },
+    { id: 'bracket', label: 'Cruces' },
     { id: 'info', label: 'Info' },
   ];
 

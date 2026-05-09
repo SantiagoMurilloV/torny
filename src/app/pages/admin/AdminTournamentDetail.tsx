@@ -118,8 +118,8 @@ export function AdminTournamentDetail() {
       setBracketMatches(fresh);
     },
     labels: {
-      success: 'Marcador de bracket actualizado',
-      error: 'Error al actualizar marcador de bracket',
+      success: 'Marcador de cruce actualizado',
+      error: 'Error al actualizar marcador de cruce',
     },
   });
 
@@ -332,19 +332,19 @@ export function AdminTournamentDetail() {
         const touched = m.matchesCreated + m.matchesUpdated;
         if (touched > 0) {
           toast.success(
-            `Tabla y bracket actualizados · ${m.matchesCreated} nuevos, ${m.matchesUpdated} ajustados`,
+            `Tabla y cruces actualizados · ${m.matchesCreated} nuevos, ${m.matchesUpdated} ajustados`,
           );
         } else if (m.slotsWithBothTeamsResolved === 0) {
           toast.success(
-            `Tabla actualizada · ${m.totalBracketRows} slots de bracket sin equipos definidos todavía`,
+            `Tabla actualizada · ${m.totalBracketRows} slots de cruces sin equipos definidos todavía`,
           );
         } else {
           toast.success(
-            `Tabla y bracket actualizados · ${m.slotsAlreadyMaterialized}/${m.slotsWithBothTeamsResolved} partidos ya existían`,
+            `Tabla y cruces actualizados · ${m.slotsAlreadyMaterialized}/${m.slotsWithBothTeamsResolved} partidos ya existían`,
           );
         }
       } else {
-        toast.success('Tabla y bracket actualizados');
+        toast.success('Tabla y cruces actualizados');
       }
     } catch (err) {
       toast.error(getErrorMessage(err, 'No se pudo recalcular la tabla'));

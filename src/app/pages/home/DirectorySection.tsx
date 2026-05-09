@@ -70,7 +70,7 @@ export function DirectorySection({
             <div className="w-20 h-1 bg-spk-red" />
             <p className="text-sm md:text-base text-black/55 max-w-xl leading-relaxed">
               Explora torneos en curso, próximos y ya finalizados. Toca cualquier torneo para
-              ver brackets, tablas y resultados en vivo.
+              ver cruces, tablas y resultados en vivo.
             </p>
           </div>
         </motion.div>

@@ -166,7 +166,7 @@ export function ManualBracketCrossingsModal({
               </Button>
             </div>
             <span className="text-sm text-black/50">
-              → {groupNames.length * classifiersPerGroup} clasificados · Bracket de {totalSlots}
+              → {groupNames.length * classifiersPerGroup} clasificados · Cruce de {totalSlots}
             </span>
           </div>
 

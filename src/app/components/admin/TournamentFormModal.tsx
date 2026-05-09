@@ -220,7 +220,7 @@ export function TournamentFormModal({
                   className="w-full px-3 py-2 bg-white border border-black/15 rounded-sm focus:outline-none focus:border-spk-red"
                 />
                 <p className="mt-1 text-[11px] text-black/45">
-                  Top {form.formData.goldClassifiersPerGroup} de cada grupo entran al bracket Oro.
+                  Top {form.formData.goldClassifiersPerGroup} de cada grupo entran al cruce Oro.
                 </p>
               </div>
               <div>
@@ -240,12 +240,12 @@ export function TournamentFormModal({
                 <p className="mt-1 text-[11px] text-black/45">
                   {form.formData.silverClassifiersPerGroup === 0
                     ? 'Plata desactivada — solo se genera Oro.'
-                    : `Posiciones ${form.formData.goldClassifiersPerGroup + 1} a ${form.formData.goldClassifiersPerGroup + form.formData.silverClassifiersPerGroup} de cada grupo entran al bracket Plata.`}
+                    : `Posiciones ${form.formData.goldClassifiersPerGroup + 1} a ${form.formData.goldClassifiersPerGroup + form.formData.silverClassifiersPerGroup} de cada grupo entran al cruce Plata.`}
                 </p>
               </div>
               <div className="sm:col-span-2 text-[11px] text-black/55">
-                Tip: para un bracket sin "byes", elegí valores que multipliquen tu número de grupos a una potencia de dos
-                (ej. 4 grupos × 2 = 8 → bracket de 8 limpio).
+                Tip: para un cruce sin "byes", elegí valores que multipliquen tu número de grupos a una potencia de dos
+                (ej. 4 grupos × 2 = 8 → cruce de 8 limpio).
               </div>
             </div>
           )}

@@ -69,7 +69,7 @@ export function FixtureModeDialog({
               MANUAL
             </p>
             <p className="text-sm text-black/60 mt-1">
-              Vos elegís qué equipos van en cada grupo o posición del bracket.
+              Vos elegís qué equipos van en cada grupo o posición del cruce.
             </p>
           </button>
         </div>

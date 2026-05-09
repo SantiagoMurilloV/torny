@@ -114,7 +114,7 @@ export function InfoTab({ tournament, onSubmit, onFinalize, onFinalized }: InfoT
             <AlertDialogTitle>¿Finalizar este torneo?</AlertDialogTitle>
             <AlertDialogDescription>
               El torneo pasará a estado <strong>Finalizado</strong>. Los
-              marcadores, clasificaciones y brackets quedan como están —
+              marcadores, clasificaciones y cruces quedan como están —
               solo cambia el estado público. Podés revertirlo editando el
               estado desde este mismo formulario.
             </AlertDialogDescription>

@@ -83,7 +83,7 @@ export function CategoryPickerDialog({
 
         <div className="p-4 sm:p-6 overflow-y-auto">
           <p className="text-sm text-black/60 mb-4">
-            Los cruces se arman por categoría. Cada categoría tiene sus propios grupos y bracket
+            Los cruces se arman por categoría. Cada categoría tiene sus propios grupos y cruces
             independientes.
           </p>
 

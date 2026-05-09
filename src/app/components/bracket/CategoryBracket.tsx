@@ -107,7 +107,7 @@ export function CategoryBracket({
             height={totalH}
             className="block"
             role="img"
-            aria-label={category ? `Bracket de ${category}` : 'Bracket del torneo'}
+            aria-label={category ? `Cruces de ${category}` : 'Cruces del torneo'}
           >
             {/* Connectors — drawn BEFORE boxes so they sit behind */}
             {bracketRounds.map((round, rIdx) => {

@@ -238,9 +238,9 @@ export function FixturesTab({
       });
       await refreshAfterGenerate(result);
       setShowManualBracket(false);
-      toast.success('Bracket generado');
+      toast.success('Cruces generados');
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Error al generar bracket'));
+      toast.error(getErrorMessage(err, 'Error al generar cruces'));
     } finally {
       setGenerating(false);
     }
@@ -270,7 +270,7 @@ export function FixturesTab({
           if (!Number.isNaN(pos) && pos > maxGoldPosition) maxGoldPosition = pos;
         }
         setSilverStartPosition(maxGoldPosition > 0 ? maxGoldPosition + 1 : 3);
-        toast.success('Bracket Oro generado. Ahora definí el bracket Plata.');
+        toast.success('Cruce Oro generado. Ahora definí el cruce Plata.');
         setCurrentTier('silver');
         // Keep the modal open — swapping `tier` re-renders the header/
         // button but `useEffect` inside the modal resets the matchups
@@ -283,11 +283,11 @@ export function FixturesTab({
       setSilverStartPosition(3);
       toast.success(
         currentTier === 'silver'
-          ? `Bracket Plata generado con ${bracket.filter((b) => b.round.includes('|silver|')).length} partidos`
-          : `Bracket generado con ${bracket.length} partidos`,
+          ? `Cruce Plata generado con ${bracket.filter((b) => b.round.includes('|silver|')).length} partidos`
+          : `Cruces generados con ${bracket.length} partidos`,
       );
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Error al generar bracket'));
+      toast.error(getErrorMessage(err, 'Error al generar cruces'));
     } finally {
       setGenerating(false);
     }
@@ -348,11 +348,11 @@ export function FixturesTab({
               <div
                 className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-sm text-xs text-amber-800 w-full sm:w-auto"
                 style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
-                title="El bracket Oro + Plata se genera solo cuando todos los grupos de la categoría terminan."
+                title="El cruce Oro + Plata se genera solo cuando todos los grupos de la categoría terminan."
               >
                 <Trophy className="w-4 h-4 flex-shrink-0" />
                 <span className="font-semibold uppercase tracking-wider">
-                  Bracket por divisiones
+                  Cruces por divisiones
                 </span>
                 <span className="text-amber-700/80">
                   · se genera automático al terminar los grupos
@@ -372,7 +372,7 @@ export function FixturesTab({
               ) : (
                 <RefreshCw className="w-4 h-4" />
               )}
-              Recalcular Tabla y Bracket
+              Recalcular Tabla y Cruces
             </Button>
           )}
           {(matches.length > 0 || bracketMatches.length > 0) && (
@@ -420,7 +420,7 @@ export function FixturesTab({
 
           {bracketMatches.length > 0 && (
             <section>
-              <SectionHeader title="Brackets" />
+              <SectionHeader title="Cruces" />
               <BracketByCategory bracketMatches={bracketMatches} editor={bracketEditor} />
             </section>
           )}
@@ -435,7 +435,7 @@ export function FixturesTab({
             <AlertDialogTitle>¿Regenerar grupos?</AlertDialogTitle>
             <AlertDialogDescription>
               A continuación elegís la categoría cuyos grupos querés regenerar. Se reemplazan los
-              grupos y resultados de esa categoría; las demás categorías y el bracket no se tocan.
+              grupos y resultados de esa categoría; las demás categorías y los cruces no se tocan.
               Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>

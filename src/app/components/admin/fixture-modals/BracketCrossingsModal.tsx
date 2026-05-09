@@ -63,9 +63,9 @@ export function BracketCrossingsModal({
         : 'text-spk-blue';
   const confirmLabel =
     tier === 'gold'
-      ? 'Generar Bracket Oro'
+      ? 'Generar Cruce Oro'
       : tier === 'silver'
-        ? 'Generar Bracket Plata'
+        ? 'Generar Cruce Plata'
         : 'Confirmar y Generar';
   const [classifiersPerGroup, setClassifiersPerGroup] = useState(2);
 
@@ -185,7 +185,7 @@ export function BracketCrossingsModal({
               </Button>
             </div>
             <span className="text-sm text-black/50">
-              → {sortedGroupNames.length * classifiersPerGroup} clasificados · Bracket de{' '}
+              → {sortedGroupNames.length * classifiersPerGroup} clasificados · Cruce de{' '}
               {totalSlots}
             </span>
           </div>

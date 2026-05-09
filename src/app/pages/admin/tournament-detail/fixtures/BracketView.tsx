@@ -125,7 +125,7 @@ export function BracketByCategory({
           className="text-lg font-bold mb-3"
           style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
         >
-          Bracket de Eliminación
+          Cruces de Eliminación
         </h3>
         {renderCategoryBody(categories[0]?.[1] ?? [])}
       </div>
@@ -137,7 +137,7 @@ export function BracketByCategory({
       {categories.map(([category, rows]) => (
         <CategorySection
           key={category || '_default_bracket'}
-          title={`Bracket · ${category}`}
+          title={`Cruces · ${category}`}
           count={rows.length}
           subtitle={`${rows.length} ${rows.length === 1 ? 'partido' : 'partidos'}`}
         >

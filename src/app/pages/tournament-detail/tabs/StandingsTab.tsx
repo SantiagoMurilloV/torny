@@ -566,7 +566,7 @@ function CategoryStandingsTable({
                   style={{ background: '#FBC02D' }}
                   aria-hidden="true"
                 />
-                <span className="font-bold">Clasificado a bracket</span>
+                <span className="font-bold">Clasificado a cruces</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Trophy className="w-3.5 h-3.5 text-spk-gold" aria-hidden="true" />

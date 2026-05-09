@@ -278,7 +278,7 @@ export function AdminSettings() {
               Reiniciar datos del sistema
             </h3>
             <p className="text-sm text-black/60 mt-1">
-              Borra todos los torneos, equipos, partidos, brackets y
+              Borra todos los torneos, equipos, partidos, cruces y
               clasificaciones. <strong>Se conservan</strong> las cuentas
               (administrador y jueces) y las suscripciones de
               notificaciones. Acción irreversible.
@@ -306,7 +306,7 @@ export function AdminSettings() {
           if (!open) setResetConfirmOpen(false);
         }}
         title="¿Reiniciar toda la base de datos?"
-        description="Se eliminarán TODOS los torneos, equipos, partidos, brackets y clasificaciones. Las cuentas de administrador y jueces, más las suscripciones de notificaciones, se conservan. Esta acción NO se puede deshacer."
+        description="Se eliminarán TODOS los torneos, equipos, partidos, cruces y clasificaciones. Las cuentas de administrador y jueces, más las suscripciones de notificaciones, se conservan. Esta acción NO se puede deshacer."
         confirmLabel="Sí, borrar todo"
         loading={resetting}
         onConfirm={async () => {

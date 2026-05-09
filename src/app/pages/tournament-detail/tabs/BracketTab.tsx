@@ -73,17 +73,17 @@ export function BracketTab({
           <Bracket matches={visible} />
         ) : (
           <div className="text-center py-16 text-black/60 text-sm">
-            No hay partidos de bracket en esta categoría todavía.
+            No hay partidos de cruces en esta categoría todavía.
           </div>
         )
       ) : (
         <div className="text-center py-20">
           <Trophy className="w-16 h-16 text-black/20 mx-auto mb-6" />
           <h3 className="text-2xl font-bold mb-3" style={FONT}>
-            SIN BRACKET
+            SIN CRUCES
           </h3>
           <p className="text-black/60">
-            El bracket se generará cuando la fase de grupos finalice
+            Los cruces se generarán cuando la fase de grupos finalice
           </p>
         </div>
       )}

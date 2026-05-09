@@ -73,13 +73,13 @@ export function BracketModePickerDialog({
 
         <div className="p-4 sm:p-6 overflow-y-auto space-y-3">
           <p className="text-sm text-black/60">
-            Elegí cómo se arman los cruces. La división Oro + Plata genera dos brackets
+            Elegí cómo se arman los cruces. La división Oro + Plata genera dos cruces
             independientes para premiar a los mejores y dar una segunda chance al resto.
           </p>
 
           <OptionCard
             icon={<Trophy className="w-5 h-5" />}
-            title="Bracket único"
+            title="Cruce único"
             description="Un solo cuadro de eliminación directa con todos los clasificados. Incluye 3er puesto."
             selected={selected === 'single'}
             onClick={() => setSelected('single')}
@@ -94,7 +94,7 @@ export function BracketModePickerDialog({
               </div>
             }
             title="División Oro + Plata"
-            description="Dos brackets: Oro para los mejores (con 3er puesto), Plata para el resto (solo final). Se arman en dos pasos."
+            description="Dos cruces: Oro para los mejores (con 3er puesto), Plata para el resto (solo final). Se arman en dos pasos."
             selected={selected === 'division'}
             onClick={() => setSelected('division')}
             accent="spk-red"

@@ -78,7 +78,7 @@ export function ManualBracketModal({
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           <p className="text-sm text-black/60 mb-4">
-            Asigná un equipo a cada posición del bracket. Las posiciones se emparejan: 1 vs 2, 3 vs 4, etc.
+            Asigná un equipo a cada posición del cruce. Las posiciones se emparejan: 1 vs 2, 3 vs 4, etc.
           </p>
           <div className="space-y-2">
             {seeds.map((seed) => (
