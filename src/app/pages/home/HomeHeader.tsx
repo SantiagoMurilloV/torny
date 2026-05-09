@@ -63,18 +63,19 @@ export function HomeHeader() {
             </div>
           </motion.div>
 
-          <button
+          <motion.button
             type="button"
             onClick={() => navigate('/login')}
             aria-label="Acceso administrador"
-            title=""
-            className="group relative h-9 w-9 rounded-sm bg-transparent outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+            whileHover={{ scale: 1.15 }}
+            whileTap={{ scale: 0.9 }}
+            className="group relative h-10 w-10 rounded-full bg-white/5 border border-white/15 backdrop-blur-sm flex items-center justify-center outline-none transition-colors hover:bg-white/10 hover:border-spk-red/60 focus-visible:ring-2 focus-visible:ring-spk-red/50"
           >
             <span
               aria-hidden="true"
-              className="absolute right-2 top-1/2 -translate-y-1/2 h-1 w-1 rounded-full bg-spk-red opacity-0 transition-opacity duration-300 group-hover:opacity-60 group-focus-visible:opacity-80"
+              className="h-2 w-2 rounded-full bg-spk-red transition-all duration-300 group-hover:h-2.5 group-hover:w-2.5 group-hover:shadow-[0_0_8px_rgba(220,38,38,0.7)]"
             />
-          </button>
+          </motion.button>
         </div>
       </div>
     </motion.header>
