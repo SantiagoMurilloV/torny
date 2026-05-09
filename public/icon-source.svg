@@ -16,10 +16,23 @@
       <stop offset="0%" stop-color="#0B1746" />
       <stop offset="100%" stop-color="#00072E" />
     </linearGradient>
+    <linearGradient id="glass" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.14" />
+      <stop offset="38%" stop-color="#FFFFFF" stop-opacity="0.04" />
+      <stop offset="62%" stop-color="#FFFFFF" stop-opacity="0" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+    <radialGradient id="hotspot" cx="28%" cy="18%" r="55%">
+      <stop offset="0%" stop-color="#7BA8FF" stop-opacity="0.18" />
+      <stop offset="60%" stop-color="#7BA8FF" stop-opacity="0.04" />
+      <stop offset="100%" stop-color="#7BA8FF" stop-opacity="0" />
+    </radialGradient>
   </defs>
 
-  <!-- Background: full-bleed, no rx — leave masking to the OS. -->
+  <!-- Background + capa avidriada — full-bleed, no rx (OS aplica máscara). -->
   <rect width="512" height="512" fill="url(#bg)" />
+  <rect width="512" height="512" fill="url(#hotspot)" />
+  <rect width="512" height="512" fill="url(#glass)" />
 
   <!-- Diagonal red accent stripe (subtle). -->
   <polygon points="0,318 512,174 512,205 0,348" fill="#E31E24" opacity="0.07" />
