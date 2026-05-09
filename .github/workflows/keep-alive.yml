@@ -53,13 +53,18 @@ jobs:
             https://spike-production-6ba4.up.railway.app/api/health \
             && echo "" && echo "Railway /api/health OK"
 
-      - name: Ping via Vercel rewrite
+      - name: Ping Vercel frontend
         id: vercel
         continue-on-error: true
         run: |
-          curl --fail --show-error --silent --max-time 30 \
-            https://torny.app/api/health \
-            && echo "" && echo "Vercel → Railway /api/health OK"
+          # Hits the public frontend HTML on Vercel. We don't ping the
+          # Vercel `/api/*` rewrite because the SPA bypasses it and
+          # talks to Railway directly via VITE_API_URL — verifying the
+          # HTML load is what actually matters to spectators. -L follows
+          # the apex → www redirect Vercel adds by default.
+          curl --fail --show-error --silent --max-time 30 -L \
+            https://torny.app/ -o /dev/null \
+            && echo "Vercel frontend OK (https://torny.app/)"
 
       # Telegram alert — only fires when at least one ping failed.
       # Skipped silently if the secrets aren't configured yet, so the
