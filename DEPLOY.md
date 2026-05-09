@@ -24,7 +24,7 @@ Vercel corre funciones serverless, lo cual no encaja bien con el Express persist
    | `NODE_ENV`                | `production`                                                                                           |
    | `JWT_SECRET`              | ≥16 caracteres aleatorios (`openssl rand -hex 32`)                                                     |
    | `CORS_ORIGINS`            | la URL de Vercel (después del paso 2)                                                                  |
-   | `PUBLIC_URL`              | URL pública de Railway, ej. `https://spk-cup-api.up.railway.app`                                       |
+   | `PUBLIC_URL`              | URL pública de Railway, ej. `https://spike-production-6ba4.up.railway.app`                                       |
    | `SUPER_ADMIN_USERNAME`    | opcional, default `superadmin`                                                                         |
    | `SUPER_ADMIN_PASSWORD`    | **obligatorio en prod**, ≥8 chars con letra y número. Se lee una sola vez para crear la cuenta         |
    | `PLATFORM_RECOVERY_KEY`   | **OPCIONAL + ARRIESGADO** — 64 hex chars (`openssl rand -hex 32`). Activa "ver contraseña actual" en el panel super_admin |
@@ -55,12 +55,12 @@ la clave **no vive en la DB**, solo en esta env var.
 
 Si no configurás esta variable, el panel opera en el modo seguro por default (reset + show-once).
 
-5. Railway construye, corre las migraciones (lo hace el mismo backend al bootear) y te da una URL pública tipo `https://spk-cup-api.up.railway.app`. **Guarda esa URL.**
+5. Railway construye, corre las migraciones (lo hace el mismo backend al bootear) y te da una URL pública tipo `https://spike-production-6ba4.up.railway.app`. **Guarda esa URL.**
 
 ### Verificar
 
 ```bash
-curl https://spk-cup-api.up.railway.app/api/health
+curl https://spike-production-6ba4.up.railway.app/api/health
 # → {"status":"ok","timestamp":"..."}
 ```
 
@@ -79,22 +79,22 @@ curl https://spk-cup-api.up.railway.app/api/health
    ```jsonc
    {
      "rewrites": [
-       { "source": "/api/:path*",     "destination": "https://spk-cup-api.up.railway.app/api/:path*" },
-       { "source": "/uploads/:path*", "destination": "https://spk-cup-api.up.railway.app/uploads/:path*" }
+       { "source": "/api/:path*",     "destination": "https://spike-production-6ba4.up.railway.app/api/:path*" },
+       { "source": "/uploads/:path*", "destination": "https://spike-production-6ba4.up.railway.app/uploads/:path*" }
      ]
    }
    ```
 
    Commit + push. Vercel re-deploya automáticamente.
 
-4. Vercel te da una URL tipo `https://spk-cup.vercel.app`.
+4. Vercel te da una URL tipo `https://torny.app`.
 
 ### Cerrar el circuito: actualizar CORS_ORIGINS
 
 Vuelve a Railway → Variables y pon en `CORS_ORIGINS` **la URL que te dio Vercel**:
 
 ```
-CORS_ORIGINS=https://spk-cup.vercel.app
+CORS_ORIGINS=https://torny.app
 ```
 
 Railway redeploya el backend. Ya pueden hablar.

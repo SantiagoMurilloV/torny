@@ -15,7 +15,7 @@ function validDto(overrides: Partial<CreateTournamentDto> = {}): CreateTournamen
   return {
     name: 'Torneo de Prueba',
     sport: 'Voleibol',
-    club: 'SPK Club',
+    club: 'Torny Club',
     startDate: '2025-06-01',
     endDate: '2025-06-15',
     status: 'upcoming',
@@ -38,7 +38,7 @@ function sampleRow(overrides: Record<string, unknown> = {}): Record<string, unkn
     id: 'uuid-1',
     name: 'Torneo de Prueba',
     sport: 'Voleibol',
-    club: 'SPK Club',
+    club: 'Torny Club',
     start_date: '2025-06-01',
     end_date: '2025-06-15',
     description: null,

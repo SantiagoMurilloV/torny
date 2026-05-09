@@ -10,4 +10,4 @@ ON CONFLICT (username) DO NOTHING;
 
 -- Seed: Configuración inicial del sistema
 INSERT INTO system_settings (system_name, club_name, language)
-VALUES ('SPK-CUP', 'SPK Club', 'es');
+VALUES ('Torny', 'Torny', 'es');

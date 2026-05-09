@@ -60,7 +60,7 @@ export const DEFAULT_COURTS: CourtEntry[] = [
 export function emptyForm(): TournamentFormState {
   return {
     name: '',
-    club: 'Club Deportivo Spike',
+    club: '',
     sport: 'Voleibol',
     description: '',
     startDate: '',

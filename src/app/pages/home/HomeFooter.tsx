@@ -23,10 +23,10 @@ export function HomeFooter() {
                 className="text-base sm:text-lg md:text-xl font-bold tracking-tighter leading-tight"
                 style={FONT}
               >
-                SPiKE
+                Torny
               </div>
               <div className="text-[10px] sm:text-xs text-white/50 truncate">
-                Club Deportivo Spike
+                Sistema de Torneos
               </div>
             </div>
           </div>

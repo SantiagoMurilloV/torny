@@ -547,7 +547,7 @@ export function TeamDetail() {
                 <div className="text-xl font-bold tracking-tighter" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
                   Torny
                 </div>
-                <div className="text-xs text-white/50">Club Deportivo Spike</div>
+                <div className="text-xs text-white/50">Sistema de Torneos</div>
               </div>
             </div>
             <div className="text-sm text-white/50">
