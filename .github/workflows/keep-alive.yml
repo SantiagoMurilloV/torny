@@ -73,7 +73,7 @@ jobs:
       # Setup (one-time, ~5 minutes):
       #   1. Open Telegram → search @BotFather → send /newbot
       #   2. Pick a name (e.g. "Torny Health") and a unique username
-      #      ending in "bot" (e.g. setpoint_health_bot).
+      #      ending in "bot" (e.g. torny_health_bot).
       #   3. BotFather replies with an HTTP API token. Copy it.
       #   4. Search your new bot in Telegram, hit "Start" so it can DM you.
       #   5. Open https://api.telegram.org/bot<TOKEN>/getUpdates in a browser
