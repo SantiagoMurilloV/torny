@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
-import { Trophy } from 'lucide-react';
+import { TornyTrophy } from '../../components/brand/TornyTrophy';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
@@ -41,18 +41,18 @@ export function HomeHeader() {
             transition={{ type: 'spring', stiffness: 300 }}
           >
             <motion.div
-              className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-sm bg-white flex items-center justify-center flex-shrink-0"
-              whileHover={{ rotate: 180 }}
-              transition={{ duration: 0.4 }}
+              className="w-9 h-9 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-sm bg-white flex items-center justify-center flex-shrink-0 text-black"
+              whileHover={{ scale: 1.06 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 18 }}
             >
-              <Trophy className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-black" />
+              <TornyTrophy className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8" />
             </motion.div>
             <div className="min-w-0">
               <h1
-                className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tighter leading-none truncate"
+                className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight leading-none truncate"
                 style={FONT}
               >
-                Torny
+                Torn<span className="text-spk-red">y</span>
               </h1>
               <motion.div
                 className="h-0.5 bg-spk-red mt-1"
