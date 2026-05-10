@@ -50,17 +50,25 @@ export function Login() {
 
   return (
     <div className="min-h-screen bg-black text-white flex">
-      {/* Left Side - Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-6 md:p-12">
+      {/* Left Side - Login Form
+          Padding matches the right panel (p-12 xl:p-16) so the brand mark
+          on the left sits at the SAME y-position as the "Tournament
+          Platform" eyebrow on the right, and the form's title aligns
+          horizontally with "GANA EL JUEGO". Layout is top-aligned (not
+          vertically centered) so the brand mirrors HomeHeader's top-left
+          position instead of floating mid-screen on tall viewports. */}
+      <div className="w-full lg:w-1/2 flex flex-col items-center p-4 sm:p-6 md:p-12 xl:p-16">
         <div className="w-full max-w-md">
           {/* Brand mark — aligned with AdminLayout's sidebar header
               (w-12 trophy frame + text-2xl wordmark + 16-px hairline) so
               the visual scale stays constant the moment the user logs in
-              and lands on the admin shell. */}
+              and lands on the admin shell.
+              `mb-5` keeps the title's top edge close to the right panel's
+              "GANA EL JUEGO" headline (eyebrow + mb-4 ≈ same offset). */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-8 sm:mb-12"
+            className="mb-5"
           >
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-sm bg-white flex items-center justify-center flex-shrink-0">
