@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Trophy, Lock, User, ArrowRight, Eye, EyeOff, Zap, WifiOff, Bell, MessageCircle, Smartphone, Shield } from 'lucide-react';
+import { Trophy, Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../services/api';
@@ -213,185 +213,122 @@ export function Login() {
         </div>
       </div>
 
-      {/* Right Side — composición visual on-brand (sin foto stock).
-          Background gradient navy oscuro + radial hotspot azul claro
-          + pelota geométrica decorativa gigante. Coherente con los SVGs
-          de la marca (mismo gradient #0B1746→#00072E + #7BA8FF hotspot).
-          Sobre eso, dos cards: brand block + soporte/info útil. */}
-      <div
-        className="hidden lg:block lg:w-1/2 relative overflow-hidden"
-        style={{
-          background:
-            'radial-gradient(circle at 22% 18%, rgba(123,168,255,0.22) 0%, transparent 55%), linear-gradient(135deg, #0B1746 0%, #00072E 100%)',
-        }}
-      >
-        {/* Capa glass overlay */}
+      {/* Right Side — foto cinematográfica de voleibol + flujo instructivo
+          en 3 pasos. Difuminado izquierdo (gradient from-black) integra
+          el panel con el form left sin corte visual. Sin info de contacto
+          personal. Foto Unsplash optimizada (hash perpetuo, 1080w). */}
+      <div className="hidden lg:block lg:w-1/2 relative overflow-hidden bg-black">
+        {/* Foto épica de voleibol en fullscreen */}
+        <img
+          src="https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?auto=format&fit=crop&w=1400&q=85"
+          alt="Jugadora de voleibol en acción"
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="eager"
+          decoding="async"
+        />
+
+        {/* Difuminado izquierdo — gradient que va del NEGRO PURO (mismo
+            del panel left) al transparente, eliminando el corte visual.
+            Más fuerte arriba/abajo y centro que en los costados para no
+            tapar la foto. */}
         <div
           aria-hidden="true"
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              'linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 45%, transparent 100%)',
+              'linear-gradient(90deg, #000 0%, rgba(0,0,0,0.85) 12%, rgba(0,0,0,0.45) 35%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0.45) 100%)',
           }}
         />
-
-        {/* Banda diagonal roja sutil — mismo motivo del logo */}
+        {/* Vignette sutil para que el contenido superpuesto destaque */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 pointer-events-none opacity-[0.06]"
+          className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              'linear-gradient(105deg, transparent 35%, #E31E24 35%, #E31E24 38%, transparent 38%)',
+              'radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.55) 100%)',
           }}
         />
 
-        {/* Pelota de voley geométrica decorativa GIGANTE — opacity baja
-            como motivo de fondo. Mismo SVG que el wordmark del landing. */}
-        <svg
-          viewBox="0 0 64 64"
-          className="absolute -top-12 -right-16 w-[520px] h-[520px] text-white opacity-[0.08] pointer-events-none"
-          aria-hidden="true"
-        >
-          <g
-            stroke="currentColor"
-            strokeWidth={2.4}
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="32" cy="32" r="26" />
-            <path d="M 7 27 C 18 22 46 22 57 27" />
-            <path d="M 7 37 C 18 42 46 42 57 37" />
-            <path d="M 27 7 C 22 18 22 46 27 57" />
-            <path d="M 37 7 C 42 18 42 46 37 57" />
-          </g>
-          <circle cx="32" cy="32" r="3.2" fill="#E31E24" />
-        </svg>
-
-        {/* Esquinas decorativas rojas (mismo del logo de la app) */}
-        <div className="absolute top-8 left-8 w-12 h-12 border-t-2 border-l-2 border-spk-red/40" />
-        <div className="absolute top-8 right-8 w-12 h-12 border-t-2 border-r-2 border-spk-red/40" />
-        <div className="absolute bottom-8 left-8 w-12 h-12 border-b-2 border-l-2 border-spk-red/40" />
-        <div className="absolute bottom-8 right-8 w-12 h-12 border-b-2 border-r-2 border-spk-red/40" />
-
-        {/* Contenido principal */}
+        {/* Contenido superpuesto */}
         <div className="relative z-10 h-full flex flex-col justify-between p-12 xl:p-16">
-          {/* TOP — Brand block */}
+          {/* TOP — eyebrow + headline corto inspiracional */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="space-y-6 max-w-md"
+            className="max-w-lg"
           >
-            <div>
-              <p
-                className="text-xs font-bold uppercase tracking-[0.25em] text-spk-red mb-3"
-                style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
-              >
-                ● Voleibol · En vivo
-              </p>
-              <h3
-                className="font-black tracking-tighter leading-none text-6xl xl:text-7xl"
-                style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
-              >
-                TORN<span className="text-spk-red">Y</span>
-              </h3>
-              <div className="h-1 w-16 bg-spk-red mt-4" />
-            </div>
-
-            <p className="text-white/75 text-base xl:text-lg leading-relaxed">
-              Plataforma para organizar torneos de voleibol con marcador en
-              vivo, brackets automáticos y panel de jueces.
+            <p
+              className="text-xs font-bold uppercase tracking-[0.3em] text-spk-red mb-4 flex items-center gap-2"
+              style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+            >
+              <span className="w-2 h-2 rounded-full bg-spk-red animate-pulse" />
+              Tournament Platform
             </p>
+            <h3
+              className="font-black tracking-tighter leading-[0.95] text-5xl xl:text-6xl 2xl:text-7xl"
+              style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+            >
+              GANA EL JUEGO
+              <br />
+              <span className="text-white/65">FUERA DE LA CANCHA.</span>
+            </h3>
           </motion.div>
 
-          {/* BOTTOM — value props + soporte */}
+          {/* BOTTOM — flujo en 3 pasos tipo instructivo */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="space-y-6"
           >
-            {/* Value props row */}
-            <div className="grid grid-cols-3 gap-3">
+            <p
+              className="text-[11px] font-bold uppercase tracking-[0.25em] text-white/55 mb-5"
+              style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+            >
+              Cómo funciona
+            </p>
+
+            <div className="space-y-3">
               {[
-                { icon: Zap, label: 'Setup', value: '5 MIN' },
-                { icon: WifiOff, label: 'Sin App Store', value: '100% PWA' },
-                { icon: Bell, label: 'Marcador', value: 'EN VIVO' },
-              ].map((p) => (
+                {
+                  n: '01',
+                  title: 'Creá tu torneo',
+                  desc: 'Categorías, formato, canchas. En 5 minutos.',
+                },
+                {
+                  n: '02',
+                  title: 'Inscribí equipos',
+                  desc: 'Capitanes y jueces con credenciales propias.',
+                },
+                {
+                  n: '03',
+                  title: 'Jugá en vivo',
+                  desc: 'Marcador, brackets y push notifications en tiempo real.',
+                },
+              ].map((s) => (
                 <div
-                  key={p.label}
-                  className="bg-white/[0.05] backdrop-blur border border-white/10 rounded-sm p-4"
+                  key={s.n}
+                  className="flex items-start gap-4 bg-white/[0.04] backdrop-blur-md border border-white/10 rounded-sm p-4"
                 >
-                  <div className="w-8 h-8 rounded-sm bg-spk-red/15 text-spk-red flex items-center justify-center mb-3">
-                    <p.icon className="w-4 h-4" />
-                  </div>
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-white/55 leading-tight mb-1">
-                    {p.label}
-                  </div>
                   <div
-                    className="font-bold text-white text-base leading-none"
+                    className="font-black text-2xl xl:text-3xl text-spk-red leading-none flex-shrink-0 w-10 xl:w-12 tabular-nums"
                     style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
                   >
-                    {p.value}
+                    {s.n}
+                  </div>
+                  <div className="min-w-0">
+                    <div
+                      className="font-bold text-white text-base xl:text-lg leading-tight uppercase tracking-tight"
+                      style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+                    >
+                      {s.title}
+                    </div>
+                    <p className="text-xs xl:text-sm text-white/60 leading-snug mt-1">
+                      {s.desc}
+                    </p>
                   </div>
                 </div>
               ))}
-            </div>
-
-            {/* Soporte + info útil */}
-            <div className="bg-white/[0.05] backdrop-blur border border-white/10 rounded-sm p-5 space-y-4">
-              <p
-                className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/45"
-                style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
-              >
-                ¿Necesitás ayuda?
-              </p>
-
-              <div className="grid grid-cols-2 gap-3">
-                <a
-                  href="https://wa.me/573166275710?text=Hola%20Santiago%2C%20necesito%20ayuda%20con%20Torny."
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2.5 bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/40 rounded-sm px-3 py-2.5 transition-colors group"
-                >
-                  <MessageCircle className="w-4 h-4 text-[#25D366] flex-shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-[10px] uppercase tracking-wider text-white/55 leading-tight">
-                      WhatsApp
-                    </div>
-                    <div className="text-sm font-bold text-white leading-tight truncate">
-                      316 627 5710
-                    </div>
-                  </div>
-                </a>
-
-                <a
-                  href="mailto:hola@torny.app"
-                  className="flex items-center gap-2.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 rounded-sm px-3 py-2.5 transition-colors"
-                >
-                  <Smartphone className="w-4 h-4 text-spk-red flex-shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-[10px] uppercase tracking-wider text-white/55 leading-tight">
-                      Email
-                    </div>
-                    <div className="text-sm font-bold text-white leading-tight truncate">
-                      hola@torny.app
-                    </div>
-                  </div>
-                </a>
-              </div>
-
-              {/* Tip — instalación PWA */}
-              <div className="flex items-start gap-2.5 pt-3 border-t border-white/10">
-                <Shield className="w-4 h-4 text-white/50 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-white/55 leading-relaxed">
-                  <span className="text-white/80 font-semibold">Tip:</span>{' '}
-                  instalá Torny como app en tu celular desde el menú del
-                  navegador (Compartir → Añadir a Inicio en iOS, ⋮ → Instalar
-                  app en Android).
-                </p>
-              </div>
             </div>
           </motion.div>
         </div>
