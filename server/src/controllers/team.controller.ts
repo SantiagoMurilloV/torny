@@ -1,10 +1,51 @@
 import { Request, Response, NextFunction } from 'express';
 import { teamService } from '../services/team.service';
 import { validateUUID } from '../middleware/validation';
+import { optionalUser } from '../middleware/auth';
 
-export async function getAll(_req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getAll(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const teams = await teamService.getAll();
+    // Scope by caller role:
+    //   · admin                      → only their own teams (owner_id match)
+    //   · super_admin / public / judge → everything
+    // Note: public spectator reads stay unscoped because match cards,
+    // standings tables and the bracket all need to render every team
+    // referenced by their tournaments.
+    const caller = optionalUser(req);
+    const teams =
+      caller?.role === 'admin'
+        ? await teamService.getAll({ scope: 'owner', ownerId: caller.userId })
+        : await teamService.getAll({ scope: 'all' });
+    res.json(teams);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /api/teams/search?q=texto&category=Sub-15&limit=20
+ *
+ * Quick search for the team-picker modal when an admin enrolls teams in
+ * a tournament. Same scoping rules as `getAll` — admins only see their
+ * own library, super_admins see everything, public callers are not
+ * expected here but get the unscoped result if they ask.
+ */
+export async function search(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const caller = optionalUser(req);
+    const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+    const category =
+      typeof req.query.category === 'string' ? req.query.category : undefined;
+    const limitRaw = typeof req.query.limit === 'string' ? Number(req.query.limit) : undefined;
+    const filters = {
+      search: q,
+      category,
+      limit: Number.isFinite(limitRaw) ? limitRaw : undefined,
+    };
+    const teams =
+      caller?.role === 'admin'
+        ? await teamService.search({ scope: 'owner', ownerId: caller.userId }, filters)
+        : await teamService.search({ scope: 'all' }, filters);
     res.json(teams);
   } catch (error) {
     next(error);
@@ -24,7 +65,15 @@ export async function getById(req: Request, res: Response, next: NextFunction): 
 
 export async function create(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const team = await teamService.create(req.body);
+    // Ownership is taken from req.user (set by authMiddleware), never
+    // from the body — Admin A can't smuggle a team into Admin B's
+    // library. super_admin creating a team gets a null owner so the row
+    // is platform-shared and visible to any super_admin.
+    let ownerId: string | null = null;
+    if (req.user?.role === 'admin') {
+      ownerId = req.user.userId;
+    }
+    const team = await teamService.create(req.body, ownerId);
     res.status(201).json(team);
   } catch (error) {
     next(error);

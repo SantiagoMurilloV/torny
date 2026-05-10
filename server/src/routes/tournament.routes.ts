@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { getPool } from '../config/database';
 import { bracketGenerator } from '../services/bracket.service';
 import { cacheGet } from '../middleware/cache';
+import { requireTournamentAccess } from '../middleware/access';
 import {
   getAll,
   getById,
@@ -38,8 +39,12 @@ const router = Router();
 router.get('/', cacheGet(30), getAll);
 router.get('/:id', cacheGet(15), getById);
 router.post('/', create);
-router.put('/:id', update);
-router.delete('/:id', remove);
+// Mutations are gated by `requireTournamentAccess`: only the admin who
+// owns the tournament (or super_admin) can edit / delete it. Public
+// callers get 404 (not 403) so the existence of cross-tenant resources
+// is never disclosed.
+router.put('/:id', requireTournamentAccess, update);
+router.delete('/:id', requireTournamentAccess, remove);
 
 // Tournament sub-resources
 //
@@ -52,23 +57,24 @@ router.delete('/:id', remove);
 // score lag stays under the polling cadence, so end users don't notice.
 router.get('/:id/matches', cacheGet(15, { swrSeconds: 60 }), getMatches);
 router.get('/:id/standings', cacheGet(15, { swrSeconds: 60 }), getStandings);
-router.post('/:id/standings/recalculate', recalculateStandings);
+router.post('/:id/standings/recalculate', requireTournamentAccess, recalculateStandings);
 router.get('/:id/bracket', cacheGet(15, { swrSeconds: 60 }), getBracket);
 
-// Team enrollment
+// Team enrollment — list is public (spectators see who's playing); the
+// enroll/unenroll mutations are owner-scoped.
 router.get('/:id/teams', cacheGet(30), getEnrolledTeams);
-router.post('/:id/teams', enrollTeam);
-router.delete('/:id/teams/:teamId', unenrollTeam);
+router.post('/:id/teams', requireTournamentAccess, enrollTeam);
+router.delete('/:id/teams/:teamId', requireTournamentAccess, unenrollTeam);
 
 // Fixture generation
-router.post('/:id/generate-fixtures', generateFixtures);
-router.post('/:id/generate-manual-fixtures', generateManualFixtures);
-router.post('/:id/generate-bracket-crossings', generateBracketCrossings);
-router.delete('/:id/fixtures', clearFixtures);
-router.post('/:id/resolve-bracket', resolveBracket);
+router.post('/:id/generate-fixtures', requireTournamentAccess, generateFixtures);
+router.post('/:id/generate-manual-fixtures', requireTournamentAccess, generateManualFixtures);
+router.post('/:id/generate-bracket-crossings', requireTournamentAccess, generateBracketCrossings);
+router.delete('/:id/fixtures', requireTournamentAccess, clearFixtures);
+router.post('/:id/resolve-bracket', requireTournamentAccess, resolveBracket);
 
 // Bracket match update
-router.put('/:id/bracket/:matchId', updateBracketMatch);
+router.put('/:id/bracket/:matchId', requireTournamentAccess, updateBracketMatch);
 
 // Diagnostic endpoint — public-readable summary of the bracket vs
 // matches state. Useful to debug "the bracket has teams but Partidos

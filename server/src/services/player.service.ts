@@ -78,15 +78,42 @@ function validateCommon(data: CreatePlayerDto | UpdatePlayerDto): void {
 }
 
 export class PlayerService {
-  async listByTeam(teamId: string): Promise<Player[]> {
+  /**
+   * List the team's roster, optionally filtered by a free-text search.
+   * The search is partial (ILIKE) and matches against first/last name,
+   * shirt number (cast to text), document number and position. Used by
+   * the team panel + admin roster card to filter big rosters quickly.
+   * Empty/whitespace search returns the full roster.
+   */
+  async listByTeam(teamId: string, search?: string): Promise<Player[]> {
     const pool = getPool();
     const check = await pool.query('SELECT id FROM teams WHERE id = $1', [teamId]);
     if (check.rows.length === 0) throw new NotFoundError('Equipo');
+
+    const term = (search ?? '').trim();
+    if (term.length === 0) {
+      const result = await pool.query(
+        `SELECT * FROM players
+         WHERE team_id = $1
+         ORDER BY last_name ASC, first_name ASC`,
+        [teamId],
+      );
+      return result.rows.map(mapRow);
+    }
+    const like = `%${term}%`;
     const result = await pool.query(
       `SELECT * FROM players
        WHERE team_id = $1
+         AND (
+           first_name ILIKE $2
+           OR last_name ILIKE $2
+           OR (first_name || ' ' || last_name) ILIKE $2
+           OR position ILIKE $2
+           OR document_number ILIKE $2
+           OR CAST(shirt_number AS TEXT) = $3
+         )
        ORDER BY last_name ASC, first_name ASC`,
-      [teamId],
+      [teamId, like, term],
     );
     return result.rows.map(mapRow);
   }

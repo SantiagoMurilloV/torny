@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -86,7 +86,6 @@ export function AdminTournamentDetail() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [enrolling, setEnrolling] = useState(false);
   const [unenrollingId, setUnenrollingId] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
@@ -162,19 +161,6 @@ export function AdminTournamentDetail() {
     fetchData();
   }, [fetchData]);
 
-  // ── Derived ─────────────────────────────────────────────────────
-
-  const enrolledIds = useMemo(() => new Set(enrolledTeams.map((t) => t.id)), [enrolledTeams]);
-
-  const availableTeams = useMemo(() => {
-    const notEnrolled = allTeams.filter((t) => !enrolledIds.has(t.id));
-    const allowed = tournament?.categories ?? [];
-    if (allowed.length === 0) return notEnrolled;
-    const normalize = (s: string) => s.trim().toLowerCase();
-    const allowedSet = new Set(allowed.map(normalize));
-    return notEnrolled.filter((t) => t.category && allowedSet.has(normalize(t.category)));
-  }, [allTeams, enrolledIds, tournament?.categories]);
-
   // ── Handlers — tournament ───────────────────────────────────────
 
   const handleTournamentEditSubmit = async (updated: Tournament) => {
@@ -211,7 +197,6 @@ export function AdminTournamentDetail() {
 
   const handleEnroll = async (teamId: string) => {
     if (!id) return;
-    setEnrolling(true);
     try {
       await api.enrollTeam(id, teamId);
       const updated = await api.getEnrolledTeams(id);
@@ -219,8 +204,6 @@ export function AdminTournamentDetail() {
       toast.success('Equipo inscrito correctamente');
     } catch (err) {
       toast.error(getErrorMessage(err, 'Error al inscribir equipo'));
-    } finally {
-      setEnrolling(false);
     }
   };
 
@@ -415,9 +398,7 @@ export function AdminTournamentDetail() {
           <TeamsTab
             tournament={tournament}
             enrolledTeams={enrolledTeams}
-            availableTeams={availableTeams}
             unenrollingId={unenrollingId}
-            enrolling={enrolling}
             onEnroll={handleEnroll}
             onUnenroll={handleUnenroll}
             onTeamFormSubmit={handleTeamFormSubmit}

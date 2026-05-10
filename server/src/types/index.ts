@@ -94,6 +94,8 @@ export interface Team {
   city?: string;
   department?: string;
   category?: string;
+  /** Admin user that owns this team. NULL for legacy / platform-shared rows. */
+  ownerId?: string;
   /** Captain handle (lowercase, unique). Populated after "Generar credenciales". */
   captainUsername?: string;
   /** ISO timestamp when credentials were generated/regenerated. */

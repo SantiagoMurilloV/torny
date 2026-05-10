@@ -8,6 +8,10 @@ import {
   remove,
 } from '../controllers/match.controller';
 import { cacheGet } from '../middleware/cache';
+import {
+  requireMatchAccess,
+  requireTournamentAccessFromBody,
+} from '../middleware/access';
 
 const router = Router();
 
@@ -19,11 +23,18 @@ const router = Router();
 // origin was hit every 5 s.
 router.get('/', cacheGet(15, { swrSeconds: 60 }), getAll);
 router.get('/:id', cacheGet(15, { swrSeconds: 60 }), getById);
-router.post('/', create);
-router.put('/:id', update);
-router.delete('/:id', remove);
+// Mutations are owner-scoped: the admin who owns the match's parent
+// tournament (or super_admin / a judge created by that admin) is the
+// only caller allowed through. POST reads the tournament from the
+// body; the others derive it from the match's existing tournamentId.
+router.post('/', requireTournamentAccessFromBody('tournamentId'), create);
+router.put('/:id', requireMatchAccess, update);
+router.delete('/:id', requireMatchAccess, remove);
 
-// Score update
-router.put('/:id/score', updateScore);
+// Score update — judges hit this from the referee panel. The match
+// access guard checks the judge's `createdBy` against the tournament's
+// owner_id so a judge created by Admin A cannot score Admin B's match
+// (even if they happened to learn the match id).
+router.put('/:id/score', requireMatchAccess, updateScore);
 
 export default router;

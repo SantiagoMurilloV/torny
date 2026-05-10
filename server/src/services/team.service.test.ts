@@ -313,6 +313,80 @@ describe('TeamService CRUD operations', () => {
     });
   });
 
+  // ── Ownership scope (mig 022) ──
+
+  describe('getAll with owner scope', () => {
+    it('should filter by owner_id when scope is owner', async () => {
+      const queryFn = mockPool(vi.fn().mockResolvedValue({ rows: [] }));
+
+      await service.getAll({ scope: 'owner', ownerId: 'admin-1' });
+
+      const sql = queryFn.mock.calls[0][0] as string;
+      expect(sql).toMatch(/WHERE owner_id = \$1/);
+      const params = queryFn.mock.calls[0][1] as unknown[];
+      expect(params).toEqual(['admin-1']);
+    });
+
+    it('should NOT filter by owner_id when scope is all', async () => {
+      const queryFn = mockPool(vi.fn().mockResolvedValue({ rows: [] }));
+
+      await service.getAll({ scope: 'all' });
+
+      const sql = queryFn.mock.calls[0][0] as string;
+      expect(sql).not.toMatch(/WHERE owner_id/);
+    });
+  });
+
+  describe('search', () => {
+    it('should scope to owner and apply LIKE filter on the search term', async () => {
+      const queryFn = mockPool(vi.fn().mockResolvedValue({ rows: [] }));
+
+      await service.search(
+        { scope: 'owner', ownerId: 'admin-1' },
+        { search: 'agui', limit: 10 },
+      );
+
+      const sql = queryFn.mock.calls[0][0] as string;
+      expect(sql).toMatch(/owner_id = \$1/);
+      expect(sql).toMatch(/ILIKE/);
+      const params = queryFn.mock.calls[0][1] as unknown[];
+      // [ownerId, '%agui%', limit]
+      expect(params[0]).toBe('admin-1');
+      expect(params[1]).toBe('%agui%');
+      expect(params[2]).toBe(10);
+    });
+
+    it('should clamp limit to the safe range', async () => {
+      const queryFn = mockPool(vi.fn().mockResolvedValue({ rows: [] }));
+
+      await service.search({ scope: 'all' }, { limit: 999 });
+
+      const params = queryFn.mock.calls[0][1] as unknown[];
+      expect(params[params.length - 1]).toBe(50); // max
+    });
+  });
+
+  describe('create with owner_id', () => {
+    it('should persist owner_id when provided', async () => {
+      const queryFn = mockPool(vi.fn().mockResolvedValue({ rows: [sampleRow()] }));
+
+      await service.create(validDto(), 'admin-1');
+
+      const insertArgs = queryFn.mock.calls[0][1] as unknown[];
+      // INSERT … VALUES ($1..$9) with owner_id as the 9th positional arg
+      expect(insertArgs[8]).toBe('admin-1');
+    });
+
+    it('should pass null owner_id when none provided (super_admin / platform)', async () => {
+      const queryFn = mockPool(vi.fn().mockResolvedValue({ rows: [sampleRow()] }));
+
+      await service.create(validDto());
+
+      const insertArgs = queryFn.mock.calls[0][1] as unknown[];
+      expect(insertArgs[8]).toBeNull();
+    });
+  });
+
   describe('getMatches', () => {
     it('should return matches for a team', async () => {
       mockPool(vi.fn()

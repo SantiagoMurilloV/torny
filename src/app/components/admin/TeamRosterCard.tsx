@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   ChevronDown,
   Edit,
   Trash2,
   Loader2,
   Plus,
+  Search,
   User,
   FileText,
   Users,
@@ -67,6 +68,10 @@ export function TeamRosterCard({
   const [editingPlayer, setEditingPlayer] = useState<Player | undefined>();
   const [pendingDeletePlayerId, setPendingDeletePlayerId] = useState<string | null>(null);
   const [deletingPlayerId, setDeletingPlayerId] = useState<string | null>(null);
+  // Free-text filter over the roster — purely client-side to avoid a
+  // round-trip per keystroke (rosters are small enough that filter-in-
+  // JS is faster than re-querying for each ?search= variant).
+  const [playerSearch, setPlayerSearch] = useState('');
   // PDF preview — abre el PdfViewerModal con el documento de la jugadora
   // que el admin pulse, sin sacarlo del flujo del listado.
   const [pdfPreview, setPdfPreview] = useState<
@@ -160,6 +165,20 @@ export function TeamRosterCard({
 
   const locationLine = [team.city, team.department].filter(Boolean).join(', ');
   const contentId = `roster-body-${team.id}`;
+
+  const filteredPlayers = useMemo(() => {
+    const term = playerSearch.trim().toLowerCase();
+    if (term.length === 0) return players;
+    return players.filter((p) => {
+      const fullName = `${p.firstName} ${p.lastName}`.toLowerCase();
+      return (
+        fullName.includes(term) ||
+        (p.position?.toLowerCase().includes(term) ?? false) ||
+        (p.documentNumber?.toLowerCase().includes(term) ?? false) ||
+        (p.shirtNumber != null && String(p.shirtNumber) === term)
+      );
+    });
+  }, [players, playerSearch]);
 
   return (
     <div className="bg-white border-2 border-black/10 rounded-sm overflow-hidden">
@@ -315,6 +334,22 @@ export function TeamRosterCard({
                 </button>
               </div>
 
+              {/* Filter input — only render when the roster has enough
+                  rows that scanning becomes painful. Keeps the card slim
+                  for small teams. */}
+              {players.length >= 6 && (
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={playerSearch}
+                    onChange={(e) => setPlayerSearch(e.target.value)}
+                    placeholder="Buscar por nombre, dorsal, posición…"
+                    className="w-full pl-9 pr-3 py-2 text-sm rounded-sm border border-spk-hairline focus:border-spk-red focus:ring-2 focus:ring-spk-red/20 outline-none bg-white"
+                  />
+                </div>
+              )}
+
               {loading && players.length === 0 ? (
                 <div className="py-8 flex items-center justify-center">
                   <Loader2 className="w-6 h-6 animate-spin text-spk-red" />
@@ -334,9 +369,13 @@ export function TeamRosterCard({
                 <div className="py-8 text-center text-sm text-black/60">
                   Aún no hay jugador@s registrad@s. Empezá agregando.
                 </div>
+              ) : filteredPlayers.length === 0 ? (
+                <div className="py-6 text-center text-sm text-black/60">
+                  Ningún@ jugador@ coincide con &ldquo;{playerSearch}&rdquo;.
+                </div>
               ) : (
                 <ul className="space-y-2">
-                  {players.map((p) => (
+                  {filteredPlayers.map((p) => (
                     <li
                       key={p.id}
                       className="flex items-center gap-3 p-2.5 bg-white border border-black/10 rounded-sm"

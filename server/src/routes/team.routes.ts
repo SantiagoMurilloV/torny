@@ -9,6 +9,7 @@ import {
   getMatches,
   generateCredentials,
   getCredentials,
+  search,
 } from '../controllers/team.controller';
 import {
   listByTeam as listPlayers,
@@ -17,7 +18,8 @@ import {
   update as updatePlayer,
   remove as removePlayer,
 } from '../controllers/player.controller';
-import { requireRole, requireTeamAccess } from '../middleware/auth';
+import { requireRole } from '../middleware/auth';
+import { requireTeamOwnership } from '../middleware/access';
 import { cacheGet } from '../middleware/cache';
 
 const router = Router();
@@ -26,21 +28,28 @@ const router = Router();
 // (carries logos as base64 data URLs), so we cache it the longest.
 // Teams change rarely once a tournament is set up.
 router.get('/', cacheGet(60), getAll);
+// Search is intentionally NOT cached — it depends on the caller's owner
+// scope and on the live query string, so caching would cross-contaminate
+// admins. The query is cheap (LIMIT 20) and runs only when the team
+// picker modal is open.
+router.get('/search', search);
 router.get('/:id', cacheGet(60), getById);
 router.post('/', create);
-router.put('/:id', update);
-router.delete('/:id', remove);
+// Mutations are owner-scoped: the admin who created the team (or its
+// captain, for /logo only) is the only non-super_admin who can touch
+// it. Captain access is handled inside `requireTeamOwnership`.
+router.put('/:id', requireTeamOwnership, update);
+router.delete('/:id', requireTeamOwnership, remove);
 
-// Logo-only update — gated by requireTeamAccess so the team's captain can
-// upload their own crest from the team panel without exposing the rest of
-// the team mutation surface (name, colors, captain credentials, etc).
-router.put('/:teamId/logo', requireTeamAccess, updateLogo);
+// Logo-only update — gated by requireTeamOwnership which also lets the
+// team's captain through (parity with the previous requireTeamAccess).
+router.put('/:teamId/logo', requireTeamOwnership, updateLogo);
 
 // Team sub-resources
 router.get('/:id/matches', cacheGet(10), getMatches);
 
 // Captain credentials — admins (and super_admins) can look up, (re)generate
-// a team captain's login.
+// a team captain's login. Owner gate keeps Admin A out of Admin B's team.
 //   GET    → returns {username, password?, generatedAt, recoveryEnabled}.
 //            password is plaintext when PLATFORM_RECOVERY_KEY decrypts the
 //            stored AES-GCM blob; null otherwise. 404 if never generated.
@@ -48,21 +57,30 @@ router.get('/:id/matches', cacheGet(10), getMatches);
 router.get(
   '/:teamId/credentials',
   requireRole('admin', 'super_admin'),
+  requireTeamOwnership,
   getCredentials
 );
 router.post(
   '/:teamId/credentials',
   requireRole('admin', 'super_admin'),
+  requireTeamOwnership,
   generateCredentials
 );
 
 // Roster — nested under /teams/:teamId/players
-// GET is public (read-only); POST/PUT/DELETE require an authenticated caller
-// who either has global access (admin/super_admin) or is the team's captain.
+// GET is public (read-only); POST/PUT/DELETE require either ownership
+// (admin/super_admin who owns the team) or the team's own captain. The
+// captain bypass lives inside requireTeamOwnership so the same guard
+// covers both paths consistently.
 router.get('/:teamId/players', cacheGet(60), listPlayers);
 router.get('/:teamId/players/:playerId', cacheGet(60), getPlayerById);
-router.post('/:teamId/players', requireTeamAccess, createPlayer);
-router.put('/:teamId/players/:playerId', requireTeamAccess, updatePlayer);
-router.delete('/:teamId/players/:playerId', requireTeamAccess, removePlayer);
+router.post('/:teamId/players', requireTeamOwnership, createPlayer);
+router.put('/:teamId/players/:playerId', requireTeamOwnership, updatePlayer);
+router.delete('/:teamId/players/:playerId', requireTeamOwnership, removePlayer);
+
+// Note: the previous `requireTeamAccess` (auth.ts) is now superseded by
+// `requireTeamOwnership` which enforces admin owner_id + lets the team's
+// own captain through. The older guard stays exported for any route
+// outside this file that still needs the team_captain-only behavior.
 
 export default router;

@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2,
   Plus,
   Edit,
   Trash2,
+  Search,
   User,
   FileText,
   Users,
@@ -51,6 +52,10 @@ export function TeamPanel() {
   const [editingPlayer, setEditingPlayer] = useState<Player | undefined>();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Free-text filter over the captain's roster — purely client-side so
+  // the input stays responsive on the kind of slow networks that show
+  // up at a stadium. Falls back to "no matches" copy when nothing hits.
+  const [playerSearch, setPlayerSearch] = useState('');
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   // PDF preview — abre el PdfViewerModal con el documento de la jugadora
@@ -173,6 +178,20 @@ export function TeamPanel() {
       setDeletingId(null);
     }
   };
+
+  const filteredPlayers = useMemo(() => {
+    const term = playerSearch.trim().toLowerCase();
+    if (term.length === 0) return players;
+    return players.filter((p) => {
+      const fullName = `${p.firstName} ${p.lastName}`.toLowerCase();
+      return (
+        fullName.includes(term) ||
+        (p.position?.toLowerCase().includes(term) ?? false) ||
+        (p.documentNumber?.toLowerCase().includes(term) ?? false) ||
+        (p.shirtNumber != null && String(p.shirtNumber) === term)
+      );
+    });
+  }, [players, playerSearch]);
 
   if (loading) {
     return (
@@ -321,13 +340,35 @@ export function TeamPanel() {
           </button>
         </div>
 
+        {/* Filter bar — only renders when the roster has enough rows that
+            scrolling becomes painful. For brand-new teams the empty state
+            copy below speaks more clearly without an extra control. */}
+        {players.length >= 6 && (
+          <div className="px-4 sm:px-5 pt-3 pb-1">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none" />
+              <input
+                type="text"
+                value={playerSearch}
+                onChange={(e) => setPlayerSearch(e.target.value)}
+                placeholder="Buscar por nombre, dorsal, posición…"
+                className="w-full pl-9 pr-3 py-2 text-sm rounded-sm border border-spk-hairline focus:border-spk-red focus:ring-2 focus:ring-spk-red/20 outline-none bg-white"
+              />
+            </div>
+          </div>
+        )}
+
         {players.length === 0 ? (
           <div className="py-10 text-center text-sm text-black/60 px-4">
             Aún no hay jugador@s registrad@s. Empezá agregando el plantel.
           </div>
+        ) : filteredPlayers.length === 0 ? (
+          <div className="py-8 text-center text-sm text-black/60 px-4">
+            Ningún@ jugador@ coincide con &ldquo;{playerSearch}&rdquo;.
+          </div>
         ) : (
           <ul className="divide-y divide-black/10">
-            {players.map((p) => (
+            {filteredPlayers.map((p) => (
               <li key={p.id} className="flex items-center gap-3 p-3 sm:p-4">
                 {p.photo ? (
                   <img

@@ -1,26 +1,17 @@
 import { useState, useMemo } from 'react';
-import { Loader2, Plus, Users } from 'lucide-react';
+import { Plus, Users } from 'lucide-react';
 import { Tournament, Team } from '../../../types';
 import { Button } from '../../../components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../../../components/ui/select';
 import { CategorySection } from '../../../components/admin/CategorySection';
 import { TeamFormModal } from '../../../components/admin/TeamFormModal';
 import { TeamRosterCard } from '../../../components/admin/TeamRosterCard';
+import { TeamPickerModal } from '../../../components/admin/TeamPickerModal';
 
 interface TeamsTabProps {
   tournament: Tournament;
   enrolledTeams: Team[];
-  /** Teams available for enrolment (already filtered by category/not-yet-enrolled). */
-  availableTeams: Team[];
   /** Who's currently being un-enrolled, if any. Drives the per-row spinner. */
   unenrollingId: string | null;
-  enrolling: boolean;
   onEnroll: (teamId: string) => Promise<void>;
   onUnenroll: (teamId: string) => Promise<void>;
   /**
@@ -39,16 +30,19 @@ interface TeamsTabProps {
 export function TeamsTab({
   tournament,
   enrolledTeams,
-  availableTeams,
   unenrollingId,
-  enrolling,
   onEnroll,
   onUnenroll,
   onTeamFormSubmit,
 }: TeamsTabProps) {
-  const [selectedTeamId, setSelectedTeamId] = useState<string>('');
+  const [showPicker, setShowPicker] = useState(false);
   const [showNewTeamModal, setShowNewTeamModal] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | undefined>();
+
+  const enrolledIds = useMemo(
+    () => new Set(enrolledTeams.map((t) => t.id)),
+    [enrolledTeams],
+  );
 
   const teamsByCategory = useMemo(() => {
     const groups: Record<string, Team[]> = {};
@@ -64,58 +58,30 @@ export function TeamsTab({
     });
   }, [enrolledTeams]);
 
-  const handleEnrollClick = async () => {
-    if (!selectedTeamId) return;
-    await onEnroll(selectedTeamId);
-    setSelectedTeamId('');
-  };
-
   const handleFormSubmit = async (team: Team) => {
     await onTeamFormSubmit(team, editingTeam);
   };
 
+  const handleEnrollFromPicker = async (teamId: string) => {
+    await onEnroll(teamId);
+    // Picker stays open so the admin can keep enrolling without
+    // re-opening it; the picked row flips to "Ya inscrito" once
+    // enrolledTeams updates.
+  };
+
   return (
     <>
-      {/* Enrolment controls — pick an existing team OR create a new one
-          (which also auto-enrols). */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
-        <div className="flex-1">
-          <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Inscribir equipo existente..." />
-            </SelectTrigger>
-            <SelectContent>
-              {availableTeams.length === 0 ? (
-                <SelectItem value="_none" disabled>
-                  No hay equipos disponibles
-                </SelectItem>
-              ) : (
-                availableTeams.map((team) => (
-                  <SelectItem key={team.id} value={team.id}>
-                    {team.name}
-                    {team.category ? ` (${team.category})` : ''}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Single CTA — opens the picker which combines search + create.
+          The previous flat <Select> dropdown didn't scale past ~30 teams
+          and there was no way to reuse a team from a past tournament
+          without scrolling the whole library. */}
+      <div className="flex justify-end mb-6">
         <Button
-          onClick={handleEnrollClick}
-          disabled={!selectedTeamId || enrolling}
-          className="bg-spk-red hover:bg-spk-red-dark w-full sm:w-auto flex-shrink-0"
-        >
-          {enrolling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-          Inscribir
-        </Button>
-        <Button
-          type="button"
-          onClick={() => setShowNewTeamModal(true)}
-          variant="outline"
-          className="w-full sm:w-auto flex-shrink-0 border-black/20 hover:bg-black/5"
+          onClick={() => setShowPicker(true)}
+          className="bg-spk-red hover:bg-spk-red-dark w-full sm:w-auto"
         >
           <Plus className="w-4 h-4" />
-          Crear Equipo Nuevo
+          Inscribir equipo
         </Button>
       </div>
 
@@ -126,7 +92,7 @@ export function TeamsTab({
           <Users className="w-12 h-12 text-black/20 mx-auto mb-3" />
           <p className="text-black/60">No hay equipos inscritos aún</p>
           <p className="text-sm text-black/40 mt-1">
-            Usa el selector de arriba para inscribir equipos
+            Tocá &ldquo;Inscribir equipo&rdquo; para empezar
           </p>
         </div>
       ) : (
@@ -155,6 +121,18 @@ export function TeamsTab({
           ))}
         </div>
       )}
+
+      <TeamPickerModal
+        isOpen={showPicker}
+        onClose={() => setShowPicker(false)}
+        enrolledIds={enrolledIds}
+        allowedCategories={tournament.categories}
+        onEnroll={handleEnrollFromPicker}
+        onCreateNew={() => {
+          setShowPicker(false);
+          setShowNewTeamModal(true);
+        }}
+      />
 
       <TeamFormModal
         isOpen={showNewTeamModal || editingTeam !== undefined}

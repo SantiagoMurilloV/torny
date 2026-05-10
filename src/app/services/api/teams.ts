@@ -27,6 +27,26 @@ export const teamsApi = {
     return toFrontendTeam(data);
   },
 
+  /**
+   * Search the admin's team library — used by the team picker modal so
+   * an admin can quickly find existing teams instead of scrolling a 200-
+   * entry dropdown. The backend scopes results by owner_id when called
+   * with an admin token (super_admin sees all). Returns up to `limit`
+   * (default 20, capped at 50) matches sorted by name.
+   */
+  async searchTeams(
+    query: string,
+    options: { category?: string; limit?: number } = {},
+  ): Promise<Team[]> {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set('q', query.trim());
+    if (options.category) params.set('category', options.category);
+    if (options.limit) params.set('limit', String(options.limit));
+    const qs = params.toString();
+    const data = await request<BackendTeam[]>(`/teams/search${qs ? `?${qs}` : ''}`);
+    return data.map(toFrontendTeam);
+  },
+
   async createTeam(dto: CreateTeamDto): Promise<Team> {
     const data = await request<BackendTeam>('/teams', {
       method: 'POST',

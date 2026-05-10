@@ -13,7 +13,12 @@ export async function listByTeam(req: Request, res: Response, next: NextFunction
   try {
     const teamId = req.params.teamId as string;
     validateUUID(teamId, 'ID de equipo');
-    const players = await playerService.listByTeam(teamId);
+    // Optional ?search=... filters the roster server-side. Front-end can
+    // also do client-side filtering on the full list — both are useful:
+    // the server filter keeps response sizes small for huge rosters,
+    // the client filter avoids a network round-trip per keystroke.
+    const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+    const players = await playerService.listByTeam(teamId, search);
     res.json(players);
   } catch (error) {
     next(error);

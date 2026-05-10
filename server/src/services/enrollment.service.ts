@@ -105,7 +105,21 @@ export class EnrollmentService {
     return result;
   }
 
-  async enroll(tournamentId: string, teamId: string): Promise<EnrolledTeam> {
+  /**
+   * Enroll a team in a tournament.
+   *
+   * `actingOwnerId` is the admin id pulled from req.user (or null for
+   * super_admin). When provided we cross-check that the team belongs to
+   * the same admin who is enrolling — Admin A cannot pluck Admin B's
+   * team into their own tournament. Tournament ownership itself is
+   * already validated by `requireTournamentAccess` upstream so the team
+   * check is the only extra step here.
+   */
+  async enroll(
+    tournamentId: string,
+    teamId: string,
+    actingOwnerId: string | null = null,
+  ): Promise<EnrolledTeam> {
     const pool = getPool();
 
     // Validate tournament exists
@@ -117,12 +131,17 @@ export class EnrollmentService {
       throw new NotFoundError('Torneo');
     }
 
-    // Validate team exists
+    // Validate team exists + belongs to the calling admin (if any).
     const teamResult = await pool.query(
-      'SELECT id FROM teams WHERE id = $1',
+      'SELECT id, owner_id FROM teams WHERE id = $1',
       [teamId]
     );
     if (teamResult.rows.length === 0) {
+      throw new NotFoundError('Equipo');
+    }
+    const teamOwner = (teamResult.rows[0] as { owner_id: string | null }).owner_id;
+    if (actingOwnerId !== null && teamOwner !== actingOwnerId) {
+      // Treat cross-tenant enrollment as 404 (don't leak existence).
       throw new NotFoundError('Equipo');
     }
 

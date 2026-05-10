@@ -166,7 +166,12 @@ export async function enrollTeam(req: Request, res: Response, next: NextFunction
     const id = req.params.id as string;
     validateUUID(id, 'ID de torneo');
     const { teamId } = req.body;
-    const enrolled = await enrollmentService.enroll(id, teamId);
+    // The acting owner is the admin in req.user; super_admin and judge
+    // pass null so the service skips the cross-tenant check (super_admin
+    // can enroll any team, judge shouldn't reach this route at all but
+    // the role guard runs before us).
+    const actingOwnerId = req.user?.role === 'admin' ? req.user.userId : null;
+    const enrolled = await enrollmentService.enroll(id, teamId, actingOwnerId);
     res.status(201).json(enrolled);
   } catch (error) {
     next(error);

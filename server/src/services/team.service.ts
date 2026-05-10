@@ -32,11 +32,27 @@ function mapRow(row: Record<string, unknown>): Team {
     city: row.city as string | undefined,
     department: row.department as string | undefined,
     category: row.category as string | undefined,
+    ownerId: (row.owner_id as string | null) ?? undefined,
     captainUsername: (row.captain_username as string | null) ?? undefined,
     credentialsGeneratedAt: normalizeIsoDate(row.credentials_generated_at),
     createdAt: row.created_at as string | undefined,
     updatedAt: row.updated_at as string | undefined,
   };
+}
+
+/**
+ * Listing scope. Mirrors TournamentService.ListScope.
+ *   · `{ scope: 'all' }`            → public reads (spectators), super_admin
+ *   · `{ scope: 'owner', ownerId }` → admin sees only their own teams
+ */
+export type TeamListScope =
+  | { scope: 'all' }
+  | { scope: 'owner'; ownerId: string };
+
+export interface TeamSearchFilters {
+  search?: string;
+  category?: string;
+  limit?: number;
 }
 
 function mapMatchRow(row: Record<string, unknown>): Match {
@@ -83,15 +99,65 @@ function mapMatchRow(row: Record<string, unknown>): Match {
 //   short TTL and gzipped on the wire.
 const TEAM_LIST_COLUMNS = `
   id, name, initials, logo, primary_color, secondary_color, city, department,
-  category, captain_username, credentials_generated_at,
+  category, owner_id, captain_username, credentials_generated_at,
   created_at, updated_at
 `;
 
 export class TeamService {
-  async getAll(): Promise<Team[]> {
+  async getAll(scope: TeamListScope = { scope: 'all' }): Promise<Team[]> {
     const pool = getPool();
+    if (scope.scope === 'owner') {
+      const result = await pool.query(
+        `SELECT ${TEAM_LIST_COLUMNS} FROM teams WHERE owner_id = $1 ORDER BY name`,
+        [scope.ownerId],
+      );
+      return result.rows.map(mapRow);
+    }
     const result = await pool.query(
       `SELECT ${TEAM_LIST_COLUMNS} FROM teams ORDER BY name`,
+    );
+    return result.rows.map(mapRow);
+  }
+
+  /**
+   * Quick search across the admin's team library — used by the team
+   * picker modal when inscribing a team in a new tournament. Matches
+   * are partial (ILIKE) on name / initials / city, optionally filtered
+   * by category. `scope` controls who sees what:
+   *   · admin       → only their own teams
+   *   · super_admin → every team (use { scope: 'all' })
+   *
+   * `limit` is clamped to [1, 50] so a misbehaving client can't pull
+   * the whole library in one shot.
+   */
+  async search(scope: TeamListScope, filters: TeamSearchFilters = {}): Promise<Team[]> {
+    const pool = getPool();
+    const limit = Math.max(1, Math.min(50, filters.limit ?? 20));
+    const term = (filters.search ?? '').trim();
+    const category = (filters.category ?? '').trim();
+
+    const where: string[] = [];
+    const params: unknown[] = [];
+
+    if (scope.scope === 'owner') {
+      params.push(scope.ownerId);
+      where.push(`owner_id = $${params.length}`);
+    }
+    if (term.length > 0) {
+      params.push(`%${term}%`);
+      const idx = params.length;
+      where.push(`(name ILIKE $${idx} OR initials ILIKE $${idx} OR city ILIKE $${idx})`);
+    }
+    if (category.length > 0) {
+      params.push(category);
+      where.push(`category = $${params.length}`);
+    }
+
+    const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+    params.push(limit);
+    const result = await pool.query(
+      `SELECT ${TEAM_LIST_COLUMNS} FROM teams ${whereSql} ORDER BY name LIMIT $${params.length}`,
+      params,
     );
     return result.rows.map(mapRow);
   }
@@ -105,12 +171,12 @@ export class TeamService {
     return mapRow(result.rows[0]);
   }
 
-  async create(data: CreateTeamDto): Promise<Team> {
+  async create(data: CreateTeamDto, ownerId: string | null = null): Promise<Team> {
     this.validateData(data);
     const pool = getPool();
     const result = await pool.query(
-      `INSERT INTO teams (name, initials, logo, primary_color, secondary_color, city, department, category)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO teams (name, initials, logo, primary_color, secondary_color, city, department, category, owner_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         data.name,
@@ -121,6 +187,7 @@ export class TeamService {
         data.city || null,
         data.department || null,
         data.category || null,
+        ownerId,
       ]
     );
     return mapRow(result.rows[0]);
