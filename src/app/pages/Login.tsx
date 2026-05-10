@@ -53,24 +53,29 @@ export function Login() {
       {/* Left Side - Login Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-4 sm:p-6 md:p-12">
         <div className="w-full max-w-md">
-          {/* Logo */}
+          {/* Brand mark — aligned with AdminLayout's sidebar header
+              (w-12 trophy frame + text-2xl wordmark + 16-px hairline) so
+              the visual scale stays constant the moment the user logs in
+              and lands on the admin shell. */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-8 sm:mb-12"
           >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-sm bg-white flex items-center justify-center">
-                <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-black" />
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-sm bg-white flex items-center justify-center flex-shrink-0">
+                <Trophy className="w-6 h-6 text-black" />
               </div>
-              <h1
-                className="text-2xl sm:text-3xl font-bold tracking-tighter"
-                style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
-              >
-                Torny
-              </h1>
+              <div>
+                <h1
+                  className="text-2xl font-bold tracking-tighter leading-none"
+                  style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+                >
+                  Torn<span className="text-spk-red">y</span>
+                </h1>
+                <div className="w-16 h-0.5 bg-spk-red mt-1" />
+              </div>
             </div>
-            <div className="w-20 h-1 bg-spk-red" />
           </motion.div>
 
           {/* Title */}

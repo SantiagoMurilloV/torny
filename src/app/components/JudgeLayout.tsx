@@ -30,7 +30,7 @@ export function JudgeLayout() {
                 className="text-base sm:text-lg font-bold uppercase tracking-tighter"
                 style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
               >
-                Torny · Panel de Juez
+                Torn<span className="text-spk-red">y</span> · Panel de Juez
               </div>
               <div className="text-[11px] text-white/55 uppercase tracking-[0.16em]">
                 {user?.username ?? 'Juez'}

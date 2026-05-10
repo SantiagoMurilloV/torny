@@ -60,7 +60,7 @@ export function Header({
                 className="text-base sm:text-lg md:text-xl font-bold tracking-tighter leading-none text-white truncate"
                 style={FONT}
               >
-                Torny
+                Torn<span className="text-spk-red">y</span>
               </h1>
             </div>
           </div>

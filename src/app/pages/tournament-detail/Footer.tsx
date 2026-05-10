@@ -16,7 +16,7 @@ export function Footer() {
                 className="text-xl font-bold tracking-tighter"
                 style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
               >
-                Torny
+                Torn<span className="text-spk-red">y</span>
               </div>
               <div className="text-xs text-white/50">Sistema de Torneos</div>
             </div>

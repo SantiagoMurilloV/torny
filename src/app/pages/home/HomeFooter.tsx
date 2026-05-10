@@ -23,7 +23,7 @@ export function HomeFooter() {
                 className="text-base sm:text-lg md:text-xl font-bold tracking-tighter leading-tight"
                 style={FONT}
               >
-                Torny
+                Torn<span className="text-spk-red">y</span>
               </div>
               <div className="text-[10px] sm:text-xs text-white/50 truncate">
                 Sistema de Torneos

@@ -32,7 +32,7 @@ export function TeamPanelLayout() {
                 className="text-base sm:text-lg font-bold uppercase tracking-tighter truncate"
                 style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
               >
-                Torny · Panel de Equipo
+                Torn<span className="text-spk-red">y</span> · Panel de Equipo
               </div>
               <div className="text-[11px] text-black/55 uppercase tracking-[0.16em] truncate">
                 {user?.username ?? 'Capitán'}

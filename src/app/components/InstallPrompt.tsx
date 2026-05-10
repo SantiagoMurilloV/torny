@@ -45,7 +45,7 @@ export function InstallPrompt() {
                 className="text-sm font-bold uppercase text-white"
                 style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.08em' }}
               >
-                Instala Torny
+                Instala Torn<span className="text-spk-red">y</span>
               </h3>
               {isIOS ? (
                 <p className="text-[11px] text-white/70 mt-1 leading-relaxed">
