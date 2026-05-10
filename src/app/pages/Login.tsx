@@ -1,17 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Trophy, Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Trophy, Lock, User, ArrowRight, Eye, EyeOff, Zap, WifiOff, Bell } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { useAuth } from '../context/AuthContext';
-import { useData } from '../context/DataContext';
 import { ApiError } from '../services/api';
 import { homeForRole } from '../lib/roles';
 
 export function Login() {
   const navigate = useNavigate();
   const { login, isAuthenticated, sessionMessage, user } = useAuth();
-  const { tournaments, teams, matches } = useData();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -216,47 +214,76 @@ export function Login() {
         </div>
       </div>
 
-      {/* Right Side - Image */}
+      {/* Right Side - Image + brand panel */}
       <div className="hidden lg:block lg:w-1/2 relative">
-        <div className="absolute inset-0 bg-gradient-to-l from-transparent via-black/50 to-black z-10" />
+        <div className="absolute inset-0 bg-gradient-to-l from-transparent via-black/60 to-black z-10" />
         <ImageWithFallback
           src="https://images.unsplash.com/photo-1771909713106-86b9a412964a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx2b2xsZXliYWxsJTIwY291cnQlMjBzcG9ydHMlMjBhcmVuYXxlbnwxfHx8fDE3NzU1NzU1MTB8MA&ixlib=rb-4.1.0&q=80&w=1080"
-          alt="Volleyball court"
+          alt="Cancha de voleibol"
           className="w-full h-full object-cover"
         />
-        
-        {/* Floating stats */}
+
+        {/* Brand block — wordmark TORNY + tagline + 3 value props honestos.
+            Reemplaza la card vieja de stats que mostraba números globales
+            del sistema (engañosos para el visitante: incluían datos de
+            stress tests viejos que no eran del admin que entraba). */}
         <div className="absolute bottom-12 left-12 right-12 z-20">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-white/10 backdrop-blur-xl border border-white/20 p-8 rounded-sm"
+            className="bg-white/[0.07] backdrop-blur-xl border border-white/15 p-8 rounded-sm"
           >
-            <h3 
-              className="text-3xl font-bold mb-6"
-              style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
-            >
-              GESTIONA TUS TORNEOS
-            </h3>
-            <div className="grid grid-cols-3 gap-6">
-              <div>
-                <div className="text-4xl font-bold mb-1" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-                  {tournaments.length}
+            {/* Wordmark grande TORNY con Y roja — coherente con el branding del landing */}
+            <div className="mb-2">
+              <h3
+                className="font-black tracking-tighter leading-none text-5xl xl:text-6xl"
+                style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+              >
+                TORN<span className="text-spk-red">Y</span>
+              </h3>
+              <div className="h-1 w-14 bg-spk-red mt-3" />
+            </div>
+
+            <p className="text-white/70 text-base xl:text-lg mt-5 mb-7 leading-snug max-w-md">
+              Plataforma para organizar torneos de voleibol con marcador en
+              vivo, brackets automáticos y panel de jueces.
+            </p>
+
+            {/* 3 value props — afirmaciones del producto, no stats inventados */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="flex flex-col items-start gap-2">
+                <div className="w-9 h-9 rounded-sm bg-spk-red/15 text-spk-red flex items-center justify-center">
+                  <Zap className="w-4 h-4" />
                 </div>
-                <div className="text-sm text-white/60 uppercase tracking-wider">Torneos</div>
+                <div className="text-[10px] uppercase tracking-[0.18em] text-white/55 leading-tight">
+                  Setup en
+                </div>
+                <div className="font-bold text-white text-lg leading-none -mt-1" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
+                  5 MIN
+                </div>
               </div>
-              <div>
-                <div className="text-4xl font-bold mb-1" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-                  {teams.length}
+              <div className="flex flex-col items-start gap-2">
+                <div className="w-9 h-9 rounded-sm bg-spk-red/15 text-spk-red flex items-center justify-center">
+                  <WifiOff className="w-4 h-4" />
                 </div>
-                <div className="text-sm text-white/60 uppercase tracking-wider">Equipos</div>
+                <div className="text-[10px] uppercase tracking-[0.18em] text-white/55 leading-tight">
+                  Sin app
+                </div>
+                <div className="font-bold text-white text-lg leading-none -mt-1" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
+                  100% PWA
+                </div>
               </div>
-              <div>
-                <div className="text-4xl font-bold mb-1" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-                  {matches.length}
+              <div className="flex flex-col items-start gap-2">
+                <div className="w-9 h-9 rounded-sm bg-spk-red/15 text-spk-red flex items-center justify-center">
+                  <Bell className="w-4 h-4" />
                 </div>
-                <div className="text-sm text-white/60 uppercase tracking-wider">Partidos</div>
+                <div className="text-[10px] uppercase tracking-[0.18em] text-white/55 leading-tight">
+                  Marcador
+                </div>
+                <div className="font-bold text-white text-lg leading-none -mt-1" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
+                  EN VIVO
+                </div>
               </div>
             </div>
           </motion.div>
