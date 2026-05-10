@@ -99,16 +99,30 @@ export function cacheGet(ttlSeconds: number, options: CacheOptions = {}) {
     res.setHeader('CDN-Cache-Control', cdnHeader);
     res.setHeader('Surrogate-Control', surrogateControl);
     // Vary on Origin so a request from one domain doesn't poison the
-    // CORS response for another. Express+cors already sets this on
-    // most responses but cached entries won't unless we're explicit.
-    res.setHeader('Vary', 'Origin, Accept-Encoding');
+    // CORS response for another. Authorization is here too so Fastly
+    // (Railway's edge) creates a separate cache entry for every bearer
+    // token — which means admins NEVER receive the public-scoped
+    // response from a previous anonymous request, even though the URL
+    // is identical. Without this, an admin's `GET /tournaments` could
+    // be served Fastly's cached public response (showing every tenant's
+    // tournaments) for up to s-maxage seconds, completely defeating
+    // owner_id scoping.
+    res.setHeader('Vary', 'Origin, Accept-Encoding, Authorization');
   }
 
   return function cacheMiddleware(req: Request, res: Response, next: NextFunction): void {
     if (req.method !== 'GET') return next();
     // Authed requests bypass the cache — they may carry tenant-scoped
-    // payloads. The unauthed flow (visitors) is what we want to optimise.
-    if (req.headers.authorization) return next();
+    // payloads. We also explicitly mark the response `private, no-store`
+    // so Fastly never caches it and never serves a previously-cached
+    // public response in its place (the Vary: Authorization on the
+    // public branch above creates the partition; this one belt-and-
+    // braces it for every authed response we ever emit).
+    if (req.headers.authorization) {
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('Vary', 'Origin, Accept-Encoding, Authorization');
+      return next();
+    }
 
     const key = `${req.method}:${req.originalUrl}`;
     const now = Date.now();
