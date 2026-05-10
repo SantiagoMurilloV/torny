@@ -11,6 +11,7 @@ import { Tournament, Match, Team } from '../types';
 import {
   api,
   updateTeamsCache,
+  clearTeamsCache,
   type CreateTournamentDto,
   type UpdateTournamentDto,
   type CreateTeamDto,
@@ -20,6 +21,7 @@ import {
 } from '../services/api';
 import { useMatchNotifications } from '../hooks/useMatchNotifications';
 import { getErrorMessage } from '../lib/errors';
+import { useAuth } from './AuthContext';
 
 interface LoadingState {
   tournaments: boolean;
@@ -183,15 +185,41 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
   }, [trackInflight]);
 
-  // Load initial data — teams first so the cache is ready for matches.
-  // Use allSettled so a single failure doesn't block the other resources.
+  // Re-fetch on every auth-token change (mount, login, logout, switch
+  // admin). Without this, the data we loaded as an anonymous visitor
+  // (which is the public "all tournaments" listing) would stay in
+  // React state after the user logs in as Admin A, and Admin A would
+  // briefly see Admin B's tournaments until something else triggered
+  // a refresh — a real cross-tenant leak even though the backend
+  // already filtered the response.
+  //
+  // We immediately wipe the in-memory state so no stale row can be
+  // rendered between the token change and the new fetch resolving.
+  // Teams load first so the matches transformer has the cache ready
+  // before it tries to attach Team objects to its rows.
+  const { token } = useAuth();
   useEffect(() => {
-    async function loadInitialData() {
+    // Wipe both the React state and the cross-module teams cache used
+    // by match/bracket/standings transformers. Without clearing the
+    // transformers cache, an admin who logs out and the public visitor
+    // (or a different admin who logs in next) could still see Team
+    // metadata cached from the previous session attached to public
+    // match cards.
+    setTournaments([]);
+    setMatches([]);
+    setTeams([]);
+    clearTeamsCache();
+    let cancelled = false;
+    async function loadAfterAuthChange() {
       await refreshTeams();
+      if (cancelled) return;
       await Promise.allSettled([refreshTournaments(), refreshMatches()]);
     }
-    loadInitialData();
-  }, [refreshTeams, refreshTournaments, refreshMatches]);
+    loadAfterAuthChange();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, refreshTeams, refreshTournaments, refreshMatches]);
 
   // Polling for live updates. Refreshes matches every 25s when the tab is
   // visible so the notification hook below sees score / status changes

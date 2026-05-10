@@ -34,6 +34,20 @@ export function updateTeamsCache(teams: Team[]): void {
 }
 
 /**
+ * Wipe the cache. Called by DataContext on auth-token changes so a
+ * team metadata snapshot from Admin A's session can never bleed into
+ * Admin B's match/bracket/standings rendering after a switch.
+ *
+ * Also resets `inflightTeamsFetch` so the next caller after a clear
+ * triggers a fresh `/teams` request instead of awaiting a stale one
+ * that was scoped to the previous session.
+ */
+export function clearTeamsCache(): void {
+  teamsCache = new Map();
+  inflightTeamsFetch = null;
+}
+
+/**
  * Guarantees the teams cache is populated before transformers run.
  *
  * Match/bracket/standings transformers attach full Team objects by id

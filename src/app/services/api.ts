@@ -45,7 +45,7 @@ export const api = {
 
 // Re-exports — consumers import from 'api' rather than the sub-modules.
 export { ApiError, setAuthToken, setOnUnauthorized, getAuthToken } from './api/client';
-export { updateTeamsCache } from './api/transformers';
+export { updateTeamsCache, clearTeamsCache } from './api/transformers';
 export type {
   CreateTournamentDto,
   UpdateTournamentDto,
