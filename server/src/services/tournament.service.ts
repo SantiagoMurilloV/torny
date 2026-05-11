@@ -511,7 +511,12 @@ export class TournamentService {
       { field: 'startDate', label: 'Fecha de inicio', required: true, type: 'string' },
       { field: 'endDate', label: 'Fecha de fin', required: true, type: 'string' },
       { field: 'status', label: 'Estado', required: true, type: 'string' },
-      { field: 'teamsCount', label: 'Cantidad de equipos', required: true, type: 'number', min: 2, max: 32 },
+      // Upper bound relaxed from 32 to 9999 (effectively unlimited for
+      // any real volleyball tournament). The cap is kept high purely as
+      // a typo safeguard — a literal "0 falla" is a 4-zero typo away
+      // from looking like a tournament with 200000 equipos. Migration
+      // 023 widens the matching DB CHECK constraint.
+      { field: 'teamsCount', label: 'Cantidad de equipos', required: true, type: 'number', min: 2, max: 9999 },
       { field: 'format', label: 'Formato', required: true, type: 'string' },
     ]);
 

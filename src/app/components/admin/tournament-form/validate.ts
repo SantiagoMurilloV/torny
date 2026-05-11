@@ -3,7 +3,11 @@ import type { FieldErrors, TournamentFormState } from './types';
 const MIN_NAME = 3;
 const MAX_NAME = 100;
 const MIN_TEAMS = 2;
-const MAX_TEAMS = 32;
+// Upper bound relaxed from 32 to 9999 (effectively unlimited for any
+// real volleyball tournament). The cap is kept high purely as a typo
+// safeguard. Mirrors the backend `tournament.service.validateData` and
+// the DB CHECK constraint widened in migration 023.
+const MAX_TEAMS = 9999;
 
 /**
  * Pure synchronous validator for the tournament form. Returns a map

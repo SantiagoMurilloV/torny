@@ -125,7 +125,11 @@ export function TournamentFormModal({
           label="Cantidad de Equipos *"
           type="number"
           min={2}
-          max={32}
+          // Upper bound mirrors `MAX_TEAMS` in tournament-form/validate.ts
+          // and the backend service ruleset. Bumped from 32 → 9999 to
+          // unblock federations with 60+, 100+ teams; the cap exists
+          // only to bounce typo errors like "200000".
+          max={9999}
           value={String(form.formData.teamsCount)}
           onChange={(v) => form.patch({ teamsCount: parseInt(v, 10) || 0 }, ['teamsCount'])}
           error={form.errors.teamsCount}

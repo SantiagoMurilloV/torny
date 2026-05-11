@@ -104,7 +104,10 @@ describe('TournamentService.validateData', () => {
     expect(() => service.validateData(validDto({ endDate: 'not-a-date' }))).toThrow();
   });
 
-  // teamsCount validation: 2-32
+  // teamsCount validation: 2-9999 (cap relaxed in migration 023 + service
+  // ruleset on 2026-05-10 to support federations with 60+ teams; the
+  // upper bound stays purely as a typo safeguard against accidental
+  // 4-zero overshoots).
   it('should reject teamsCount less than 2', () => {
     expect(() => service.validateData(validDto({ teamsCount: 1 }))).toThrow();
   });
@@ -114,13 +117,18 @@ describe('TournamentService.validateData', () => {
     expect(result.valid).toBe(true);
   });
 
-  it('should reject teamsCount greater than 32', () => {
-    expect(() => service.validateData(validDto({ teamsCount: 33 }))).toThrow();
+  it('should accept teamsCount above the legacy 32 cap', () => {
+    const result = service.validateData(validDto({ teamsCount: 60 }));
+    expect(result.valid).toBe(true);
   });
 
-  it('should accept teamsCount of 32', () => {
-    const result = service.validateData(validDto({ teamsCount: 32 }));
+  it('should accept teamsCount at the new 9999 ceiling', () => {
+    const result = service.validateData(validDto({ teamsCount: 9999 }));
     expect(result.valid).toBe(true);
+  });
+
+  it('should reject teamsCount above 9999', () => {
+    expect(() => service.validateData(validDto({ teamsCount: 10000 }))).toThrow();
   });
 
   // Required fields
