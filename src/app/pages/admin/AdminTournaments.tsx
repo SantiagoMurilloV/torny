@@ -336,7 +336,17 @@ export function AdminTournaments() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-center gap-2 text-sm">
                   <Users className="w-4 h-4 text-black/60" />
-                  <span>{tournament.teamsCount} equipos</span>
+                  {/* Show real enrolment count from the LIST_SELECT
+                      (`tournament_teams` correlated subquery). Fall back
+                      to the configured cap (`teamsCount`) when the API
+                      hasn't shipped enrolledCount yet — older client
+                      cache, optimistic local state, etc. — so the card
+                      never renders a blank stat. The "/ cap" suffix
+                      gives the admin a quick read on how full the
+                      tournament is without leaving the index page. */}
+                  <span>
+                    {tournament.enrolledCount ?? tournament.teamsCount} / {tournament.teamsCount} equipos
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="w-4 h-4 text-black/60" />
