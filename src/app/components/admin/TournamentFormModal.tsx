@@ -266,7 +266,6 @@ export function TournamentFormModal({
       {/* Programación de partidos — se persiste en el torneo y la usan
           tanto el generador inicial como el reparador automático. */}
       <ScheduleField
-        matchDurationMinutes={form.formData.matchDurationMinutes}
         matchBreakMinutes={form.formData.matchBreakMinutes}
         maxMatchesPerDay={form.formData.maxMatchesPerDay}
         deadTimeBlocks={form.formData.deadTimeBlocks}
@@ -278,7 +277,6 @@ export function TournamentFormModal({
         // sync as the admin renames or adds courts.
         finalsCourt={form.formData.finalsCourt}
         availableCourts={form.formData.courts.map((c) => c.name).filter((n) => n.trim() !== '')}
-        onMatchDurationChange={(n) => form.patch({ matchDurationMinutes: n })}
         onMatchBreakChange={(n) => form.patch({ matchBreakMinutes: n })}
         onMaxMatchesPerDayChange={(n) => form.patch({ maxMatchesPerDay: n })}
         onDeadTimeBlocksChange={(blocks) => form.patch({ deadTimeBlocks: blocks })}

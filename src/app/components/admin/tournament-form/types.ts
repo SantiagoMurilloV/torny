@@ -65,14 +65,17 @@ export interface TournamentFormState {
   /**
    * Schedule defaults — persisted on the tournament so the admin sets
    * them once instead of re-typing for every fixture generation.
-   *   · matchDurationMinutes — global per-match length (5..600).
    *   · matchBreakMinutes    — global between-matches gap (0..240).
    *   · dailySchedules       — per-date overrides of the active window.
    *                             One row per day in the range; empty
    *                             start/end means "use the global
    *                             08:00–18:00 default".
+   *
+   * Per-MATCH duration moved to `matchDurationsByCategory` (mig 027).
+   * The DB column `match_duration_minutes` stays for backwards-compat
+   * but the form no longer writes it — every category gets its own
+   * value (or falls back to a 60-min hardcoded default).
    */
-  matchDurationMinutes: number;
   matchBreakMinutes: number;
   dailySchedules: DailyScheduleEntry[];
   /** Max matches per day (0 = unlimited). */
@@ -122,7 +125,6 @@ export function emptyForm(): TournamentFormState {
     silverClassifiersPerGroup: 2,
     regulationText: '',
     regulationPdfUrl: '',
-    matchDurationMinutes: 60,
     matchBreakMinutes: 15,
     dailySchedules: [],
     maxMatchesPerDay: 0,

@@ -21,7 +21,6 @@ const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
  *   them all blank) just as easy as before.
  */
 export function ScheduleField({
-  matchDurationMinutes,
   matchBreakMinutes,
   maxMatchesPerDay,
   deadTimeBlocks,
@@ -31,7 +30,6 @@ export function ScheduleField({
   finalsCourt,
   availableCourts,
   matchDurationsByCategory,
-  onMatchDurationChange,
   onMatchBreakChange,
   onMaxMatchesPerDayChange,
   onDeadTimeBlocksChange,
@@ -40,7 +38,6 @@ export function ScheduleField({
   onFinalsCourtChange,
   onMatchDurationsByCategoryChange,
 }: {
-  matchDurationMinutes: number;
   matchBreakMinutes: number;
   maxMatchesPerDay: number;
   deadTimeBlocks: Array<{ start: string; end: string }>;
@@ -52,10 +49,13 @@ export function ScheduleField({
   /** Court names from the tournament's `courts` array — feeds the
    *  finals-court <select> options. */
   availableCourts: string[];
-  /** Migration 027 — sparse map: only categories with explicit
-   *  overrides are present. Missing keys hint at the global default. */
+  /**
+   * Migration 027 — per-category match length (in minutes). Sparse:
+   * categories without an entry fall back to a hardcoded 60 min in the
+   * scheduler. Replaced the old global `matchDurationMinutes` field
+   * since the two were redundant from the admin's perspective.
+   */
   matchDurationsByCategory: Record<string, number>;
-  onMatchDurationChange: (n: number) => void;
   onMatchBreakChange: (n: number) => void;
   onMaxMatchesPerDayChange: (n: number) => void;
   onDeadTimeBlocksChange: (blocks: Array<{ start: string; end: string }>) => void;
@@ -92,26 +92,12 @@ export function ScheduleField({
         </p>
       </div>
 
-      {/* Global match length + break — applies to every day. */}
+      {/* Tournament-wide knobs that apply across all categories: the
+          break between matches and the per-day cap. The per-MATCH
+          duration was moved out of this row — it now lives in
+          "Duración por categoría" below, so admin no longer sees the
+          redundant global vs per-category inputs side-by-side. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-bold mb-1" style={FONT}>
-            Duración de cada partido (min)
-          </label>
-          <input
-            type="number"
-            min={5}
-            max={600}
-            value={String(matchDurationMinutes)}
-            onChange={(e) =>
-              onMatchDurationChange(parseInt(e.target.value, 10) || 0)
-            }
-            className="w-full px-3 py-2 bg-white border-2 border-black/10 rounded-sm focus:outline-none focus:border-spk-red"
-          />
-          <p className="text-[11px] text-black/45 mt-1">
-            Tiempo bloqueado por partido. Default: 60.
-          </p>
-        </div>
         <div>
           <label className="block text-sm font-bold mb-1" style={FONT}>
             Intervalo entre partidos (min)
@@ -194,9 +180,8 @@ export function ScheduleField({
             </label>
           </div>
           <p className="text-[11px] text-black/45 mb-3">
-            Si dejás un campo vacío, esa categoría usa la duración global
-            de arriba ({matchDurationMinutes} min). Útil cuando una
-            categoría dura más o menos que el resto.
+            Tiempo bloqueado por partido en cada categoría. Si dejás un
+            campo vacío, esa categoría usa 60 min por defecto.
           </p>
           <div className="space-y-2">
             {availableCategories.map((cat) => {
@@ -214,7 +199,7 @@ export function ScheduleField({
                     min={5}
                     max={600}
                     inputMode="numeric"
-                    placeholder={String(matchDurationMinutes)}
+                    placeholder="60"
                     value={typeof current === 'number' ? String(current) : ''}
                     onChange={(e) => {
                       const raw = e.target.value.trim();
