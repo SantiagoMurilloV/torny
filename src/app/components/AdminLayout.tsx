@@ -146,32 +146,23 @@ export function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 bg-black border-b border-white/10 z-50">
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-white/10 rounded-sm transition-colors text-white"
-              aria-label={sidebarOpen ? 'Cerrar menú' : 'Abrir menú'}
-            >
-              {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-            <div className="w-10 h-10 bg-white rounded-sm flex items-center justify-center">
-              <Trophy className="w-5 h-5 text-black" />
-            </div>
-            <div>
-              <h1
-                className="font-bold text-white text-lg"
-                style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
-              >
-                Torn<span className="text-spk-red">y</span> <span className="text-white/70 font-normal">ADMIN</span>
-              </h1>
-              <p className="text-xs text-white/60">Panel de Administración</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Mobile floating menu button — replaces the previous full-width
+          black header bar (Trophy + "Torny ADMIN" + subtitle) so the
+          page content keeps the entire viewport on mobile. The button
+          stays z-50 so it sits above the sidebar overlay (z-30) and
+          the sidebar itself (z-40); clicking it toggles to X to close
+          the sidebar without needing a second control inside it. */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="md:hidden fixed top-3 left-3 z-50 inline-flex items-center justify-center w-10 h-10 bg-black/85 hover:bg-black backdrop-blur-md text-white rounded-sm shadow-lg transition-colors"
+        aria-label={sidebarOpen ? 'Cerrar menú' : 'Abrir menú'}
+      >
+        {sidebarOpen ? (
+          <X className="w-5 h-5" aria-hidden="true" />
+        ) : (
+          <Menu className="w-5 h-5" aria-hidden="true" />
+        )}
+      </button>
 
       {/* Sidebar */}
       <aside
@@ -199,8 +190,12 @@ export function AdminLayout() {
           </div>
         </div>
 
-        {/* Navigation (scrolls if tournament list is long) */}
-        <nav className="p-4 space-y-1 mt-16 md:mt-0 flex-1 overflow-y-auto">
+        {/* Navigation (scrolls if tournament list is long).
+            The mobile mt-16 used to clear the old fixed header — now
+            removed, but we keep an mt-14 so the floating hamburger
+            button (top-3 left-3, 40 px square) doesn't overlap the
+            first nav row when the sidebar is open. */}
+        <nav className="p-4 space-y-1 mt-14 md:mt-0 flex-1 overflow-y-auto">
           {/* Dashboard */}
           <TopLink
             icon={LayoutDashboard}
@@ -455,8 +450,12 @@ export function AdminLayout() {
         )}
       </AnimatePresence>
 
-      {/* Main Content */}
-      <main className="md:ml-72 pt-16 md:pt-0 min-h-screen bg-white">
+      {/* Main Content. Mobile pt was pt-16 to clear the old fixed
+          header bar; now we only need pt-14 to leave room for the
+          floating hamburger (top-3 + 40 px height = 52 px) plus a
+          tiny breathing gap before page headings. Desktop has no
+          floating button so pt is 0. */}
+      <main className="md:ml-72 pt-14 md:pt-0 min-h-screen bg-white">
         <Outlet />
       </main>
 
