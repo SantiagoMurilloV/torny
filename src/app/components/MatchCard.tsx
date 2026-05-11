@@ -3,6 +3,7 @@ import { Clock, MapPin, User, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { TeamAvatar } from './TeamAvatar';
 import { LiveBadge } from './LiveBadge';
+import { formatShortDate } from '../lib/format';
 
 interface MatchCardProps {
   match: Match;
@@ -39,11 +40,18 @@ export function MatchCard({ match, variant = 'default', onClick, tournamentLabel
           }
         }}
       >
+        {/* Date over time — gives the spectator the "when" without
+            having to open the full match card. Date stays the smaller
+            line so the time keeps visual priority for "today's
+            matches" lists where every row's date is the same. */}
         <span
-          className="text-sm text-black/60 min-w-[60px] font-bold"
+          className="flex flex-col leading-tight min-w-[64px] text-black/60"
           style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
         >
-          {match.time}
+          <span className="text-[10px] uppercase tracking-wide text-black/45">
+            {formatShortDate(match.date)}
+          </span>
+          <span className="text-sm font-bold text-black/80">{match.time}</span>
         </span>
         <div className="flex items-center gap-2 flex-1 mx-4">
           <span className="text-sm truncate">{match.team1.name}</span>
@@ -91,7 +99,10 @@ export function MatchCard({ match, variant = 'default', onClick, tournamentLabel
               className="text-[11px] font-bold uppercase opacity-85"
               style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.08em' }}
             >
-              {isUpcoming && `PRÓXIMO · ${match.time}`}
+              {/* PRÓXIMO line now carries date + time so the spectator
+                  doesn't have to drill into the match to see WHEN it
+                  is. Format: "PRÓXIMO · 15 abr · 10:00". */}
+              {isUpcoming && `PRÓXIMO · ${formatShortDate(match.date)} · ${match.time}`}
               {isCompleted && 'FINALIZADO'}
             </span>
           )}
@@ -103,10 +114,13 @@ export function MatchCard({ match, variant = 'default', onClick, tournamentLabel
               <MapPin className="w-3 h-3" aria-hidden="true" />
               {match.court}
             </span>
+            {/* Date + time cluster for live / completed cards. Upcoming
+                cards already show the date in the PRÓXIMO label above
+                so we skip them here to avoid duplicating the info. */}
             {!isUpcoming && (
-              <span className="inline-flex items-center gap-1">
+              <span className="inline-flex items-center gap-1 whitespace-nowrap">
                 <Clock className="w-3 h-3" aria-hidden="true" />
-                {match.time}
+                {formatShortDate(match.date)} · {match.time}
               </span>
             )}
           </span>
