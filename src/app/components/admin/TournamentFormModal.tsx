@@ -271,6 +271,8 @@ export function TournamentFormModal({
         maxMatchesPerDay={form.formData.maxMatchesPerDay}
         deadTimeBlocks={form.formData.deadTimeBlocks}
         dailySchedules={form.formData.dailySchedules}
+        categoryPriority={form.formData.categoryPriority}
+        availableCategories={form.formData.categories}
         onMatchDurationChange={(n) => form.patch({ matchDurationMinutes: n })}
         onMatchBreakChange={(n) => form.patch({ matchBreakMinutes: n })}
         onMaxMatchesPerDayChange={(n) => form.patch({ maxMatchesPerDay: n })}
@@ -281,6 +283,7 @@ export function TournamentFormModal({
           );
           form.patch({ dailySchedules: next });
         }}
+        onCategoryPriorityChange={(order) => form.patch({ categoryPriority: order })}
       />
 
       <RegulationField

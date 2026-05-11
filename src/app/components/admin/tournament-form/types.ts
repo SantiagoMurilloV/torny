@@ -79,6 +79,8 @@ export interface TournamentFormState {
   maxMatchesPerDay: number;
   /** Dead-time blocks — no matches scheduled during these windows. */
   deadTimeBlocks: Array<{ start: string; end: string }>;
+  /** Category play order — first in array plays earliest in the day. */
+  categoryPriority: string[];
 }
 
 export const DEFAULT_COURTS: CourtEntry[] = [
@@ -111,5 +113,6 @@ export function emptyForm(): TournamentFormState {
     dailySchedules: [],
     maxMatchesPerDay: 0,
     deadTimeBlocks: [],
+    categoryPriority: [],
   };
 }

@@ -1,4 +1,4 @@
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar, Clock, ArrowUp, ArrowDown } from 'lucide-react';
 import type { DailyScheduleEntry } from '../types';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
@@ -26,22 +26,28 @@ export function ScheduleField({
   maxMatchesPerDay,
   deadTimeBlocks,
   dailySchedules,
+  categoryPriority,
+  availableCategories,
   onMatchDurationChange,
   onMatchBreakChange,
   onMaxMatchesPerDayChange,
   onDeadTimeBlocksChange,
   onDailyScheduleChange,
+  onCategoryPriorityChange,
 }: {
   matchDurationMinutes: number;
   matchBreakMinutes: number;
   maxMatchesPerDay: number;
   deadTimeBlocks: Array<{ start: string; end: string }>;
   dailySchedules: DailyScheduleEntry[];
+  categoryPriority: string[];
+  availableCategories: string[];
   onMatchDurationChange: (n: number) => void;
   onMatchBreakChange: (n: number) => void;
   onMaxMatchesPerDayChange: (n: number) => void;
   onDeadTimeBlocksChange: (blocks: Array<{ start: string; end: string }>) => void;
   onDailyScheduleChange: (index: number, patch: Partial<DailyScheduleEntry>) => void;
+  onCategoryPriorityChange: (order: string[]) => void;
 }) {
   // Format a YYYY-MM-DD string as "vie 15 may" for the row label. Uses
   // the browser's es-CO locale so the day-of-week is short + Spanish.
@@ -192,6 +198,62 @@ export function ScheduleField({
           </div>
         )}
       </div>
+
+      {/* Category priority — which categories play first each day */}
+      {availableCategories.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <ArrowUp className="w-4 h-4 text-black/60" aria-hidden="true" />
+            <label className="text-sm font-bold" style={FONT}>
+              Orden de categorías (quién juega primero)
+            </label>
+          </div>
+          <p className="text-[11px] text-black/45 mb-3">
+            Las categorías de arriba juegan más temprano. Arrastrá o usá las flechas para reordenar.
+          </p>
+          <div className="space-y-1.5">
+            {(categoryPriority.length > 0 ? categoryPriority : availableCategories).map((cat, idx, arr) => (
+              <div
+                key={cat}
+                className="flex items-center gap-2 bg-white border border-black/10 rounded-sm px-3 py-2"
+              >
+                <span className="text-xs font-bold text-black/40 w-5" style={FONT}>
+                  {idx + 1}.
+                </span>
+                <span className="text-sm font-medium flex-1">{cat}</span>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    disabled={idx === 0}
+                    onClick={() => {
+                      const next = [...arr];
+                      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                      onCategoryPriorityChange(next);
+                    }}
+                    className="p-1 text-black/30 hover:text-black disabled:opacity-20 transition-colors"
+                    aria-label="Subir"
+                  >
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === arr.length - 1}
+                    onClick={() => {
+                      const next = [...arr];
+                      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                      onCategoryPriorityChange(next);
+                    }}
+                    className="p-1 text-black/30 hover:text-black disabled:opacity-20 transition-colors"
+                    aria-label="Bajar"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Per-day rows — only render when the date range produced rows
           (set start + end first, save, then re-open). */}

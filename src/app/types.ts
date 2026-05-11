@@ -181,6 +181,8 @@ export interface Tournament {
   /** Dead-time blocks where no matches are scheduled (e.g. lunch break).
    *  Array of { start: "HH:MM", end: "HH:MM" } in local time. */
   deadTimeBlocks?: Array<{ start: string; end: string }>;
+  /** Category play order — first in array plays earliest each day. */
+  categoryPriority?: string[];
   /**
    * Real counts populated by the backend SELECT (LIST_SELECT) — used by
    * the home cards and the public detail hero so the numbers reflect

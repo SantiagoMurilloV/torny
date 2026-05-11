@@ -117,6 +117,7 @@ export function useTournamentForm({
       dailySchedules: hydrateDailySchedules(),
       maxMatchesPerDay: tournament.maxMatchesPerDay ?? 0,
       deadTimeBlocks: tournament.deadTimeBlocks ?? [],
+      categoryPriority: tournament.categoryPriority ?? [],
     });
     setCoverFile(null);
     setCoverPreview(tournament.coverImage ?? null);
@@ -350,6 +351,7 @@ export function useTournamentForm({
         dailySchedules: dailySchedulesMap,
         maxMatchesPerDay: formData.maxMatchesPerDay,
         deadTimeBlocks: formData.deadTimeBlocks.length > 0 ? formData.deadTimeBlocks : undefined,
+        categoryPriority: formData.categoryPriority.length > 0 ? formData.categoryPriority : undefined,
       };
 
       try {
