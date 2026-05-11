@@ -309,7 +309,7 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
           </h2>
         </div>
         <span className="text-xs text-black/50">
-          Arrastrá un partido a otra celda para reagendarlo. Misma cancha+hora ocupada → intercambio.
+          Arrastrá un partido a otra cancha u hora del mismo día. Si la celda destino está ocupada → intercambio automático. Para mover a otro día, cambialo arriba en el filtro.
         </span>
       </div>
 
