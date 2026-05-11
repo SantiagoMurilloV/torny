@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Calendar, GripVertical } from 'lucide-react';
+import { AlertTriangle, Calendar, CalendarDays, GripVertical, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Match, Tournament } from '../../../types';
 import { TeamAvatar } from '../../../components/TeamAvatar';
@@ -12,6 +12,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../../components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../../../components/ui/popover';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../../../components/ui/alert-dialog';
 import { api } from '../../../services/api';
 import { getErrorMessage } from '../../../lib/errors';
 
@@ -80,7 +94,30 @@ export function CronogramaTab({ tournament, matches, onMatchesPatched }: Cronogr
 function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTabProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedDay, setSelectedDay] = useState<string>('');
-  const [busy, setBusy] = useState(false);
+  // Per-match in-flight set. Only matches currently mutating are
+  // locked — the rest of the grid stays draggable. Replaces the
+  // earlier global `busy` flag that froze every drop after the first
+  // success on slow networks (the post-patch re-render briefly looked
+  // "stuck" because the lock hadn't released yet visually).
+  const [inFlight, setInFlight] = useState<Set<string>>(() => new Set());
+  // Big red alert state for unrecoverable conflicts (backend rejects
+  // even after the auto-swap fallback, or there's nowhere to move a
+  // match to on the target day). Replaces silent toast.error so the
+  // admin can't miss the failure mid-drag.
+  const [conflictAlert, setConflictAlert] = useState<
+    { title: string; body: string } | null
+  >(null);
+
+  const markInFlight = useCallback((ids: string[], on: boolean) => {
+    setInFlight((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }, []);
 
   const toIso = (d: Date | string): string => {
     if (d instanceof Date) return d.toISOString().slice(0, 10);
@@ -156,27 +193,38 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
 
   const dailySchedules = tournament.dailySchedules ?? {};
 
-  // Time slots are generated FOR THE SELECTED DAY using its specific
-  // window (per-day override or global default). We also union the
-  // times of matches scheduled on that day so a match in an
-  // off-cadence slot (e.g. admin manually moved it to a non-standard
-  // time) still has a row to land in.
-  const times = useMemo<string[]>(() => {
-    const set = new Set<string>();
-    if (selectedDay) {
-      const override = dailySchedules[selectedDay];
+  // Time slots for an arbitrary day. Used by:
+  //   · `times` (the visible grid) for the selected day.
+  //   · `findFreeSlotForDay` (cross-day move from the per-card day
+  //      picker) to look up the legal slot lattice of a different day.
+  const timesForDay = useCallback(
+    (day: string): string[] => {
+      const set = new Set<string>();
+      if (!day) return ['08:00'];
+      const override = dailySchedules[day];
       const startMin = parseHHMM(override?.start, DEFAULT_DAY_START_MIN);
       const endMin = parseHHMM(override?.end, DEFAULT_DAY_END_MIN);
       for (let m = startMin; m + matchDuration <= endMin; m += slotStride) {
         set.add(formatHHMM(m));
       }
       for (const m of matches) {
-        if (toIso(m.date) === selectedDay && m.time) set.add(m.time);
+        if (toIso(m.date) === day && m.time) set.add(m.time);
       }
-    }
-    const sorted = [...set].sort();
-    return sorted.length > 0 ? sorted : ['08:00'];
-  }, [selectedDay, dailySchedules, matchDuration, slotStride, matches]);
+      const sorted = [...set].sort();
+      return sorted.length > 0 ? sorted : ['08:00'];
+    },
+    [dailySchedules, matchDuration, slotStride, matches],
+  );
+
+  // Time slots are generated FOR THE SELECTED DAY using its specific
+  // window (per-day override or global default). We also union the
+  // times of matches scheduled on that day so a match in an
+  // off-cadence slot (e.g. admin manually moved it to a non-standard
+  // time) still has a row to land in.
+  const times = useMemo<string[]>(
+    () => timesForDay(selectedDay),
+    [timesForDay, selectedDay],
+  );
 
   const getMatchCategory = (m: Match): string => {
     if (m.group) {
@@ -259,25 +307,33 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
    * time on another court, the PUT throws and we toast the friendly
    * error.
    */
-  const handleDrop = async (dragged: Match, destCourt: string, destTime: string) => {
-    if (busy) return;
-    if (dragged.court === destCourt && dragged.time === destTime) return;
+  const shortLabel = useCallback(
+    (m: Match): string =>
+      `${m.team1.initials || m.team1.name} vs ${m.team2.initials || m.team2.name}`,
+    [],
+  );
 
-    setBusy(true);
-    try {
+  const formatDayLabel = useCallback((iso: string): string => {
+    const d = new Date(iso + 'T12:00:00');
+    return d.toLocaleDateString('es-CO', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    });
+  }, []);
+
+  const handleDrop = useCallback(
+    async (dragged: Match, destCourt: string, destTime: string) => {
+      // Same slot drop → no-op.
+      if (dragged.court === destCourt && dragged.time === destTime) return;
+      // This specific match is already mutating — ignore the second drop
+      // to avoid double-firing the API. Other matches stay draggable.
+      if (inFlight.has(dragged.id)) return;
+
       // 1) Destination cell occupied → straight swap with whichever
       // match is sitting on it (first wins if it's a stacked cell).
       const destStack = matchesByCell.get(`${destCourt}|${destTime}`) ?? [];
       const destMatch = destStack.find((m) => m.id !== dragged.id) ?? null;
-
-      if (destMatch) {
-        const { matchA, matchB } = await api.swapMatches(dragged.id, destMatch.id);
-        onMatchesPatched?.([matchA, matchB]);
-        toast.success(
-          `Cambio: ${shortLabel(dragged)} y ${shortLabel(destMatch)} intercambiaron horario.`,
-        );
-        return;
-      }
 
       // 2) Destination empty in the active view — but a match in
       // another category (hidden by the filter) or another court at
@@ -288,56 +344,49 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
       // To keep the drop succeeding, we auto-swap with that hidden
       // team-conflict match so the dragged match takes the conflict's
       // slot and the conflict's match moves to the dragged's original
-      // slot. Both teams keep their commitments without forcing the
-      // admin to chase the hidden partido.
-      const teamConflict = matches.find((m) => {
-        if (m.id === dragged.id) return false;
-        if (toIso(m.date) !== selectedDay) return false;
-        if (m.time !== destTime) return false;
-        const t1 = m.team1.id;
-        const t2 = m.team2.id;
-        const d1 = dragged.team1.id;
-        const d2 = dragged.team2.id;
-        return t1 === d1 || t1 === d2 || t2 === d1 || t2 === d2;
-      });
+      // slot.
+      const teamConflict = !destMatch
+        ? matches.find((m) => {
+            if (m.id === dragged.id) return false;
+            if (toIso(m.date) !== selectedDay) return false;
+            if (m.time !== destTime) return false;
+            const t1 = m.team1.id;
+            const t2 = m.team2.id;
+            const d1 = dragged.team1.id;
+            const d2 = dragged.team2.id;
+            return t1 === d1 || t1 === d2 || t2 === d1 || t2 === d2;
+          })
+        : null;
 
-      if (teamConflict) {
-        const { matchA, matchB } = await api.swapMatches(dragged.id, teamConflict.id);
-        onMatchesPatched?.([matchA, matchB]);
-        const hidden =
-          selectedCategory !== 'all' &&
-          getMatchCategory(teamConflict) !== selectedCategory;
-        toast.success(
-          `Movido a ${destCourt} · ${destTime} e intercambiado con ${shortLabel(teamConflict)}` +
-            (hidden ? ' (estaba oculto por el filtro).' : '.'),
-        );
-        return;
-      }
+      // 3) Decide partner for swap (if any) or a clean move.
+      const swapPartner = destMatch ?? teamConflict ?? null;
+      const partnerIds = swapPartner ? [dragged.id, swapPartner.id] : [dragged.id];
+      markInFlight(partnerIds, true);
 
-      // 3) Clean move — destination empty and no team conflict.
-      {
-        // Diagnostic snapshot — the BE has rejected drops with a "conflict
-        // on another day" message in the past and the only way to tell
-        // whether the FE or the BE drifted is to log what we're sending.
-        // Safe to leave in production: a console.info entry per drag has
-        // negligible cost and stays invisible unless the admin opens
-        // devtools.
-        // eslint-disable-next-line no-console
-        console.info('[cronograma] move match', {
-          matchId: dragged.id,
-          draggedFrom: {
-            date: toIso(dragged.date),
-            time: dragged.time,
-            court: dragged.court,
-          },
-          movingTo: {
-            date: selectedDay,
-            time: destTime,
-            court: destCourt,
-          },
-          teams: { team1Id: dragged.team1.id, team2Id: dragged.team2.id },
-          selectedDay,
-        });
+      try {
+        if (swapPartner) {
+          const { matchA, matchB } = await api.swapMatches(
+            dragged.id,
+            swapPartner.id,
+          );
+          onMatchesPatched?.([matchA, matchB]);
+          if (destMatch) {
+            toast.success(
+              `Cambio: ${shortLabel(dragged)} y ${shortLabel(destMatch)} intercambiaron horario.`,
+            );
+          } else {
+            const hidden =
+              selectedCategory !== 'all' &&
+              getMatchCategory(swapPartner) !== selectedCategory;
+            toast.success(
+              `Movido a ${destCourt} · ${destTime} e intercambiado con ${shortLabel(swapPartner)}` +
+                (hidden ? ' (estaba oculto por el filtro).' : '.'),
+            );
+          }
+          return;
+        }
+
+        // 4) Clean move — destination empty and no team conflict.
         const updated = await api.updateMatch(dragged.id, {
           tournamentId: dragged.tournamentId,
           team1Id: dragged.team1.id,
@@ -351,27 +400,143 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
         });
         onMatchesPatched?.([updated]);
         toast.success(`Movido a ${destCourt} · ${destTime}.`);
+      } catch (err) {
+        // Loud, unmissable failure dialog instead of a small toast.
+        // The admin must dismiss the alert before continuing — which
+        // is the right UX when the backend rejects a destructive move.
+        // eslint-disable-next-line no-console
+        console.warn('[cronograma] move failed', err);
+        setConflictAlert({
+          title: 'No se pudo mover el partido',
+          body: getErrorMessage(
+            err,
+            'El servidor rechazó el cambio. Probá con otra cancha u hora.',
+          ),
+        });
+      } finally {
+        markInFlight(partnerIds, false);
       }
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn('[cronograma] move failed', err);
-      toast.error(getErrorMessage(err, 'No se pudo mover el partido'));
-    } finally {
-      setBusy(false);
-    }
-  };
+    },
+    [
+      inFlight,
+      matches,
+      matchesByCell,
+      selectedDay,
+      selectedCategory,
+      onMatchesPatched,
+      markInFlight,
+      shortLabel,
+    ],
+  );
 
-  const shortLabel = (m: Match): string =>
-    `${m.team1.initials || m.team1.name} vs ${m.team2.initials || m.team2.name}`;
+  /**
+   * Cross-day move from the per-card day picker. Finds the first free
+   * (time, court) slot on `targetDay` that:
+   *   1. Has nothing scheduled on it.
+   *   2. Doesn't put either of the dragged match's teams in two
+   *      matches at the same time on that day.
+   *
+   * If nothing fits, surfaces the big red alert with an explanation.
+   * If something fits, fires `api.updateMatch` and (optionally) jumps
+   * the view to the target day so the admin sees where it landed.
+   */
+  const handleMoveToDay = useCallback(
+    async (dragged: Match, targetDay: string) => {
+      if (!targetDay) return;
+      if (toIso(dragged.date) === targetDay) {
+        toast.info('El partido ya está en ese día.');
+        return;
+      }
+      if (inFlight.has(dragged.id)) return;
 
-  const formatDayLabel = (iso: string): string => {
-    const d = new Date(iso + 'T12:00:00');
-    return d.toLocaleDateString('es-CO', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-    });
-  };
+      const slots = timesForDay(targetDay);
+      // Existing matches on the target day, indexed by occupancy and
+      // by team-time. Includes ALL categories — backend will reject
+      // cross-team conflicts regardless of the active filter.
+      const occupied = new Set<string>();
+      const teamTimes = new Map<string, Set<string>>(); // teamId → Set<time>
+      for (const m of matches) {
+        if (m.id === dragged.id) continue;
+        if (toIso(m.date) !== targetDay) continue;
+        occupied.add(`${m.court}|${m.time}`);
+        for (const tid of [m.team1.id, m.team2.id]) {
+          const s = teamTimes.get(tid) ?? new Set<string>();
+          s.add(m.time);
+          teamTimes.set(tid, s);
+        }
+      }
+      const t1Times = teamTimes.get(dragged.team1.id) ?? new Set<string>();
+      const t2Times = teamTimes.get(dragged.team2.id) ?? new Set<string>();
+
+      let chosen: { court: string; time: string } | null = null;
+      outer: for (const time of slots) {
+        if (t1Times.has(time) || t2Times.has(time)) continue;
+        for (const court of courts) {
+          if (occupied.has(`${court}|${time}`)) continue;
+          chosen = { court, time };
+          break outer;
+        }
+      }
+
+      if (!chosen) {
+        setConflictAlert({
+          title: 'No hay espacio libre ese día',
+          body:
+            `No queda ningún horario en ${formatDayLabel(targetDay)} donde ` +
+            `${shortLabel(dragged)} pueda jugar sin chocar con otro partido ` +
+            'de los mismos equipos. Probá con otro día o liberá un slot.',
+        });
+        return;
+      }
+
+      markInFlight([dragged.id], true);
+      try {
+        const updated = await api.updateMatch(dragged.id, {
+          tournamentId: dragged.tournamentId,
+          team1Id: dragged.team1.id,
+          team2Id: dragged.team2.id,
+          date: targetDay,
+          time: chosen.time,
+          court: chosen.court,
+          phase: dragged.phase,
+          groupName: dragged.group,
+          status: dragged.status,
+        });
+        onMatchesPatched?.([updated]);
+        toast.success(
+          `Movido a ${formatDayLabel(targetDay)} · ${chosen.court} · ${chosen.time}.`,
+          {
+            action: {
+              label: 'Ir al día',
+              onClick: () => setSelectedDay(targetDay),
+            },
+          },
+        );
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[cronograma] day-move failed', err);
+        setConflictAlert({
+          title: 'No se pudo cambiar de día',
+          body: getErrorMessage(
+            err,
+            'El servidor rechazó el cambio. Intentá de nuevo o elegí otro día.',
+          ),
+        });
+      } finally {
+        markInFlight([dragged.id], false);
+      }
+    },
+    [
+      inFlight,
+      matches,
+      courts,
+      timesForDay,
+      onMatchesPatched,
+      markInFlight,
+      shortLabel,
+      formatDayLabel,
+    ],
+  );
 
   return (
     <div className="space-y-4">
@@ -384,7 +549,9 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
           </h2>
         </div>
         <span className="text-xs text-black/50">
-          Arrastrá un partido a otra cancha u hora del mismo día. Si la celda destino está ocupada → intercambio automático. Para mover a otro día, cambialo arriba en el filtro.
+          Arrastrá para mover, soltá en una celda ocupada para intercambiar.
+          Para cambiar de día, tocá el ícono de calendario en la cartica del
+          partido.
         </span>
       </div>
 
@@ -452,6 +619,11 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
                 key={m.id}
                 match={m}
                 color={categoryColorMap.get(getMatchCategory(m)) ?? CATEGORY_COLORS[0]}
+                days={days}
+                currentDay={toIso(m.date)}
+                onMoveToDay={handleMoveToDay}
+                formatDayLabel={formatDayLabel}
+                isInFlight={inFlight.has(m.id)}
               />
             ))}
           </div>
@@ -494,12 +666,49 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
                 categoryColorMap={categoryColorMap}
                 getMatchCategory={getMatchCategory}
                 onDrop={handleDrop}
-                busy={busy}
+                onMoveToDay={handleMoveToDay}
+                days={days}
+                selectedDay={selectedDay}
+                formatDayLabel={formatDayLabel}
+                inFlight={inFlight}
               />
             ))}
           </div>
         </div>
       </div>
+
+      {/* Big red unrecoverable-conflict alert. Keeps the admin from
+          missing a failure mid-drag the way a small toast can — once
+          shown, the alert blocks the rest of the UI until dismissed. */}
+      <AlertDialog
+        open={conflictAlert !== null}
+        onOpenChange={(open) => {
+          if (!open) setConflictAlert(null);
+        }}
+      >
+        <AlertDialogContent className="border-2 border-red-600">
+          <AlertDialogHeader>
+            <AlertDialogTitle
+              className="flex items-center gap-2 text-red-700 text-xl"
+              style={FONT}
+            >
+              <AlertTriangle className="w-6 h-6" aria-hidden="true" />
+              {conflictAlert?.title ?? 'Conflicto'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-black/80 whitespace-pre-line">
+              {conflictAlert?.body ?? ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => setConflictAlert(null)}
+            >
+              Entendido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -515,7 +724,11 @@ interface RowFragmentProps {
   categoryColorMap: Map<string, typeof CATEGORY_COLORS[0]>;
   getMatchCategory: (m: Match) => string;
   onDrop: (dragged: Match, destCourt: string, destTime: string) => void;
-  busy: boolean;
+  onMoveToDay: (m: Match, targetDay: string) => void;
+  days: string[];
+  selectedDay: string;
+  formatDayLabel: (iso: string) => string;
+  inFlight: Set<string>;
 }
 
 /**
@@ -530,7 +743,11 @@ function RowFragment({
   categoryColorMap,
   getMatchCategory,
   onDrop,
-  busy,
+  onMoveToDay,
+  days,
+  selectedDay,
+  formatDayLabel,
+  inFlight,
 }: RowFragmentProps) {
   return (
     <>
@@ -549,7 +766,11 @@ function RowFragment({
           categoryColorMap={categoryColorMap}
           getMatchCategory={getMatchCategory}
           onDrop={onDrop}
-          busy={busy}
+          onMoveToDay={onMoveToDay}
+          days={days}
+          selectedDay={selectedDay}
+          formatDayLabel={formatDayLabel}
+          inFlight={inFlight}
         />
       ))}
     </>
@@ -570,7 +791,11 @@ interface CellProps {
   categoryColorMap: Map<string, typeof CATEGORY_COLORS[0]>;
   getMatchCategory: (m: Match) => string;
   onDrop: (dragged: Match, destCourt: string, destTime: string) => void;
-  busy: boolean;
+  onMoveToDay: (m: Match, targetDay: string) => void;
+  days: string[];
+  selectedDay: string;
+  formatDayLabel: (iso: string) => string;
+  inFlight: Set<string>;
 }
 
 function Cell({
@@ -580,7 +805,11 @@ function Cell({
   categoryColorMap,
   getMatchCategory,
   onDrop,
-  busy,
+  onMoveToDay,
+  days,
+  selectedDay,
+  formatDayLabel,
+  inFlight,
 }: CellProps) {
   const [{ isOver, canDrop }, drop] = useDrop<
     { match: Match },
@@ -588,13 +817,16 @@ function Cell({
     { isOver: boolean; canDrop: boolean }
   >(() => ({
     accept: MATCH_DND_TYPE,
+    // Refuse drops when the dragged match itself is locked. Cells stay
+    // hot for other (idle) matches — the previous global `busy` flag
+    // froze every cell during a save and made the grid feel broken.
     drop: (item) => onDrop(item.match, court, time),
-    canDrop: () => !busy,
+    canDrop: (item) => !inFlight.has(item.match.id),
     collect: (monitor) => ({
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(),
     }),
-  }), [court, time, onDrop, busy]);
+  }), [court, time, onDrop, inFlight]);
 
   const dropTint = isOver && canDrop ? 'bg-spk-red/5 ring-2 ring-spk-red/40 ring-inset' : '';
   const isStacked = matches.length > 1;
@@ -619,6 +851,11 @@ function Cell({
             key={m.id}
             match={m}
             color={categoryColorMap.get(getMatchCategory(m)) ?? CATEGORY_COLORS[0]}
+            days={days}
+            currentDay={selectedDay}
+            onMoveToDay={onMoveToDay}
+            formatDayLabel={formatDayLabel}
+            isInFlight={inFlight.has(m.id)}
           />
         ))}
       </div>
@@ -629,9 +866,32 @@ function Cell({
 interface MatchCardProps {
   match: Match;
   color: typeof CATEGORY_COLORS[0];
+  /** Tournament days for the day-picker popover. */
+  days: string[];
+  /**
+   * The day this card is currently rendered under. Disables that
+   * option in the popover so "moving to the same day" is a no-op the
+   * user can't even pick.
+   */
+  currentDay: string;
+  /** Cross-day move from the popover. Parent finds a free slot. */
+  onMoveToDay: (m: Match, targetDay: string) => void;
+  formatDayLabel: (iso: string) => string;
+  /** True while this match's PUT/SWAP is in flight. */
+  isInFlight: boolean;
 }
 
-function MatchCard({ match, color }: MatchCardProps) {
+function MatchCard({
+  match,
+  color,
+  days,
+  currentDay,
+  onMoveToDay,
+  formatDayLabel,
+  isInFlight,
+}: MatchCardProps) {
+  const [dayPickerOpen, setDayPickerOpen] = useState(false);
+
   const [{ isDragging }, drag, preview] = useDrag<
     { match: Match },
     void,
@@ -639,10 +899,14 @@ function MatchCard({ match, color }: MatchCardProps) {
   >(() => ({
     type: MATCH_DND_TYPE,
     item: { match },
+    // Don't let an in-flight card be re-dragged — the previous drop
+    // hasn't settled yet and a second drag would race the parent
+    // state update.
+    canDrag: () => !isInFlight,
     collect: (monitor) => ({ isDragging: monitor.isDragging() }),
-  }), [match]);
+  }), [match, isInFlight]);
 
-  const opacity = isDragging ? 'opacity-40' : 'opacity-100';
+  const opacity = isDragging || isInFlight ? 'opacity-40' : 'opacity-100';
   const groupLabel = match.group?.includes('|')
     ? match.group.split('|').slice(1).join('|')
     : match.group || '';
@@ -670,6 +934,65 @@ function MatchCard({ match, color }: MatchCardProps) {
             {match.score.team1}-{match.score.team2}
           </span>
         )}
+        {/* Day-picker — small calendar icon. Opens a popover with the
+            tournament days; selecting one fires onMoveToDay and the
+            parent finds a free (court, time) slot on that day. The
+            button isn't part of the drag handle, so clicking it never
+            starts a drag. */}
+        <Popover open={dayPickerOpen} onOpenChange={setDayPickerOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => e.stopPropagation()}
+              disabled={isInFlight}
+              aria-label="Cambiar de día"
+              title="Cambiar de día"
+              className={`${match.score ? '' : 'ml-auto'} text-black/50 hover:text-black disabled:opacity-40 disabled:cursor-not-allowed`}
+            >
+              {isInFlight ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            className="w-52 p-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-black/55"
+              style={FONT}
+            >
+              Mover a otro día
+            </div>
+            <div className="max-h-60 overflow-y-auto">
+              {days.map((d) => {
+                const isCurrent = d === currentDay;
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    disabled={isCurrent}
+                    onClick={() => {
+                      setDayPickerOpen(false);
+                      if (!isCurrent) onMoveToDay(match, d);
+                    }}
+                    className="w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between"
+                  >
+                    <span>{formatDayLabel(d)}</span>
+                    {isCurrent && (
+                      <span className="text-[9px] text-black/40 uppercase">
+                        Actual
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
       <div className="flex items-center gap-1.5">
         <TeamAvatar team={match.team1} size="xs" />
