@@ -115,15 +115,16 @@ export function TeamsTab({
 
   return (
     <>
-      {/* Toolbar — search + CTA. On mobile they stack; on >=sm the
-          search lives on the left and the Inscribir button on the right.
-          The previous flat <Select> dropdown for enrolment was replaced
-          long ago by TeamPickerModal (search across the admin's library)
-          — this search is for filtering the ALREADY-INSCRIBED roster
-          shown in the accordions below. */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+      {/* Toolbar — single row: search input takes most of the width,
+          a "+" icon button sits next to it on mobile and a full
+          "+ Inscribir equipo" button on desktop. Mirrors the same
+          pattern AdminTournaments uses so the admin sees a consistent
+          shape across the app's "list + create" surfaces. The "+"
+          button is always rendered — when there's no search input
+          (small tournaments) the button still sits on the right. */}
+      <div className="flex items-center gap-2 mb-6">
         {showSearch ? (
-          <div className="relative w-full sm:max-w-sm">
+          <div className="relative flex-1 min-w-0">
             <Search
               className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none"
               aria-hidden="true"
@@ -151,11 +152,22 @@ export function TeamsTab({
           // Spacer keeps the Inscribir button on the right when there's
           // no search input (small tournaments). Without it the button
           // would jump to the left edge on the flex row.
-          <div aria-hidden="true" />
+          <div aria-hidden="true" className="flex-1" />
         )}
+        {/* Mobile: 40×40 icon button. */}
+        <button
+          type="button"
+          onClick={() => setShowPicker(true)}
+          aria-label="Inscribir equipo"
+          title="Inscribir equipo"
+          className="sm:hidden flex-shrink-0 inline-flex items-center justify-center w-10 h-10 bg-spk-red text-white hover:bg-spk-red-dark rounded-sm transition-colors"
+        >
+          <Plus className="w-5 h-5" aria-hidden="true" />
+        </button>
+        {/* Desktop: full label, same red treatment. */}
         <Button
           onClick={() => setShowPicker(true)}
-          className="bg-spk-red hover:bg-spk-red-dark w-full sm:w-auto"
+          className="hidden sm:inline-flex bg-spk-red hover:bg-spk-red-dark"
         >
           <Plus className="w-4 h-4" />
           Inscribir equipo
