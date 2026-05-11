@@ -107,12 +107,33 @@ export function MatchesTab({
         const fresh = await api.getTournamentMatches(effectiveTournamentId);
         onMatchesReplaced?.(fresh);
         const moved = result.matchesMoved;
-        const unresolved = result.unresolved;
+        // Compose a sentence that names every problem found ("X por
+        // conflicto de equipo, Y por cancha doble, Z fuera del rango")
+        // so the admin understands not just THAT something moved but
+        // WHAT was wrong. Each sub-total is listed only when > 0.
+        const parts: string[] = [];
+        if (result.teamConflicts > 0) {
+          parts.push(
+            `${result.teamConflicts} con equipo en dos partidos a la vez`,
+          );
+        }
+        if (result.courtConflicts > 0) {
+          parts.push(
+            `${result.courtConflicts} con cancha doble`,
+          );
+        }
+        if (result.outOfRange > 0) {
+          parts.push(
+            `${result.outOfRange} fuera del rango del torneo`,
+          );
+        }
+        const detail = parts.length > 0 ? ` (${parts.join(', ')})` : '';
+        const tail =
+          result.unresolved > 0
+            ? `. Quedaron ${result.unresolved} sin slot disponible — revisalos a mano.`
+            : '.';
         toast.success(
-          `Reagendé ${moved} partido${moved === 1 ? '' : 's'}` +
-            (unresolved > 0
-              ? `. Quedaron ${unresolved} sin slot disponible — revisalos a mano.`
-              : '.'),
+          `Reagendé ${moved} partido${moved === 1 ? '' : 's'}${detail}${tail}`,
         );
       }
       setRepairConfirmOpen(false);
@@ -387,10 +408,11 @@ export function MatchesTab({
         }}
         title="¿Reparar horarios?"
         description={
-          'Voy a buscar partidos donde un mismo equipo aparece dos veces a la misma hora ' +
-          'y voy a moverlos al próximo horario libre. El partido original queda en su lugar; ' +
-          'solo se reagenda el duplicado. Esta acción no afecta los marcadores ni el estado ' +
-          'de los partidos.'
+          'Voy a buscar tres tipos de problemas y reagendar los partidos afectados al próximo ' +
+          'horario libre dentro del torneo: (1) un mismo equipo programado en dos partidos a la ' +
+          'misma hora, (2) la misma cancha usada por dos partidos a la misma hora, y (3) partidos ' +
+          'con fecha fuera del rango del torneo (anteriores al inicio o posteriores al fin). ' +
+          'Esta acción no toca marcadores ni el estado de los partidos.'
         }
         confirmLabel="Reparar"
         variant="default"

@@ -114,16 +114,23 @@ export const tournamentsApi = {
   },
 
   /**
-   * Detect every team double-booking in a tournament's matches and
-   * reschedule the offending matches into safe slots. Used by the admin
-   * "Reparar horarios" button after the SAN JOSE A bug from 2026-05-10
-   * where an old generation left some teams scheduled twice at the same
-   * date+time. Idempotent — re-running it on a clean tournament returns
+   * Detect every schedule problem in a tournament's matches and
+   * reschedule the offenders into safe slots. Three failure modes are
+   * caught:
+   *   · teamConflicts  — same team in two matches at the same datetime
+   *   · courtConflicts — same court double-booked at the same datetime
+   *   · outOfRange     — match.date sits before tournament_start or
+   *                      after tournament_end (admin shifted the dates
+   *                      after fixtures were generated)
+   * Idempotent — re-running it on a clean tournament returns
    * conflictsDetected: 0 and changes nothing.
    */
   async repairTournamentConflicts(id: string): Promise<{
     conflictsDetected: number;
     matchesMoved: number;
+    teamConflicts: number;
+    courtConflicts: number;
+    outOfRange: number;
     moves: Array<{
       matchId: string;
       from: { date: string; time: string; court: string };

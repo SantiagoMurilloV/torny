@@ -638,6 +638,10 @@ export class MatchService {
   ): Promise<{
     conflictsDetected: number;
     matchesMoved: number;
+    /** Sub-totals so the UI can word the toast precisely. */
+    teamConflicts: number;
+    courtConflicts: number;
+    outOfRange: number;
     moves: Array<{
       matchId: string;
       from: { date: string; time: string; court: string };
@@ -647,13 +651,17 @@ export class MatchService {
   }> {
     const pool = getPool();
 
-    // Pull tournament context (start_date, courts, day window) so the
-    // repair walks the same calendar the original scheduler uses.
+    // Pull tournament context (start_date, end_date, courts, day window)
+    // so the repair walks the same calendar the original scheduler uses
+    // AND so we can detect matches that fall outside the tournament's
+    // declared window (e.g. admin shifts start_date forward after fixtures
+    // were generated → old matches now sit "before" the tournament).
     const tRes = await pool.query<{
       start_date: string | Date;
+      end_date: string | Date | null;
       courts: string[] | null;
     }>(
-      'SELECT start_date, courts FROM tournaments WHERE id = $1',
+      'SELECT start_date, end_date, courts FROM tournaments WHERE id = $1',
       [tournamentId],
     );
     if (tRes.rows.length === 0) {
@@ -661,6 +669,18 @@ export class MatchService {
     }
     const courtsRow = tRes.rows[0].courts ?? [];
     const courts: string[] = courtsRow.length > 0 ? courtsRow : ['Cancha 1'];
+
+    // Normalise both dates to YYYY-MM-DD strings for plain string
+    // comparison. Handles both shapes the pg driver returns (Date
+    // instance vs ISO string) so the same code works on local dev
+    // (driver may give Date) and Railway prod.
+    const toDateStr = (raw: string | Date | null | undefined): string | null => {
+      if (raw instanceof Date) return raw.toISOString().slice(0, 10);
+      if (typeof raw === 'string') return raw.slice(0, 10);
+      return null;
+    };
+    const tournamentStart = toDateStr(tRes.rows[0].start_date) ?? '';
+    const tournamentEnd = toDateStr(tRes.rows[0].end_date) ?? tournamentStart;
 
     const DAY_START_MIN = 8 * 60; // 08:00
     const DAY_END_MIN = 18 * 60; // 18:00
@@ -708,17 +728,34 @@ export class MatchService {
     const courtKey = (court: string, date: string, time: string) =>
       `${court}|${slotKey(date, time)}`;
 
+    // Two failure modes to detect, both surface the same way (the
+    // match needs to move):
+    //   1. Slot conflict — same team or court already busy at this
+    //      (date, time). The earliest-inserted match keeps the slot,
+    //      newer ones get queued for relocation.
+    //   2. Out-of-range — match.date sits before tournament_start or
+    //      after tournament_end. Happens when admin shifts the
+    //      tournament dates after fixtures already exist.
     const conflictMatches: Row[] = [];
+    let teamConflicts = 0;
+    let courtConflicts = 0;
+    let outOfRange = 0;
     for (const r of rows) {
       const k1 = teamKey(r.team1_id, r.date, r.time);
       const k2 = teamKey(r.team2_id, r.date, r.time);
       const ck = courtKey(r.court, r.date, r.time);
-      if (
-        teamSlot.has(k1) ||
-        teamSlot.has(k2) ||
-        courtSlot.has(ck)
-      ) {
+      const teamHit = teamSlot.has(k1) || teamSlot.has(k2);
+      const courtHit = courtSlot.has(ck);
+      // Plain string comparison works because all three values are in
+      // YYYY-MM-DD form (lexicographic order matches calendar order).
+      const outsideWindow =
+        tournamentStart !== '' &&
+        (r.date < tournamentStart || r.date > tournamentEnd);
+      if (teamHit || courtHit || outsideWindow) {
         conflictMatches.push(r);
+        if (teamHit) teamConflicts++;
+        else if (courtHit) courtConflicts++;
+        if (outsideWindow) outOfRange++;
         continue;
       }
       teamSlot.set(k1, r.id);
@@ -730,6 +767,9 @@ export class MatchService {
       return {
         conflictsDetected: 0,
         matchesMoved: 0,
+        teamConflicts: 0,
+        courtConflicts: 0,
+        outOfRange: 0,
         moves: [],
         unresolved: 0,
       };
@@ -739,13 +779,9 @@ export class MatchService {
     // tournament's first day at the day-window opening time, advancing
     // SLOT_MIN minutes per attempt and rolling to the next day at
     // 18:00. Cap at 365 days so a misconfigured tournament can't spin
-    // forever.
-    const startDate = (() => {
-      const raw = tRes.rows[0].start_date;
-      if (raw instanceof Date) return raw.toISOString().slice(0, 10);
-      if (typeof raw === 'string') return raw.slice(0, 10);
-      return new Date().toISOString().slice(0, 10);
-    })();
+    // forever. Naturally fills the earliest dates first so out-of-range
+    // matches end up pulled INTO the tournament window when there's room.
+    const startDate = tournamentStart || new Date().toISOString().slice(0, 10);
 
     const formatHHMM = (totalMinutes: number): string => {
       const h = Math.floor(totalMinutes / 60);
@@ -811,6 +847,9 @@ export class MatchService {
     return {
       conflictsDetected: conflictMatches.length,
       matchesMoved: moves.length,
+      teamConflicts,
+      courtConflicts,
+      outOfRange,
       moves,
       unresolved,
     };
