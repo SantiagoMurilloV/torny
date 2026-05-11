@@ -115,6 +115,8 @@ export function useTournamentForm({
       matchDurationMinutes: tournament.matchDurationMinutes ?? 60,
       matchBreakMinutes: tournament.matchBreakMinutes ?? 15,
       dailySchedules: hydrateDailySchedules(),
+      maxMatchesPerDay: tournament.maxMatchesPerDay ?? 0,
+      deadTimeBlocks: tournament.deadTimeBlocks ?? [],
     });
     setCoverFile(null);
     setCoverPreview(tournament.coverImage ?? null);
@@ -346,6 +348,8 @@ export function useTournamentForm({
         matchDurationMinutes: formData.matchDurationMinutes,
         matchBreakMinutes: formData.matchBreakMinutes,
         dailySchedules: dailySchedulesMap,
+        maxMatchesPerDay: formData.maxMatchesPerDay,
+        deadTimeBlocks: formData.deadTimeBlocks.length > 0 ? formData.deadTimeBlocks : undefined,
       };
 
       try {

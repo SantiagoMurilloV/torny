@@ -176,6 +176,11 @@ export interface Tournament {
   matchDurationMinutes?: number;
   matchBreakMinutes?: number;
   dailySchedules?: Record<string, { start: string; end: string }>;
+  /** Maximum matches per day across all courts (0 = unlimited). */
+  maxMatchesPerDay?: number;
+  /** Dead-time blocks where no matches are scheduled (e.g. lunch break).
+   *  Array of { start: "HH:MM", end: "HH:MM" } in local time. */
+  deadTimeBlocks?: Array<{ start: string; end: string }>;
   /**
    * Real counts populated by the backend SELECT (LIST_SELECT) — used by
    * the home cards and the public detail hero so the numbers reflect

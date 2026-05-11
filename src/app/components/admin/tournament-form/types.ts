@@ -75,6 +75,10 @@ export interface TournamentFormState {
   matchDurationMinutes: number;
   matchBreakMinutes: number;
   dailySchedules: DailyScheduleEntry[];
+  /** Max matches per day (0 = unlimited). */
+  maxMatchesPerDay: number;
+  /** Dead-time blocks — no matches scheduled during these windows. */
+  deadTimeBlocks: Array<{ start: string; end: string }>;
 }
 
 export const DEFAULT_COURTS: CourtEntry[] = [
@@ -105,5 +109,7 @@ export function emptyForm(): TournamentFormState {
     matchDurationMinutes: 60,
     matchBreakMinutes: 15,
     dailySchedules: [],
+    maxMatchesPerDay: 0,
+    deadTimeBlocks: [],
   };
 }

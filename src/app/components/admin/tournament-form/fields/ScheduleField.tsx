@@ -23,20 +23,24 @@ const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 export function ScheduleField({
   matchDurationMinutes,
   matchBreakMinutes,
+  maxMatchesPerDay,
+  deadTimeBlocks,
   dailySchedules,
   onMatchDurationChange,
   onMatchBreakChange,
+  onMaxMatchesPerDayChange,
+  onDeadTimeBlocksChange,
   onDailyScheduleChange,
 }: {
   matchDurationMinutes: number;
   matchBreakMinutes: number;
+  maxMatchesPerDay: number;
+  deadTimeBlocks: Array<{ start: string; end: string }>;
   dailySchedules: DailyScheduleEntry[];
   onMatchDurationChange: (n: number) => void;
   onMatchBreakChange: (n: number) => void;
-  /**
-   * Replace one row by index. Passing empty strings clears the
-   * override for that date — the day falls back to the global default.
-   */
+  onMaxMatchesPerDayChange: (n: number) => void;
+  onDeadTimeBlocksChange: (blocks: Array<{ start: string; end: string }>) => void;
   onDailyScheduleChange: (index: number, patch: Partial<DailyScheduleEntry>) => void;
 }) {
   // Format a YYYY-MM-DD string as "vie 15 may" for the row label. Uses
@@ -105,6 +109,88 @@ export function ScheduleField({
             Pausa entre un partido y el siguiente. Default: 15.
           </p>
         </div>
+        <div>
+          <label className="block text-sm font-bold mb-1" style={FONT}>
+            Máx. partidos por día
+          </label>
+          <input
+            type="number"
+            min={0}
+            max={200}
+            value={String(maxMatchesPerDay)}
+            onChange={(e) =>
+              onMaxMatchesPerDayChange(parseInt(e.target.value, 10) || 0)
+            }
+            className="w-full px-3 py-2 bg-white border-2 border-black/10 rounded-sm focus:outline-none focus:border-spk-red"
+          />
+          <p className="text-[11px] text-black/45 mt-1">
+            0 = sin límite. Útil para no sobrecargar un día.
+          </p>
+        </div>
+      </div>
+
+      {/* Dead-time blocks */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-black/60" aria-hidden="true" />
+            <label className="text-sm font-bold" style={FONT}>
+              Horas muertas (sin partidos)
+            </label>
+          </div>
+          <button
+            type="button"
+            onClick={() => onDeadTimeBlocksChange([...deadTimeBlocks, { start: '12:00', end: '13:00' }])}
+            className="text-xs text-black/60 hover:text-black border border-black/20 rounded px-2 py-1 transition-colors"
+            style={FONT}
+          >
+            + Agregar bloque
+          </button>
+        </div>
+        {deadTimeBlocks.length === 0 ? (
+          <p className="text-xs text-black/45 italic">
+            Sin horas muertas. Agregá bloques para pausas (almuerzo, descanso, etc.)
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {deadTimeBlocks.map((block, idx) => (
+              <div key={idx} className="flex items-center gap-3 bg-black/[0.02] border border-black/10 rounded-sm px-3 py-2">
+                <label className="flex items-center gap-2 flex-1">
+                  <span className="text-[11px] text-black/55 uppercase tracking-wide w-10">Inicio</span>
+                  <input
+                    type="time"
+                    value={block.start}
+                    onChange={(e) => {
+                      const next = deadTimeBlocks.map((b, i) => i === idx ? { ...b, start: e.target.value } : b);
+                      onDeadTimeBlocksChange(next);
+                    }}
+                    className="flex-1 px-2 py-1 text-sm bg-white border border-black/10 rounded-sm focus:outline-none focus:border-spk-red"
+                  />
+                </label>
+                <label className="flex items-center gap-2 flex-1">
+                  <span className="text-[11px] text-black/55 uppercase tracking-wide w-10">Fin</span>
+                  <input
+                    type="time"
+                    value={block.end}
+                    onChange={(e) => {
+                      const next = deadTimeBlocks.map((b, i) => i === idx ? { ...b, end: e.target.value } : b);
+                      onDeadTimeBlocksChange(next);
+                    }}
+                    className="flex-1 px-2 py-1 text-sm bg-white border border-black/10 rounded-sm focus:outline-none focus:border-spk-red"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => onDeadTimeBlocksChange(deadTimeBlocks.filter((_, i) => i !== idx))}
+                  className="text-black/30 hover:text-red-500 transition-colors text-lg leading-none"
+                  aria-label="Eliminar bloque"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Per-day rows — only render when the date range produced rows

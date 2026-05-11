@@ -268,12 +268,14 @@ export function TournamentFormModal({
       <ScheduleField
         matchDurationMinutes={form.formData.matchDurationMinutes}
         matchBreakMinutes={form.formData.matchBreakMinutes}
+        maxMatchesPerDay={form.formData.maxMatchesPerDay}
+        deadTimeBlocks={form.formData.deadTimeBlocks}
         dailySchedules={form.formData.dailySchedules}
         onMatchDurationChange={(n) => form.patch({ matchDurationMinutes: n })}
         onMatchBreakChange={(n) => form.patch({ matchBreakMinutes: n })}
+        onMaxMatchesPerDayChange={(n) => form.patch({ maxMatchesPerDay: n })}
+        onDeadTimeBlocksChange={(blocks) => form.patch({ deadTimeBlocks: blocks })}
         onDailyScheduleChange={(idx, patch) => {
-          // Replace the row at `idx` with the patched values. Keep the
-          // array immutable so React picks up the change cleanly.
           const next = form.formData.dailySchedules.map((row, i) =>
             i === idx ? { ...row, ...patch } : row,
           );
