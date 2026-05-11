@@ -137,6 +137,13 @@ export const tournamentsApi = {
       to: { date: string; time: string; court: string };
     }>;
     unresolved: number;
+    debug: {
+      tournamentStart: string;
+      tournamentEnd: string;
+      totalMatches: number;
+      earliestMatchDate: string | null;
+      latestMatchDate: string | null;
+    };
   }> {
     return request(`/tournaments/${id}/repair-conflicts`, {
       method: 'POST',

@@ -101,8 +101,18 @@ export function MatchesTab({
     setRepairing(true);
     try {
       const result = await api.repairTournamentConflicts(effectiveTournamentId);
+      // Mirror the backend's debug snapshot in the dev console so the
+      // admin can verify what window the repair ran against. Useful when
+      // toast says "todo en orden" but the matches list still shows
+      // out-of-range dates — usually points at a date-format mismatch.
+      // eslint-disable-next-line no-console
+      console.info('[repair] result', result);
       if (result.conflictsDetected === 0) {
-        toast.success('No se encontraron conflictos. Todo en orden.');
+        const d = result.debug;
+        toast.success(
+          `No se encontraron conflictos. Ventana ${d.tournamentStart} a ${d.tournamentEnd}, ` +
+            `${d.totalMatches} partidos entre ${d.earliestMatchDate ?? '—'} y ${d.latestMatchDate ?? '—'}.`,
+        );
       } else {
         const fresh = await api.getTournamentMatches(effectiveTournamentId);
         onMatchesReplaced?.(fresh);

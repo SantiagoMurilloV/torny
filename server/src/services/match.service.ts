@@ -648,6 +648,16 @@ export class MatchService {
       to: { date: string; time: string; court: string };
     }>;
     unresolved: number;
+    /** Diagnostic block — surfaces what the repair "saw" so the admin
+     *  console can debug edge cases (e.g. date-format mismatch) without
+     *  needing access to Railway logs. */
+    debug: {
+      tournamentStart: string;
+      tournamentEnd: string;
+      totalMatches: number;
+      earliestMatchDate: string | null;
+      latestMatchDate: string | null;
+    };
   }> {
     const pool = getPool();
 
@@ -766,6 +776,27 @@ export class MatchService {
       courtSlot.set(ck, r.id);
     }
 
+    // Debug snapshot — emitted on every response so the admin tools (and
+    // Railway logs) can verify the repair "saw" the right window even
+    // when conflictsDetected ends up being 0.
+    const sortedDates = rows
+      .map((r) => r.date)
+      .filter((d): d is string => typeof d === 'string')
+      .sort();
+    const debug = {
+      tournamentStart,
+      tournamentEnd,
+      totalMatches: rows.length,
+      earliestMatchDate: sortedDates[0] ?? null,
+      latestMatchDate: sortedDates[sortedDates.length - 1] ?? null,
+    };
+    console.log(
+      `[repair] tournament=${tournamentId} window=${tournamentStart}..${tournamentEnd} ` +
+        `matches=${rows.length} conflicts=${conflictMatches.length} ` +
+        `(team=${teamConflicts} court=${courtConflicts} oor=${outOfRange}) ` +
+        `dates=${debug.earliestMatchDate}..${debug.latestMatchDate}`,
+    );
+
     if (conflictMatches.length === 0) {
       return {
         conflictsDetected: 0,
@@ -775,6 +806,7 @@ export class MatchService {
         outOfRange: 0,
         moves: [],
         unresolved: 0,
+        debug,
       };
     }
 
@@ -855,6 +887,7 @@ export class MatchService {
       outOfRange,
       moves,
       unresolved,
+      debug,
     };
   }
 
