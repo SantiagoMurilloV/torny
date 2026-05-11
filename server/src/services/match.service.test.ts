@@ -541,7 +541,7 @@ describe('MatchService CRUD operations', () => {
 
       await expect(
         service.update('match-1', { time: '14:00' }),
-      ).rejects.toThrow(/equipos ya tiene un partido/);
+      ).rejects.toThrow(/Uno de los equipos coincide/);
     });
 
     it('should reject moving a match onto a court already in use at that time', async () => {

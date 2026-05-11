@@ -255,6 +255,51 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
   const handleDrop = async (dragged: Match, destCourt: string, destTime: string) => {
     if (busy) return;
     if (dragged.court === destCourt && dragged.time === destTime) return;
+
+    // Pre-check against the FULL match list (NOT matchesByCell, which
+    // is filtered by the active category). The grid can show an empty
+    // cell while a match in another category — invisible to the
+    // current view — sits at the same (date, time) on a different
+    // court with one of the dragged match's teams. The backend would
+    // (correctly) reject the move with a generic "Uno de los equipos
+    // ya tiene un partido programado el …" message, but the admin
+    // doesn't see WHICH match because the filter hides it.
+    //
+    // Catching the conflict here lets us name the offender ("X vs Y
+    // en Cancha N") so the admin understands and either changes the
+    // category filter or picks a different slot.
+    const teamConflict = matches.find((m) => {
+      if (m.id === dragged.id) return false;
+      if (toIso(m.date) !== selectedDay) return false;
+      if (m.time !== destTime) return false;
+      const t1 = m.team1.id;
+      const t2 = m.team2.id;
+      const d1 = dragged.team1.id;
+      const d2 = dragged.team2.id;
+      return t1 === d1 || t1 === d2 || t2 === d1 || t2 === d2;
+    });
+    if (teamConflict) {
+      // Find which team(s) clash so the message names them. Useful
+      // when both teams appear elsewhere — admin sees the exact
+      // overlap instead of a generic warning.
+      const t1 = teamConflict.team1.id;
+      const t2 = teamConflict.team2.id;
+      const sharedTeam =
+        dragged.team1.id === t1 || dragged.team1.id === t2
+          ? dragged.team1.name
+          : dragged.team2.name;
+      const hidden =
+        selectedCategory !== 'all' &&
+        getMatchCategory(teamConflict) !== selectedCategory;
+      toast.error(
+        `${sharedTeam} ya juega ${shortLabel(teamConflict)} a las ${destTime} en ${teamConflict.court}.` +
+          (hidden
+            ? ' (Está oculto por el filtro de categoría — quitalo para verlo.)'
+            : ''),
+      );
+      return;
+    }
+
     setBusy(true);
     try {
       const destMatch = matchesByCell.get(`${destCourt}|${destTime}`);

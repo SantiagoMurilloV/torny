@@ -270,22 +270,33 @@ export class MatchService {
       const mergedTeam2 = data.team2Id ?? existing.team2Id;
 
       const pool = getPool();
+      // Pull team names alongside the conflict row so the error
+      // message can identify the exact match the admin is colliding
+      // with — generic "uno de los equipos" wording leaves the admin
+      // hunting through the schedule for the offender (especially
+      // painful when a category filter on the FE hides the conflict
+      // from the Cronograma grid).
       const conflictRes = await pool.query<{
         id: string;
         team1_id: string;
         team2_id: string;
         court: string;
+        team1_name: string | null;
+        team2_name: string | null;
       }>(
-        `SELECT id, team1_id, team2_id, court
-         FROM matches
-         WHERE tournament_id = $1
-           AND id <> $2
-           AND date = $3
-           AND time = $4
+        `SELECT m.id, m.team1_id, m.team2_id, m.court,
+                t1.name AS team1_name, t2.name AS team2_name
+         FROM matches m
+         LEFT JOIN teams t1 ON t1.id = m.team1_id
+         LEFT JOIN teams t2 ON t2.id = m.team2_id
+         WHERE m.tournament_id = $1
+           AND m.id <> $2
+           AND m.date = $3
+           AND m.time = $4
            AND (
-             team1_id = $5 OR team1_id = $6
-             OR team2_id = $5 OR team2_id = $6
-             OR court = $7
+             m.team1_id = $5 OR m.team1_id = $6
+             OR m.team2_id = $5 OR m.team2_id = $6
+             OR m.court = $7
            )`,
         [
           mergedTournament,
@@ -306,12 +317,14 @@ export class MatchService {
             r.team2_id === mergedTeam2,
         );
         if (teamConflict) {
+          const labelA = teamConflict.team1_name ?? 'Equipo 1';
+          const labelB = teamConflict.team2_name ?? 'Equipo 2';
           throw new ValidationError(
-            `Uno de los equipos ya tiene un partido programado el ${mergedDate} a las ${mergedTime}. Elegí otro horario.`,
+            `Conflicto: a las ${mergedTime} ya está programado ${labelA} vs ${labelB} en ${teamConflict.court}. Uno de los equipos coincide.`,
           );
         }
         throw new ValidationError(
-          `La cancha "${mergedCourt}" ya tiene un partido programado el ${mergedDate} a las ${mergedTime}. Elegí otra cancha o cambiá el horario.`,
+          `La cancha "${mergedCourt}" ya tiene un partido programado a las ${mergedTime}. Elegí otra cancha o cambiá el horario.`,
         );
       }
     }
