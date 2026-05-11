@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Trophy, Filter, Edit, MapPin, Pencil } from 'lucide-react';
+import { Trophy, Filter, Edit, MapPin, Pencil, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Match } from '../../../types';
 import { Badge } from '../../../components/ui/badge';
@@ -13,6 +13,7 @@ import {
 import { CategorySection } from '../../../components/admin/CategorySection';
 import { ScoreSetsEditor } from '../../../components/admin/ScoreSetsEditor';
 import { MatchFormModal } from '../../../components/admin/MatchFormModal';
+import { TeamAvatar } from '../../../components/TeamAvatar';
 import { api, type UpdateMatchDto } from '../../../services/api';
 import { categoryOfMatchPhase } from '../../../lib/phase';
 import { matchStatusLabel } from '../../../lib/status';
@@ -41,8 +42,18 @@ export function MatchesTab({ matches, editor, onMatchUpdated }: MatchesTabProps)
   const [phaseFilter, setPhaseFilter] = useState<string>('all');
   const [groupFilter, setGroupFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  // Free-text search across both teams in each match. Matches the
+  // accent-tolerant pattern used in TeamsTab (Bogota → Bogotá, Anez →
+  // Áñez) so admins typing fast on mobile still hit results.
+  const [search, setSearch] = useState<string>('');
   const [editingMatch, setEditingMatch] = useState<Match | undefined>();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const normalize = (s: string): string =>
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
 
   const openEditModal = (m: Match) => {
     setEditingMatch(m);
@@ -88,16 +99,37 @@ export function MatchesTab({ matches, editor, onMatchUpdated }: MatchesTabProps)
     [matches],
   );
 
-  const filteredMatches = useMemo(
-    () =>
-      matches.filter((m) => {
-        if (phaseFilter !== 'all' && m.phase !== phaseFilter) return false;
-        if (groupFilter !== 'all' && m.group !== groupFilter) return false;
-        if (statusFilter !== 'all' && m.status !== statusFilter) return false;
-        return true;
-      }),
-    [matches, phaseFilter, groupFilter, statusFilter],
-  );
+  const filteredMatches = useMemo(() => {
+    const term = normalize(search.trim());
+    const matchesSearch = (m: Match): boolean => {
+      if (term.length === 0) return true;
+      // Match against both teams' name + initials so the admin can
+      // type either side of the matchup. Court is included so a
+      // referee asking "what's on Cancha 2 today?" can find it fast.
+      return (
+        normalize(m.team1.name).includes(term) ||
+        normalize(m.team2.name).includes(term) ||
+        normalize(m.team1.initials).includes(term) ||
+        normalize(m.team2.initials).includes(term) ||
+        (m.court ? normalize(m.court).includes(term) : false)
+      );
+    };
+    return matches.filter((m) => {
+      if (phaseFilter !== 'all' && m.phase !== phaseFilter) return false;
+      if (groupFilter !== 'all' && m.group !== groupFilter) return false;
+      if (statusFilter !== 'all' && m.status !== statusFilter) return false;
+      if (!matchesSearch(m)) return false;
+      return true;
+    });
+  }, [matches, phaseFilter, groupFilter, statusFilter, search]);
+
+  // Active filtering forces all category accordions open during
+  // search/filter so matches aren't hidden behind collapsed sections.
+  const isFiltering =
+    search.trim().length > 0 ||
+    phaseFilter !== 'all' ||
+    groupFilter !== 'all' ||
+    statusFilter !== 'all';
 
   const split = useMemo(() => {
     const live: Match[] = [];
@@ -120,6 +152,33 @@ export function MatchesTab({ matches, editor, onMatchUpdated }: MatchesTabProps)
 
   return (
     <>
+      {/* Search bar — kept on its own row so it gets full width on
+          mobile and doesn't get squeezed between the filter selects. */}
+      <div className="relative mb-3">
+        <Search
+          className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none"
+          aria-hidden="true"
+        />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por equipo, sigla o cancha…"
+          aria-label="Buscar partido"
+          className="w-full pl-9 pr-9 py-2 text-sm rounded-sm border border-spk-hairline focus:border-spk-red focus:ring-2 focus:ring-spk-red/20 outline-none bg-white"
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch('')}
+            aria-label="Limpiar búsqueda"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-black/40 hover:text-black rounded-sm"
+          >
+            <X className="w-3.5 h-3.5" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 mb-6">
         <Filter className="w-4 h-4 text-black/40" />
@@ -207,6 +266,9 @@ export function MatchesTab({ matches, editor, onMatchUpdated }: MatchesTabProps)
               title={category || 'Sin categoría'}
               count={catMatches.length}
               defaultOpen
+              // Pin all categories open while filtering so matches in
+              // collapsed sections aren't hidden behind an extra click.
+              forceOpen={isFiltering ? true : undefined}
             >
               <div className="space-y-2">
                 {catMatches.map((m) => (
@@ -285,12 +347,11 @@ function MatchCard({
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div
-            className="w-10 h-10 rounded-sm flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-            style={{ backgroundColor: match.team1.colors.primary }}
-          >
-            {match.team1.initials}
-          </div>
+          {/* TeamAvatar renders the uploaded logo when present and
+              falls back to the initials-on-primary-color square. The
+              previous inline div ignored `team.logo` entirely, so
+              every match card showed initials only. */}
+          <TeamAvatar team={match.team1} size="md" />
           <span className="font-medium truncate">{match.team1.name}</span>
         </div>
 
@@ -314,12 +375,7 @@ function MatchCard({
 
         <div className="flex items-center gap-3 flex-1 min-w-0 justify-end">
           <span className="font-medium truncate text-right">{match.team2.name}</span>
-          <div
-            className="w-10 h-10 rounded-sm flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-            style={{ backgroundColor: match.team2.colors.primary }}
-          >
-            {match.team2.initials}
-          </div>
+          <TeamAvatar team={match.team2} size="md" />
         </div>
       </div>
 
