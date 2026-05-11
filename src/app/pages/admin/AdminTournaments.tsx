@@ -257,24 +257,35 @@ export function AdminTournaments() {
             // alone left the cards visually flat at rest.
             className="group relative bg-white border-2 border-black/10 hover:border-black/30 rounded-sm overflow-hidden shadow-md hover:shadow-xl transition-all cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-spk-red/50"
           >
-            {/* Tournament Image */}
-            <div className="h-40 bg-gradient-to-br from-[#003087] to-[#E31E24] relative">
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="text-white text-center">
-                  <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-2">
-                    <Calendar className="w-8 h-8" />
-                  </div>
-                  <div className="text-sm font-medium opacity-90">
-                    {tournament.startDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} — {tournament.endDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </div>
-                </div>
-              </div>
-              <div className="absolute top-3 right-3 flex items-center gap-2">
+            {/* Banner — uses the tournament's coverImage when present
+                (data URL or http URL), falling back to the brand
+                blue→red gradient. The dark gradient overlay underneath
+                keeps the status badge + delete button readable on any
+                photo, no matter how busy. */}
+            <div
+              className="h-40 relative bg-cover bg-center"
+              style={
+                tournament.coverImage
+                  ? { backgroundImage: `url(${tournament.coverImage})` }
+                  : { background: 'linear-gradient(135deg, #003087 0%, #E31E24 100%)' }
+              }
+            >
+              {/* Bottom-up gradient — only when there's an image, so the
+                  fallback gradient stays clean. Helps the floating
+                  buttons up top stay legible without darkening the
+                  whole image. */}
+              {tournament.coverImage && (
+                <div
+                  className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30"
+                  aria-hidden="true"
+                />
+              )}
+              <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
                 <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(tournament.status)}`}>
                   {getStatusLabel(tournament.status)}
                 </span>
               </div>
-              {/* Floating delete — lives on top of the gradient banner so
+              {/* Floating delete — lives on top of the banner so
                   it has contrast without a solid bg on the card body.
                   stopPropagation keeps the card click isolated. */}
               <button
@@ -286,7 +297,7 @@ export function AdminTournaments() {
                 disabled={deletingId === tournament.id}
                 aria-label={`Eliminar torneo ${tournament.name}`}
                 title="Eliminar torneo"
-                className="absolute top-3 left-3 p-1.5 bg-black/40 hover:bg-spk-red text-white rounded-sm backdrop-blur-sm transition-colors disabled:opacity-50"
+                className="absolute top-3 left-3 z-10 p-1.5 bg-black/40 hover:bg-spk-red text-white rounded-sm backdrop-blur-sm transition-colors disabled:opacity-50"
               >
                 {deletingId === tournament.id ? (
                   <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
@@ -301,9 +312,25 @@ export function AdminTournaments() {
               <h3 className="font-bold text-lg mb-1" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
                 {tournament.name}
               </h3>
-              <p className="text-sm text-black/60 mb-4">
+              <p className="text-sm text-black/60">
                 {tournament.club}
               </p>
+              {/* Date moved here from the banner so the cover image
+                  stays clean — small caption tone keeps the visual
+                  hierarchy below the name + club. Uses <div> instead
+                  of <p> because the icon + text live inside an
+                  inline-flex row. */}
+              <div
+                className="mt-1 mb-4 flex items-center gap-1.5 text-[11px] uppercase text-black/45"
+                style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.08em' }}
+              >
+                <Calendar className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
+                <span>
+                  {tournament.startDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                  {' — '}
+                  {tournament.endDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </span>
+              </div>
 
               {/* Stats */}
               <div className="grid grid-cols-2 gap-3">
