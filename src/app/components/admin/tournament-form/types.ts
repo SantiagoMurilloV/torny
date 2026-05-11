@@ -21,6 +21,18 @@ export interface FieldErrors {
 
 export type BracketMode = NonNullable<Tournament['bracketMode']>;
 
+/** Per-day schedule override row used by the "Programación de partidos"
+ *  section. The form keeps these as an array so the daily order in the
+ *  UI is stable; the API layer transforms it to the
+ *  `{ "YYYY-MM-DD": { start, end } }` map the backend stores. */
+export interface DailyScheduleEntry {
+  /** ISO 'YYYY-MM-DD'. Set by the form when the date range is computed. */
+  date: string;
+  /** "HH:MM" — empty string ("") means "use the global default". */
+  start: string;
+  end: string;
+}
+
 /** Shape of the form model held by useTournamentForm. */
 export interface TournamentFormState {
   name: string;
@@ -50,6 +62,19 @@ export interface TournamentFormState {
    * archivo nuevo se sube y se reemplaza esta URL.
    */
   regulationPdfUrl: string;
+  /**
+   * Schedule defaults — persisted on the tournament so the admin sets
+   * them once instead of re-typing for every fixture generation.
+   *   · matchDurationMinutes — global per-match length (5..600).
+   *   · matchBreakMinutes    — global between-matches gap (0..240).
+   *   · dailySchedules       — per-date overrides of the active window.
+   *                             One row per day in the range; empty
+   *                             start/end means "use the global
+   *                             08:00–18:00 default".
+   */
+  matchDurationMinutes: number;
+  matchBreakMinutes: number;
+  dailySchedules: DailyScheduleEntry[];
 }
 
 export const DEFAULT_COURTS: CourtEntry[] = [
@@ -77,5 +102,8 @@ export function emptyForm(): TournamentFormState {
     silverClassifiersPerGroup: 2,
     regulationText: '',
     regulationPdfUrl: '',
+    matchDurationMinutes: 60,
+    matchBreakMinutes: 15,
+    dailySchedules: [],
   };
 }

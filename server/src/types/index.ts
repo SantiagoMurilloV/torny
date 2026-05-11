@@ -70,6 +70,29 @@ export interface Tournament {
   regulationText?: string;
   regulationPdf?: string;
   /**
+   * Per-tournament schedule defaults — persisted by migration 024 so
+   * the admin sets them once in Ajustes Generales instead of re-typing
+   * for every fixture generation. They drive both the original
+   * scheduler (calculateMatchTimes) and the schedule reparator
+   * (matchService.repairTeamConflicts).
+   *
+   *   · matchDurationMinutes → global per-match length (5 ≤ x ≤ 600).
+   *   · matchBreakMinutes    → global between-matches gap (0 ≤ x ≤ 240).
+   *   · dailySchedules       → optional per-day override of the active
+   *                             window. Keyed by YYYY-MM-DD; days not
+   *                             present in the map fall back to the
+   *                             historic 08:00–18:00 default. Lets the
+   *                             admin model "Saturday runs late, Sunday
+   *                             ends early" without forcing a global
+   *                             setting.
+   *
+   * All optional in TS because internal helpers / partial selects may
+   * skip them; the DB has NOT NULL defaults so reads are always safe.
+   */
+  matchDurationMinutes?: number;
+  matchBreakMinutes?: number;
+  dailySchedules?: Record<string, { start: string; end: string }>;
+  /**
    * Decorated by the SELECT in tournament.service (LIST_SELECT). The
    * home cards / public detail use these instead of the static
    * `teamsCount` cap so the numbers reflect reality.
@@ -245,6 +268,14 @@ export interface CreateTournamentDto {
   regulationText?: string | null;
   /** Reglamento en PDF (data URL). Opcional. */
   regulationPdf?: string | null;
+  /**
+   * Schedule defaults persisted on the tournament so the admin sets
+   * them once instead of re-typing per generation. See `Tournament`
+   * above for the full doc — the DTO mirrors the same optionality.
+   */
+  matchDurationMinutes?: number;
+  matchBreakMinutes?: number;
+  dailySchedules?: Record<string, { start: string; end: string }>;
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

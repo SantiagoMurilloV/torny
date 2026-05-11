@@ -47,6 +47,11 @@ export interface BackendTournament {
   regulationText?: string;
   /** PDF del reglamento como data URL (opcional). */
   regulationPdf?: string;
+  /** Schedule defaults — migration 024. See Tournament (frontend type)
+   *  for the full doc. */
+  matchDurationMinutes?: number;
+  matchBreakMinutes?: number;
+  dailySchedules?: Record<string, { start: string; end: string }>;
   /** Real counts decorated by the LIST_SELECT in tournament.service. */
   enrolledCount?: number;
   matchesCount?: number;

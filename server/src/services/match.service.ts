@@ -678,11 +678,17 @@ export class MatchService {
       start_date: string;
       end_date: string | null;
       courts: string[] | null;
+      match_duration_minutes: number | null;
+      match_break_minutes: number | null;
+      daily_schedules: Record<string, { start: string; end: string }> | null;
     }>(
       `SELECT
          start_date::text AS start_date,
          end_date::text   AS end_date,
-         courts
+         courts,
+         match_duration_minutes,
+         match_break_minutes,
+         daily_schedules
        FROM tournaments WHERE id = $1`,
       [tournamentId],
     );
@@ -695,9 +701,41 @@ export class MatchService {
     const tournamentStart = (tRes.rows[0].start_date ?? '').slice(0, 10);
     const tournamentEnd = (tRes.rows[0].end_date ?? tournamentStart).slice(0, 10);
 
-    const DAY_START_MIN = 8 * 60; // 08:00
-    const DAY_END_MIN = 18 * 60; // 18:00
-    const SLOT_MIN = 75; // 60 min match + 15 min break, mirrors the scheduler defaults
+    // Pull the tournament's persisted schedule defaults; fall back to
+    // the historic numbers if a column is missing (legacy row, partial
+    // SELECT, etc.). The per-day override map (`daily_schedules`) lets
+    // each day use a different active window — see windowForDate below.
+    const matchDurationMinutes = tRes.rows[0].match_duration_minutes ?? 60;
+    const matchBreakMinutes = tRes.rows[0].match_break_minutes ?? 15;
+    const dailySchedules = tRes.rows[0].daily_schedules ?? {};
+    const SLOT_MIN = matchDurationMinutes + matchBreakMinutes;
+    // Historic global window — used as the fallback for any day that
+    // doesn't carry an explicit override in `dailySchedules`. Matches
+    // the values the schedule modal showed before migration 024.
+    const DEFAULT_DAY_START_MIN = 8 * 60; // 08:00
+    const DEFAULT_DAY_END_MIN = 18 * 60; // 18:00
+
+    /**
+     * Resolve the active window for a given date, looking up
+     * `daily_schedules['YYYY-MM-DD']` first and falling back to the
+     * tournament-wide default. Returns minutes-from-midnight so the
+     * slot-search loop can compare directly against `currentMinutes`.
+     */
+    const parseHHMM = (raw: string | undefined, fallback: number): number => {
+      if (!raw) return fallback;
+      const [h, m] = raw.split(':').map((n) => Number(n));
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return fallback;
+      return h * 60 + m;
+    };
+    const windowForDate = (
+      dateStr: string,
+    ): { startMin: number; endMin: number } => {
+      const override = dailySchedules[dateStr];
+      return {
+        startMin: parseHHMM(override?.start, DEFAULT_DAY_START_MIN),
+        endMin: parseHHMM(override?.end, DEFAULT_DAY_END_MIN),
+      };
+    };
 
     // Pull every match, oldest first. created_at decides which match
     // "wins" the slot (oldest stays put) so the original schedule is
@@ -761,9 +799,18 @@ export class MatchService {
       const courtHit = courtSlot.has(ck);
       // Plain string comparison works because all three values are in
       // YYYY-MM-DD form (lexicographic order matches calendar order).
-      const outsideWindow =
+      const dateOutOfRange =
         tournamentStart !== '' &&
         (r.date < tournamentStart || r.date > tournamentEnd);
+      // Time outside the day's active window — e.g. match at 16:00 on a
+      // day whose dailySchedules entry says 08:00–14:00. Counts as out
+      // of range so the repair pulls it back into a valid slot.
+      const win = windowForDate(r.date);
+      const matchMin = parseHHMM(r.time, -1);
+      const timeOutOfWindow =
+        matchMin >= 0 &&
+        (matchMin < win.startMin || matchMin + matchDurationMinutes > win.endMin);
+      const outsideWindow = dateOutOfRange || timeOutOfWindow;
       if (teamHit || courtHit || outsideWindow) {
         conflictMatches.push(r);
         if (teamHit) teamConflicts++;
@@ -832,7 +879,17 @@ export class MatchService {
       const MAX_DAYS = 365;
       for (let d = 0; d < MAX_DAYS; d++) {
         const dateStr = cursor.toISOString().slice(0, 10);
-        for (let mins = DAY_START_MIN; mins + 60 <= DAY_END_MIN; mins += SLOT_MIN) {
+        // Each day's active window comes from the tournament's
+        // `daily_schedules` map (with the historic 08:00–18:00 default
+        // when the day isn't in the map). The match must FIT entirely
+        // within that window, so the upper bound check uses the
+        // tournament's configured match duration, not the slot stride.
+        const { startMin, endMin } = windowForDate(dateStr);
+        for (
+          let mins = startMin;
+          mins + matchDurationMinutes <= endMin;
+          mins += SLOT_MIN
+        ) {
           const time = formatHHMM(mins);
           if (
             teamSlot.has(teamKey(team1Id, dateStr, time)) ||

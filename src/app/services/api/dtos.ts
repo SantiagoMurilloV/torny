@@ -35,6 +35,18 @@ export interface CreateTournamentDto {
   regulationText?: string | null;
   /** Reglamento como PDF data URL. null para borrar; undefined para no tocar. */
   regulationPdf?: string | null;
+  /**
+   * Schedule defaults persisted on the tournament (migration 024). Used
+   * by the original scheduler AND the repair tool so the admin sets
+   * them once in Ajustes Generales instead of re-typing for every
+   * fixture generation. The per-day map (`dailySchedules`) lets the
+   * admin model "Sat 08:00–22:00, Sun 08:00–14:00" without splitting
+   * the tournament. Days not in the map fall back to the global
+   * 08:00–18:00 window inside the scheduler.
+   */
+  matchDurationMinutes?: number;
+  matchBreakMinutes?: number;
+  dailySchedules?: Record<string, { start: string; end: string }>;
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

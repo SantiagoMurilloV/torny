@@ -94,6 +94,28 @@ function mapRow(row: Record<string, unknown>): Tournament {
       (row.silver_classifiers_per_group as number | null) ?? undefined,
     regulationText: (row.regulation_text as string | null) ?? undefined,
     regulationPdf: (row.regulation_pdf as string | null) ?? undefined,
+    // Schedule defaults — added by migration 024. Optional in the type
+    // because legacy SELECTs (or migrations not yet run on a given
+    // environment) may not include the columns; mapRow itself returns
+    // undefined rather than the default in that case so the caller can
+    // tell "field absent" from "field set to default".
+    matchDurationMinutes:
+      (row.match_duration_minutes as number | null) ?? undefined,
+    matchBreakMinutes:
+      (row.match_break_minutes as number | null) ?? undefined,
+    // Per-day schedule overrides keyed by 'YYYY-MM-DD'. Empty object
+    // (the default) means "use the global 08:00-18:00 fallback for every
+    // day". The pg driver parses jsonb into an object automatically; if
+    // the column was NULL (legacy row pre-migration) we surface {} so
+    // the rest of the app can iterate without null-checks.
+    dailySchedules: (() => {
+      const raw = row.daily_schedules as
+        | Record<string, { start: string; end: string }>
+        | null
+        | undefined;
+      if (!raw || typeof raw !== 'object') return {};
+      return raw;
+    })(),
     enrolledCount:
       typeof enrolledRaw === 'number'
         ? enrolledRaw
@@ -312,9 +334,19 @@ export class TournamentService {
     // would also reject these but we want a friendlier path.
     const goldClassifiers = clampInt(data.goldClassifiersPerGroup, 1, 8, 2);
     const silverClassifiers = clampInt(data.silverClassifiersPerGroup, 0, 8, 2);
+    // Schedule defaults — when the caller doesn't pass them we fall
+    // back to the historic numbers the schedule modal used for years
+    // (60-min matches, 15-min breaks, no per-day overrides). Migration
+    // 024 collapsed the old global daily_start_time/daily_end_time pair
+    // into a single `daily_schedules` JSONB map keyed by date so the
+    // admin can model "Saturday goes 08:00–22:00 but Sunday only to
+    // 14:00" without forcing every day to share hours.
+    const matchDuration = clampInt(data.matchDurationMinutes, 5, 600, 60);
+    const matchBreak = clampInt(data.matchBreakMinutes, 0, 240, 15);
+    const dailySchedules = data.dailySchedules ?? {};
     const result = await pool.query(
-      `INSERT INTO tournaments (name, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+      `INSERT INTO tournaments (name, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
        RETURNING *`,
       [
         data.name,
@@ -339,6 +371,9 @@ export class TournamentService {
         silverClassifiers,
         data.regulationText || null,
         data.regulationPdf || null,
+        matchDuration,
+        matchBreak,
+        JSON.stringify(dailySchedules),
       ],
     );
     return mapRow(result.rows[0]);
@@ -382,6 +417,17 @@ export class TournamentService {
       silverClassifiersPerGroup: 'silver_classifiers_per_group',
       regulationText: 'regulation_text',
       regulationPdf: 'regulation_pdf',
+      // Schedule defaults — added by migration 024 so the global
+      // numbers that drive both the original scheduler and the repair
+      // tool can be edited from Ajustes Generales instead of being
+      // re-typed at every fixture generation. The per-day overrides
+      // live in `daily_schedules` (jsonb keyed by 'YYYY-MM-DD') so the
+      // admin can model "Sat 08:00–22:00, Sun 08:00–14:00" without
+      // forcing every day to share hours. Clamp values land below in
+      // the same switch so out-of-range writes never reach Postgres.
+      matchDurationMinutes: 'match_duration_minutes',
+      matchBreakMinutes: 'match_break_minutes',
+      dailySchedules: 'daily_schedules',
     };
 
     for (const [key, column] of Object.entries(columnMap)) {
@@ -401,6 +447,18 @@ export class TournamentService {
           stored = clampInt(rawValue as number | null | undefined, 1, 8, 2);
         } else if (key === 'silverClassifiersPerGroup') {
           stored = clampInt(rawValue as number | null | undefined, 0, 8, 2);
+        } else if (key === 'matchDurationMinutes') {
+          // Same DB CHECK range from migration 024 (5..600). Clamp here
+          // so an out-of-range FE submission lands on the closest legal
+          // value instead of returning a 500 from the constraint.
+          stored = clampInt(rawValue as number | null | undefined, 5, 600, 60);
+        } else if (key === 'matchBreakMinutes') {
+          stored = clampInt(rawValue as number | null | undefined, 0, 240, 15);
+        } else if (key === 'dailySchedules') {
+          // jsonb requires stringified JSON. NULL / undefined collapses
+          // to '{}' (the same default the DB column carries) so the
+          // admin can clear all per-day overrides by sending null.
+          stored = JSON.stringify(rawValue ?? {});
         } else if (key === 'regulationText' || key === 'regulationPdf') {
           // Normaliza '' → null para que "limpiar" desde el form deje
           // la columna realmente vacía en vez de un string vacío. El

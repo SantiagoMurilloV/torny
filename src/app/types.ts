@@ -160,6 +160,23 @@ export interface Tournament {
   regulationText?: string;
   regulationPdf?: string;
   /**
+   * Schedule defaults persisted on the tournament (migration 024) so the
+   * admin sets them once in Ajustes Generales instead of re-typing them
+   * every fixture generation. Both the original scheduler and the
+   * `repairTournamentConflicts` tool read these.
+   *   · matchDurationMinutes — global per-match length (default 60).
+   *   · matchBreakMinutes    — global between-matches gap (default 15).
+   *   · dailySchedules       — per-date `{start, end}` overrides keyed
+   *                             by 'YYYY-MM-DD'. Days not in the map
+   *                             use the global 08:00–18:00 default.
+   *                             Lets the admin model "Sat 08:00–22:00,
+   *                             Sun 08:00–14:00" without splitting the
+   *                             tournament.
+   */
+  matchDurationMinutes?: number;
+  matchBreakMinutes?: number;
+  dailySchedules?: Record<string, { start: string; end: string }>;
+  /**
    * Real counts populated by the backend SELECT (LIST_SELECT) — used by
    * the home cards and the public detail hero so the numbers reflect
    * actual enrollment / scheduled matches instead of the cap configured

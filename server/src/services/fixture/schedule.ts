@@ -43,36 +43,69 @@ export function calculateMatchTimes<T extends FixtureShape>(
   const matchDuration = config?.matchDuration || DEFAULT_MATCH_MIN;
   const breakDuration = config?.breakDuration || DEFAULT_BREAK_MIN;
   const courtCount = config?.courtCount || courts.length || 1;
+  const dailySchedules = config?.dailySchedules ?? {};
 
   const courtNames: string[] = [];
   for (let i = 0; i < courtCount; i++) {
     courtNames.push(courts[i] || `Cancha ${i + 1}`);
   }
 
+  const parseHHMM = (raw: string | undefined, fallback: number): number => {
+    if (!raw) return fallback;
+    const [h, m] = raw.split(':').map(Number);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return fallback;
+    return h * 60 + m;
+  };
   const [startH, startM] = startTime.split(':').map(Number);
   const [endH, endM] = endTime.split(':').map(Number);
-  const dayStartMinutes = startH * 60 + startM;
-  const dayEndMinutes = endH * 60 + endM;
+  const defaultDayStart = startH * 60 + startM;
+  const defaultDayEnd = endH * 60 + endM;
+  /**
+   * Resolve the active window (in minutes-from-midnight) for a given
+   * date, looking up `dailySchedules['YYYY-MM-DD']` first and falling
+   * back to the global startTime/endTime. Lets the admin model
+   * "Saturday 08:00–22:00, Sunday 08:00–14:00" without forcing every
+   * day to share hours.
+   */
+  const windowForDate = (
+    dateStr: string,
+  ): { startMin: number; endMin: number } => {
+    const override = dailySchedules[dateStr];
+    return {
+      startMin: parseHHMM(override?.start, defaultDayStart),
+      endMin: parseHHMM(override?.end, defaultDayEnd),
+    };
+  };
 
   const results: Array<Slot | null> = new Array(fixtures.length).fill(null);
   const unscheduled = fixtures.map((f, idx) => ({ ...f, __idx: idx }));
 
   const currentDate = new Date(startDate + 'T00:00:00');
-  let currentMinutes = dayStartMinutes;
+  // Track the per-day window so the loop can swap windows when it
+  // rolls into the next day. Initialise to the first day's window.
+  let currentDateStr = currentDate.toISOString().split('T')[0];
+  let currentWindow = windowForDate(currentDateStr);
+  let currentMinutes = currentWindow.startMin;
   const maxIterations = DAYS_BEFORE_ABORT * Math.max(1, courtCount);
   let iterations = 0;
+
+  const advanceToNextDay = () => {
+    currentDate.setDate(currentDate.getDate() + 1);
+    currentDateStr = currentDate.toISOString().split('T')[0];
+    currentWindow = windowForDate(currentDateStr);
+    currentMinutes = currentWindow.startMin;
+  };
 
   while (unscheduled.length > 0 && iterations < maxIterations) {
     iterations++;
 
-    if (currentMinutes + matchDuration > dayEndMinutes) {
-      currentDate.setDate(currentDate.getDate() + 1);
-      currentMinutes = dayStartMinutes;
+    if (currentMinutes + matchDuration > currentWindow.endMin) {
+      advanceToNextDay();
       continue;
     }
 
     const timeStr = formatHHMM(currentMinutes);
-    const dateStr = currentDate.toISOString().split('T')[0];
+    const dateStr = currentDateStr;
     const busyTeams = new Set<string>();
     let assignedInSlot = 0;
 
@@ -94,13 +127,26 @@ export function calculateMatchTimes<T extends FixtureShape>(
     // If the slot was completely empty AND there are still matches to
     // place, bump to the next day so we don't spin endlessly.
     if (assignedInSlot === 0 && unscheduled.length > 0) {
-      currentDate.setDate(currentDate.getDate() + 1);
-      currentMinutes = dayStartMinutes;
+      advanceToNextDay();
     }
   }
 
   if (results.some((r) => r === null)) {
-    fillFallback(results, startDate, dayStartMinutes, dayEndMinutes, matchDuration, breakDuration, courtNames[0]);
+    // Fallback uses the FIRST day's window — the unresolved leftovers
+    // get sequential slots from there. Edge case for tournaments with
+    // very tight per-day windows; the main loop handles 99% of cases.
+    const fallbackWindow = windowForDate(
+      new Date(startDate + 'T00:00:00').toISOString().split('T')[0],
+    );
+    fillFallback(
+      results,
+      startDate,
+      fallbackWindow.startMin,
+      fallbackWindow.endMin,
+      matchDuration,
+      breakDuration,
+      courtNames[0],
+    );
   }
 
   return results as Slot[];

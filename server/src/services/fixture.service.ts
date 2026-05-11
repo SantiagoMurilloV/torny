@@ -648,7 +648,38 @@ export class FixtureGenerator {
         ? new Date(tournament.start_date as string).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0];
       const courts = (tournament.courts as string[]) || [];
-      const slots = calculateMatchTimes(matchFixtures, startDate, courts, schedule);
+      // Merge: explicit ScheduleConfig from the modal (when present) wins,
+      // otherwise pull defaults from the tournament's persisted columns
+      // (migration 024). This is what makes "set the schedule once in
+      // Ajustes Generales" actually take effect on the next regeneration.
+      // Fields not provided by either side fall back to the historic
+      // 60-min match / 15-min break / 08:00–18:00 defaults inside
+      // calculateMatchTimes itself, so old callers stay backwards-compat.
+      const tournamentMatchDuration = tournament.match_duration_minutes as
+        | number
+        | null
+        | undefined;
+      const tournamentMatchBreak = tournament.match_break_minutes as
+        | number
+        | null
+        | undefined;
+      const tournamentDailySchedules = tournament.daily_schedules as
+        | Record<string, { start: string; end: string }>
+        | null
+        | undefined;
+      const effectiveSchedule: ScheduleConfig = {
+        ...(schedule ?? {}),
+        matchDuration:
+          schedule?.matchDuration ?? tournamentMatchDuration ?? undefined,
+        breakDuration:
+          schedule?.breakDuration ?? tournamentMatchBreak ?? undefined,
+        // Per-day overrides only carry through when the modal didn't
+        // pass its own — modal config is the most-recent admin intent
+        // and should win whenever it's supplied.
+        dailySchedules:
+          schedule?.dailySchedules ?? tournamentDailySchedules ?? undefined,
+      } as ScheduleConfig;
+      const slots = calculateMatchTimes(matchFixtures, startDate, courts, effectiveSchedule);
 
       const matches = await persistMatches(client, tournamentId, matchFixtures, slots);
       const bracketMatches = await persistBracket(client, tournamentId, bracketFixtures);

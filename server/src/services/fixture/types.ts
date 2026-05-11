@@ -35,6 +35,14 @@ export interface ScheduleConfig {
   matchDuration?: number;
   breakDuration?: number;
   courtCount?: number;
+  /**
+   * Optional per-day overrides keyed by 'YYYY-MM-DD'. Days listed here
+   * use the override window; every other day falls back to the
+   * top-level `startTime`/`endTime`. Mirrors `tournaments.daily_schedules`
+   * (migration 024) so the fixture generator and the repair tool stay
+   * in sync.
+   */
+  dailySchedules?: Record<string, { start: string; end: string }>;
 }
 
 /** Minimum team count required to generate fixtures for each format. */

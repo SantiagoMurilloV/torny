@@ -125,8 +125,11 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
     name: t.name,
     sport: t.sport,
     club: t.club,
-    startDate: new Date(t.startDate),
-    endDate: new Date(t.endDate),
+    // Anchor at noon UTC via parseWireDate so tournament dates show
+    // identically across timezones (same fix as match dates — see the
+    // note on parseWireDate below).
+    startDate: parseWireDate(t.startDate),
+    endDate: parseWireDate(t.endDate),
     description: t.description ?? '',
     coverImage: t.coverImage,
     logo: t.logo,
@@ -144,9 +147,40 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
     silverClassifiersPerGroup: t.silverClassifiersPerGroup,
     regulationText: t.regulationText,
     regulationPdf: t.regulationPdf,
+    matchDurationMinutes: t.matchDurationMinutes,
+    matchBreakMinutes: t.matchBreakMinutes,
+    dailySchedules: t.dailySchedules ?? {},
     enrolledCount: t.enrolledCount,
     matchesCount: t.matchesCount,
   };
+}
+
+/**
+ * Parse a 'YYYY-MM-DD' wire date into a JS Date that always represents
+ * the calendar day, never drifting across timezone boundaries.
+ *
+ * The naive `new Date('2026-05-15')` constructor treats the input as
+ * UTC midnight. In any timezone west of UTC (Colombia is UTC-5) that's
+ * "yesterday" in local time, so a card formatted with date-fns / local
+ * helpers shows '14 may' while a `toISOString().split('T')[0]` round-
+ * trip in the edit modal still returns '2026-05-15'. The two surfaces
+ * disagree by a day, leaving the admin convinced the form is loading
+ * "wrong" data.
+ *
+ * Anchoring at NOON UTC gives a 12-hour cushion in either direction
+ * so every IRL timezone interprets the Date as the same calendar day —
+ * the card's `formatShortDate` and the modal's `toISOString()` both
+ * agree, and downstream consumers (date inputs, sorting) keep working.
+ *
+ * Falls back to the raw `new Date(...)` path for anything that doesn't
+ * look like a bare date so timestamps with explicit timezones (rare but
+ * possible for legacy callers) keep their precision.
+ */
+function parseWireDate(raw: string): Date {
+  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return new Date(`${raw}T12:00:00Z`);
+  }
+  return new Date(raw);
 }
 
 export function toFrontendMatch(m: BackendMatch): Match {
@@ -155,7 +189,7 @@ export function toFrontendMatch(m: BackendMatch): Match {
     tournamentId: m.tournamentId,
     team1: resolveTeam(m.team1Id),
     team2: resolveTeam(m.team2Id),
-    date: new Date(m.date),
+    date: parseWireDate(m.date),
     time: m.time,
     court: m.court,
     referee: m.referee,
