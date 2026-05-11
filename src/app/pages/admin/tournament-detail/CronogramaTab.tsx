@@ -431,6 +431,59 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
       const destStack = matchesByCell.get(`${destCourt}|${destTime}`) ?? [];
       const destMatch = destStack.find((m) => m.id !== dragged.id) ?? null;
 
+      // GEOMETRY GUARD — block swaps where the destination's matches
+      // wouldn't fit in the source's time budget. Two scenarios:
+      //
+      //   a) Destination cell has > 1 match stacked. We can't safely
+      //      do a multi-way swap with the current API (it only swaps
+      //      two matches), and even if we could, those matches need
+      //      enough room in the source slot to all land somewhere.
+      //      Block with a clear "movelos primero" message.
+      //
+      //   b) Destination has 1 match BUT it's longer than the dragged
+      //      match. Putting a 90-min Senior in a 60-min Sub-13 slot
+      //      would overflow into whatever's right after the source —
+      //      either creating a second-order overlap or shifting the
+      //      next match. The user explicitly asked us to block this:
+      //      "solo debe dejar si donde esta el de 60 hay espacio para
+      //      los dos de 45 si no no".
+      //
+      // Only fires when there's at least one match in the destination
+      // cell — empty drops fall through to the team-conflict / clean
+      // move branches below.
+      const destOthers = destStack.filter((m) => m.id !== dragged.id);
+      if (destOthers.length > 0) {
+        const draggedDur = getMatchDurationMinutes(dragged, tournament);
+        const destTotalDur = destOthers.reduce(
+          (sum, m) => sum + getMatchDurationMinutes(m, tournament),
+          0,
+        );
+        if (destOthers.length > 1) {
+          setConflictAlert({
+            title: 'No se puede intercambiar acá',
+            body:
+              `El destino ya tiene ${destOthers.length} partidos apilados ` +
+              `(${destTotalDur} min en total). ${shortLabel(dragged)} dura ` +
+              `${draggedDur} min — moveríamos uno y los demás quedarían sin ` +
+              'lugar. Mové cada uno por separado a un slot libre antes de ' +
+              'soltar otro acá.',
+          });
+          return;
+        }
+        if (destTotalDur > draggedDur) {
+          setConflictAlert({
+            title: 'Las duraciones no encajan',
+            body:
+              `${shortLabel(destOthers[0])} dura ${destTotalDur} min y ` +
+              `${shortLabel(dragged)} dura solo ${draggedDur} min. Si los ` +
+              'cambiamos, el partido más largo no entraría en el slot original ' +
+              'sin chocar con el siguiente. Movelo manualmente a una hora con ' +
+              'más espacio o achicá la duración de su categoría.',
+          });
+          return;
+        }
+      }
+
       // 2) Destination empty in the active view — but a match in
       // another category (hidden by the filter) or another court at
       // the same time may share a team with the dragged match. The
