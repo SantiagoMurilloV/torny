@@ -642,6 +642,10 @@ export class MatchService {
     teamConflicts: number;
     courtConflicts: number;
     outOfRange: number;
+    /** Matches relocated only because the priority pass found them
+     *  sitting in a slot that should belong to a higher-priority
+     *  category. Distinct from team/court/oor conflicts. */
+    priorityReordered: number;
     moves: Array<{
       matchId: string;
       from: { date: string; time: string; court: string };
@@ -683,6 +687,7 @@ export class MatchService {
       daily_schedules: Record<string, { start: string; end: string }> | null;
       max_matches_per_day: number | null;
       dead_time_blocks: Array<{ start: string; end: string }> | null;
+      category_priority: string[] | null;
     }>(
       `SELECT
          start_date::text AS start_date,
@@ -692,7 +697,8 @@ export class MatchService {
          match_break_minutes,
          daily_schedules,
          max_matches_per_day,
-         dead_time_blocks
+         dead_time_blocks,
+         category_priority
        FROM tournaments WHERE id = $1`,
       [tournamentId],
     );
@@ -723,6 +729,13 @@ export class MatchService {
         : 0;
     const deadTimeBlocks = Array.isArray(tRes.rows[0].dead_time_blocks)
       ? tRes.rows[0].dead_time_blocks
+      : [];
+    // Empty array = "no priority configured" → keep matches in their
+    // original order. When set, the repair will additionally reorder
+    // every UPCOMING match so categories listed earlier take the
+    // earliest slots — same semantics as the scheduler's pre-sort.
+    const categoryPriority = Array.isArray(tRes.rows[0].category_priority)
+      ? tRes.rows[0].category_priority
       : [];
     // Historic global window — used as the fallback for any day that
     // doesn't carry an explicit override in `dailySchedules`. Matches
@@ -781,6 +794,9 @@ export class MatchService {
       time: string;
       court: string;
       created_at: string | Date;
+      phase: string;
+      status: 'upcoming' | 'live' | 'completed';
+      group_name: string | null;
     };
     // Cast `date` to text so we get a stable YYYY-MM-DD string instead
     // of pg's JS Date instance (the driver normalises DATE columns to
@@ -789,11 +805,17 @@ export class MatchService {
     // back as a plain string without any extra cast — using to_char
     // here would crash with "function to_char(character varying, …)
     // does not exist".
+    //
+    // Phase + status + group_name are pulled because the per-priority
+    // reorder pass (when categoryPriority is set) needs to know which
+    // category a match belongs to AND must skip live/completed matches
+    // (they're already locked in or in flight; reshuffling them would
+    // be hostile to the referee console).
     const allRes = await pool.query<Row>(
       `SELECT id, team1_id, team2_id,
               date::text AS date,
               time,
-              court, created_at
+              court, created_at, phase, status, group_name
        FROM matches
        WHERE tournament_id = $1
        ORDER BY created_at ASC, id ASC`,
@@ -889,13 +911,19 @@ export class MatchService {
         `dates=${debug.earliestMatchDate}..${debug.latestMatchDate}`,
     );
 
-    if (conflictMatches.length === 0) {
+    // Early-out only when there's nothing to repair AND no priority
+    // reorder is pending. The priority pass below can ADD conflicts
+    // (matches that aren't broken on their own but sit in the wrong
+    // priority slot), so we must let it run before deciding the work
+    // is done.
+    if (conflictMatches.length === 0 && categoryPriority.length === 0) {
       return {
         conflictsDetected: 0,
         matchesMoved: 0,
         teamConflicts: 0,
         courtConflicts: 0,
         outOfRange: 0,
+        priorityReordered: 0,
         moves: [],
         unresolved: 0,
         debug,
@@ -967,6 +995,94 @@ export class MatchService {
       return null;
     };
 
+    /**
+     * Priority reorder pass — only runs when the admin set
+     * `categoryPriority`. The basic conflict detector above only
+     * relocates matches that have a hard collision (team double-book,
+     * court double-book, out-of-window). It doesn't enforce category
+     * order: a low-priority match scheduled for 08:00 on day 1 stays
+     * there even if a high-priority match is sitting at 17:00 on day
+     * 3, which is exactly the bug the admin reported with
+     * "Reparar horarios no hace nada" after changing priority.
+     *
+     * Strategy:
+     *   1. Take every UPCOMING match still keeping its original slot
+     *      (i.e. NOT already in conflictMatches).
+     *   2. Sort them by category priority (lower index → earlier slot).
+     *      Stable sort preserves their original order within each
+     *      category so round-robin pairings keep their cadence.
+     *   3. If the sorted order doesn't match the chronological order
+     *      they're currently sitting in, mark the out-of-place ones as
+     *      conflicts → they'll be moved by the existing loop below.
+     *
+     * Live + completed matches are NEVER touched: they're either being
+     * scored right now or already locked in a referee's history.
+     * Reshuffling them would surprise the judge console mid-set.
+     */
+    const extractCategory = (r: Row): string => {
+      const raw = r.group_name || r.phase || '';
+      const pipeIdx = raw.indexOf('|');
+      return pipeIdx > 0 ? raw.slice(0, pipeIdx) : raw;
+    };
+    let priorityReordered = 0;
+    if (categoryPriority.length > 0) {
+      const priorityIndex = (cat: string): number => {
+        const idx = categoryPriority.indexOf(cat);
+        return idx >= 0 ? idx : categoryPriority.length;
+      };
+      // Pull out matches that DIDN'T conflict above and are still
+      // upcoming. Sort them in slot order (date ASC, time ASC) so the
+      // "current order" we compare against is what the admin would
+      // actually see in the Cronograma view.
+      const conflictIds = new Set(conflictMatches.map((r) => r.id));
+      const upcomingPlaced = rows
+        .filter((r) => !conflictIds.has(r.id) && r.status === 'upcoming')
+        .sort((a, b) => {
+          if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+          return a.time < b.time ? -1 : 1;
+        });
+      // Same list sorted by category priority (then by original
+      // chronological position — stable sort preserves the round-robin
+      // order for matches that share a priority bucket).
+      const sortedByPriority = upcomingPlaced.slice().sort((a, b) => {
+        const pa = priorityIndex(extractCategory(a));
+        const pb = priorityIndex(extractCategory(b));
+        return pa - pb;
+      });
+      // Walk the two lists in lockstep: any match that should sit on
+      // a different slot than its current one is added to conflicts.
+      // We also remove its busy markers from teamSlot/courtSlot so
+      // findFreeSlot can hand its slot to a higher-priority match.
+      for (let i = 0; i < upcomingPlaced.length; i++) {
+        const inPlace = upcomingPlaced[i].id;
+        const expected = sortedByPriority[i].id;
+        if (inPlace !== expected) {
+          // The match currently in slot[i] doesn't belong here per
+          // priority. Eject it (clear busy markers + decrement day
+          // counter) so the move loop can re-place it AND re-place
+          // whatever should sit here instead.
+          const r = upcomingPlaced[i];
+          const k1 = teamKey(r.team1_id, r.date, r.time);
+          const k2 = teamKey(r.team2_id, r.date, r.time);
+          const ck = courtKey(r.court, r.date, r.time);
+          if (teamSlot.get(k1) === r.id) teamSlot.delete(k1);
+          if (teamSlot.get(k2) === r.id) teamSlot.delete(k2);
+          if (courtSlot.get(ck) === r.id) courtSlot.delete(ck);
+          const dayCount = matchesByDay.get(r.date) ?? 0;
+          if (dayCount > 0) matchesByDay.set(r.date, dayCount - 1);
+          conflictMatches.push(r);
+          priorityReordered++;
+        }
+      }
+      // Order the conflict list ascending by priority so the higher-
+      // priority matches get findFreeSlot's earliest slots first.
+      conflictMatches.sort(
+        (a, b) =>
+          priorityIndex(extractCategory(a)) -
+          priorityIndex(extractCategory(b)),
+      );
+    }
+
     const moves: Array<{
       matchId: string;
       from: { date: string; time: string; court: string };
@@ -1005,6 +1121,7 @@ export class MatchService {
       teamConflicts,
       courtConflicts,
       outOfRange,
+      priorityReordered,
       moves,
       unresolved,
       debug,

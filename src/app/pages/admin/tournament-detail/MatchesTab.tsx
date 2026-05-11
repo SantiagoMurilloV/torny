@@ -137,6 +137,11 @@ export function MatchesTab({
             `${result.outOfRange} fuera del rango del torneo`,
           );
         }
+        if (result.priorityReordered > 0) {
+          parts.push(
+            `${result.priorityReordered} reordenad${result.priorityReordered === 1 ? 'o' : 'os'} por prioridad de categoría`,
+          );
+        }
         const detail = parts.length > 0 ? ` (${parts.join(', ')})` : '';
         const tail =
           result.unresolved > 0

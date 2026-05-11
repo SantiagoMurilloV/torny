@@ -131,6 +131,10 @@ export const tournamentsApi = {
     teamConflicts: number;
     courtConflicts: number;
     outOfRange: number;
+    /** Matches the priority pass relocated. Surfaced separately so the
+     *  toast can say "reordené N por prioridad" instead of bundling
+     *  them into the team/court conflict counters. */
+    priorityReordered: number;
     moves: Array<{
       matchId: string;
       from: { date: string; time: string; court: string };
