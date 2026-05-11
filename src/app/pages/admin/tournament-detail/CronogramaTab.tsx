@@ -23,6 +23,16 @@ interface CronogramaTabProps {
 
 export function CronogramaTab({ matches }: CronogramaTabProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedCourt, setSelectedCourt] = useState<string>('all');
+
+  // Extract courts from matches
+  const courts = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of matches) {
+      if (m.court) set.add(m.court);
+    }
+    return [...set].sort();
+  }, [matches]);
 
   // Extract categories from group names (format: "Category|Letter")
   const categories = useMemo(() => {
@@ -55,11 +65,14 @@ export function CronogramaTab({ matches }: CronogramaTabProps) {
     return 'General';
   };
 
-  // Filter matches by selected category
+  // Filter matches by selected category and court
   const filteredMatches = useMemo(() => {
-    if (selectedCategory === 'all') return matches;
-    return matches.filter((m) => getMatchCategory(m) === selectedCategory);
-  }, [matches, selectedCategory]);
+    return matches.filter((m) => {
+      if (selectedCategory !== 'all' && getMatchCategory(m) !== selectedCategory) return false;
+      if (selectedCourt !== 'all' && m.court !== selectedCourt) return false;
+      return true;
+    });
+  }, [matches, selectedCategory, selectedCourt]);
 
   // Group matches by date
   const matchesByDate = useMemo(() => {
@@ -141,6 +154,42 @@ export function CronogramaTab({ matches }: CronogramaTabProps) {
             );
           })}
         </div>
+
+        {/* Court filter */}
+        {courts.length > 1 && (
+          <div className="mt-3 pt-3 border-t border-black/10">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-bold text-black/50 uppercase" style={FONT}>Cancha:</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setSelectedCourt('all')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                  selectedCourt === 'all'
+                    ? 'bg-black text-white'
+                    : 'bg-black/5 text-black/60 hover:bg-black/10'
+                }`}
+                style={FONT}
+              >
+                Todas
+              </button>
+              {courts.map((court) => (
+                <button
+                  key={court}
+                  onClick={() => setSelectedCourt(court)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                    selectedCourt === court
+                      ? 'bg-black/90 text-white border-black'
+                      : 'bg-white border-black/10 text-black/60 hover:bg-black/5'
+                  }`}
+                  style={FONT}
+                >
+                  {court}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Schedule by day */}
