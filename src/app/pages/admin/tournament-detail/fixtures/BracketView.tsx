@@ -3,6 +3,7 @@ import { BracketMatch } from '../../../../types';
 import { Badge } from '../../../../components/ui/badge';
 import { CategorySection } from '../../../../components/admin/CategorySection';
 import { ScoreSetsEditor } from '../../../../components/admin/ScoreSetsEditor';
+import { TeamAvatar } from '../../../../components/TeamAvatar';
 import {
   categoryOfBracketRound,
   bracketRoundName,
@@ -158,12 +159,10 @@ function BracketRow({ match: bm, editor }: { match: BracketMatch; editor: Bracke
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {bm.team1 ? (
             <>
-              <div
-                className="w-8 h-8 rounded-sm flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
-                style={{ backgroundColor: bm.team1.colors.primary }}
-              >
-                {bm.team1.initials}
-              </div>
+              {/* TeamAvatar handles logo / initials fallback. The hardcoded
+                  square here ignored team.logo so even teams with crests
+                  uploaded showed only initials in the bracket admin. */}
+              <TeamAvatar team={bm.team1} size="sm" />
               <span className="text-sm font-medium truncate">{bm.team1.name}</span>
             </>
           ) : (
@@ -186,12 +185,7 @@ function BracketRow({ match: bm, editor }: { match: BracketMatch; editor: Bracke
           {bm.team2 ? (
             <>
               <span className="text-sm font-medium truncate text-right">{bm.team2.name}</span>
-              <div
-                className="w-8 h-8 rounded-sm flex items-center justify-center text-white font-bold text-xs flex-shrink-0"
-                style={{ backgroundColor: bm.team2.colors.primary }}
-              >
-                {bm.team2.initials}
-              </div>
+              <TeamAvatar team={bm.team2} size="sm" />
             </>
           ) : (
             <span className="text-sm text-black/40 italic">Por definir</span>
