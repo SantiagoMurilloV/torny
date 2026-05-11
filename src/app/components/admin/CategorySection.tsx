@@ -13,6 +13,14 @@ interface CategorySectionProps {
   /** Start expanded. Defaults to false so admins open what they need. */
   defaultOpen?: boolean;
   /**
+   * External override that pins the section open. Used by parent views
+   * (e.g. TeamsTab when the admin types in the search box) to force
+   * every matching category open without clobbering the user's manual
+   * collapse state — when `forceOpen` flips back to `undefined`, the
+   * component reverts to whatever the admin last toggled internally.
+   */
+  forceOpen?: boolean;
+  /**
    * Optional leading icon shown before the title (e.g. Award for
    * División Oro, Medal for División Plata).
    */
@@ -38,11 +46,18 @@ export function CategorySection({
   count,
   subtitle,
   defaultOpen = false,
+  forceOpen,
   icon: Icon,
   accentClassName,
   children,
 }: CategorySectionProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  // `forceOpen` (when defined) overrides the local toggle so the parent
+  // can pin the section open during search — but the click handler is
+  // a no-op in that case, so the chevron animation reads as "locked
+  // open" rather than out-of-sync with the toggle. When `forceOpen` is
+  // undefined the component is fully self-controlled.
+  const open = forceOpen ?? internalOpen;
   const contentId = `cat-body-${title.replace(/\s+/g, '-')}`;
   const accentTextClass = accentClassName ?? 'text-black/70';
 
@@ -50,7 +65,9 @@ export function CategorySection({
     <div className="border-b border-black/10 last:border-b-0">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (forceOpen === undefined) setInternalOpen((v) => !v);
+        }}
         aria-expanded={open}
         aria-controls={contentId}
         className={`w-full flex items-center justify-between gap-3 px-1 py-3 text-left transition-colors ${
