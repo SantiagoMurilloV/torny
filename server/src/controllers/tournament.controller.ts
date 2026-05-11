@@ -4,6 +4,7 @@ import { enrollmentService } from '../services/enrollment.service';
 import { fixtureGenerator } from '../services/fixture.service';
 import { bracketGenerator } from '../services/bracket.service';
 import { standingsCalculator } from '../services/standings.service';
+import { matchService } from '../services/match.service';
 import { validateUUID } from '../middleware/validation';
 import { ValidationError } from '../middleware/errorHandler';
 import { optionalUser } from '../middleware/auth';
@@ -134,6 +135,34 @@ export async function recalculateStandings(
       // swallow: best-effort
     }
     res.json(standings);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/tournaments/:id/repair-conflicts
+ *
+ * Detects every team double-booking in the tournament's matches and
+ * reschedules the offending matches into safe slots. Used by the admin
+ * "Reparar horarios" button after the SAN JOSE A bug from 2026-05-10
+ * surfaced a class of legacy fixtures with two-matches-at-the-same-time
+ * for one team.
+ *
+ * Auth + ownership: gated at the route level by requireTournamentAccess,
+ * so an admin can only repair their own tournaments and judges + public
+ * are blocked. Returns the move list so the UI can show "moví N partidos".
+ */
+export async function repairConflicts(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    validateUUID(id, 'ID de torneo');
+    const result = await matchService.repairTeamConflicts(id);
+    res.json(result);
   } catch (error) {
     next(error);
   }

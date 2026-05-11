@@ -22,6 +22,7 @@ import {
   updateBracketMatch,
   clearFixtures,
   resolveBracket,
+  repairConflicts,
 } from '../controllers/tournament.controller';
 
 const router = Router();
@@ -75,6 +76,14 @@ router.post('/:id/resolve-bracket', requireTournamentAccess, resolveBracket);
 
 // Bracket match update
 router.put('/:id/bracket/:matchId', requireTournamentAccess, updateBracketMatch);
+
+// Schedule repair — detects every team double-booking in the
+// tournament's matches and reschedules the offenders into safe slots.
+// Owner-gated so only the admin who owns the tournament (or super_admin)
+// can trigger it. The endpoint isn't cached (mutation) and isn't
+// rate-limited because it's manual + idempotent: re-running it on a
+// repaired tournament returns conflictsDetected=0 immediately.
+router.post('/:id/repair-conflicts', requireTournamentAccess, repairConflicts);
 
 // Diagnostic endpoint — public-readable summary of the bracket vs
 // matches state. Useful to debug "the bracket has teams but Partidos

@@ -451,6 +451,10 @@ describe('MatchService CRUD operations', () => {
           .mockResolvedValueOnce({ rows: [existingRow] })
           // getSets for getById
           .mockResolvedValueOnce({ rows: [] })
+          // schedule conflict check — added 2026-05-10 with the
+          // SAN JOSE A double-booking fix. Empty rows means "no
+          // conflict found" so the update proceeds.
+          .mockResolvedValueOnce({ rows: [] })
           // UPDATE query
           .mockResolvedValueOnce({ rows: [updatedRow] })
       );

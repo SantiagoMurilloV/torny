@@ -236,6 +236,86 @@ export class MatchService {
       }
     }
 
+    // Schedule conflict check — runs whenever the admin moves a match
+    // (date / time / court change) OR swaps a team into a different
+    // slot. We compare the would-be (date, time, team1, team2) against
+    // every other match in the same tournament; if any of the four
+    // pairings collide we abort with a human-readable error.
+    //
+    // Two failure modes we guard against:
+    //   1. Same team plays two matches at the exact same date+time
+    //      (the SAN JOSE A bug from 2026-05-10 — the algorithm got
+    //      this right historically but a manual edit could put a team
+    //      in two simultaneous matches without complaint).
+    //   2. Two matches scheduled on the same court at the same date+time
+    //      (court collision — physically impossible).
+    //
+    // Skipped only when none of the relevant fields are being touched
+    // (purely a status / score / referee update) so editing scores on
+    // an existing match never triggers a query just to re-confirm what
+    // was already valid.
+    const touchesSlot =
+      data.date !== undefined ||
+      data.time !== undefined ||
+      data.court !== undefined ||
+      data.team1Id !== undefined ||
+      data.team2Id !== undefined ||
+      data.tournamentId !== undefined;
+    if (touchesSlot) {
+      const mergedTournament = data.tournamentId ?? existing.tournamentId;
+      const mergedDate = data.date ?? existing.date;
+      const mergedTime = data.time ?? existing.time;
+      const mergedCourt = data.court ?? existing.court;
+      const mergedTeam1 = data.team1Id ?? existing.team1Id;
+      const mergedTeam2 = data.team2Id ?? existing.team2Id;
+
+      const pool = getPool();
+      const conflictRes = await pool.query<{
+        id: string;
+        team1_id: string;
+        team2_id: string;
+        court: string;
+      }>(
+        `SELECT id, team1_id, team2_id, court
+         FROM matches
+         WHERE tournament_id = $1
+           AND id <> $2
+           AND date = $3
+           AND time = $4
+           AND (
+             team1_id = $5 OR team1_id = $6
+             OR team2_id = $5 OR team2_id = $6
+             OR court = $7
+           )`,
+        [
+          mergedTournament,
+          id,
+          mergedDate,
+          mergedTime,
+          mergedTeam1,
+          mergedTeam2,
+          mergedCourt,
+        ],
+      );
+      if (conflictRes.rows.length > 0) {
+        const teamConflict = conflictRes.rows.find(
+          (r) =>
+            r.team1_id === mergedTeam1 ||
+            r.team1_id === mergedTeam2 ||
+            r.team2_id === mergedTeam1 ||
+            r.team2_id === mergedTeam2,
+        );
+        if (teamConflict) {
+          throw new ValidationError(
+            `Uno de los equipos ya tiene un partido programado el ${mergedDate} a las ${mergedTime}. Elegí otro horario.`,
+          );
+        }
+        throw new ValidationError(
+          `La cancha "${mergedCourt}" ya tiene un partido programado el ${mergedDate} a las ${mergedTime}. Elegí otra cancha o cambiá el horario.`,
+        );
+      }
+    }
+
     const pool = getPool();
     const fields: string[] = [];
     const values: unknown[] = [];
@@ -521,6 +601,212 @@ export class MatchService {
     // set_scores are deleted via CASCADE
     await pool.query('DELETE FROM matches WHERE id = $1', [id]);
     await refreshTournamentState(existing.tournamentId);
+  }
+
+  /**
+   * Detect every team double-booking in a tournament and reschedule
+   * the offending matches into safe slots. "Double-booking" here means:
+   * the same team appears in two or more matches at the exact same
+   * (date, time) — physically impossible because a team can only be on
+   * one court at a time.
+   *
+   * Strategy:
+   *   1. Pull every match in the tournament, sorted oldest-first.
+   *   2. Walk them in order, tracking the (team, date, time) tuples
+   *      already claimed.
+   *   3. The first match for each (team, date, time) tuple keeps its
+   *      slot; later matches that collide with it are flagged as
+   *      "needs to move".
+   *   4. For each one that needs to move: scan forward through the
+   *      tournament's day window (08:00-18:00 by default, derived
+   *      from the most recently used slot) and pick the next slot
+   *      where:
+   *         · neither team has another match,
+   *         · the chosen court is free at that slot.
+   *   5. UPDATE the row's date/time/court to the new slot. Leave
+   *      everything else (status, scores, phase, group) untouched.
+   *
+   * Returns a summary so the caller can show the admin what was moved.
+   *
+   * The matches table is NOT locked during the scan — by design this is
+   * a manual repair tool the admin runs from the UI; we want it
+   * fast-running and tolerant of concurrent score updates rather than
+   * a 30-second transaction holding everyone else off.
+   */
+  async repairTeamConflicts(
+    tournamentId: string,
+  ): Promise<{
+    conflictsDetected: number;
+    matchesMoved: number;
+    moves: Array<{
+      matchId: string;
+      from: { date: string; time: string; court: string };
+      to: { date: string; time: string; court: string };
+    }>;
+    unresolved: number;
+  }> {
+    const pool = getPool();
+
+    // Pull tournament context (start_date, courts, day window) so the
+    // repair walks the same calendar the original scheduler uses.
+    const tRes = await pool.query<{
+      start_date: string | Date;
+      courts: string[] | null;
+    }>(
+      'SELECT start_date, courts FROM tournaments WHERE id = $1',
+      [tournamentId],
+    );
+    if (tRes.rows.length === 0) {
+      throw new NotFoundError('Torneo');
+    }
+    const courtsRow = tRes.rows[0].courts ?? [];
+    const courts: string[] = courtsRow.length > 0 ? courtsRow : ['Cancha 1'];
+
+    const DAY_START_MIN = 8 * 60; // 08:00
+    const DAY_END_MIN = 18 * 60; // 18:00
+    const SLOT_MIN = 75; // 60 min match + 15 min break, mirrors the scheduler defaults
+
+    // Pull every match, oldest first. created_at decides which match
+    // "wins" the slot (oldest stays put) so the original schedule is
+    // disturbed as little as possible.
+    type Row = {
+      id: string;
+      team1_id: string;
+      team2_id: string;
+      date: string;
+      time: string;
+      court: string;
+      created_at: string | Date;
+    };
+    const allRes = await pool.query<Row>(
+      `SELECT id, team1_id, team2_id,
+              to_char(date, 'YYYY-MM-DD') AS date,
+              to_char(time, 'HH24:MI')    AS time,
+              court, created_at
+       FROM matches
+       WHERE tournament_id = $1
+       ORDER BY created_at ASC, id ASC`,
+      [tournamentId],
+    );
+    const rows = allRes.rows;
+
+    // Maps to track what's claimed:
+    //   teamSlot   → "team|date|time"  → matchId
+    //   courtSlot  → "court|date|time" → matchId
+    const teamSlot = new Map<string, string>();
+    const courtSlot = new Map<string, string>();
+    const slotKey = (date: string, time: string) => `${date}|${time}`;
+    const teamKey = (teamId: string, date: string, time: string) =>
+      `${teamId}|${slotKey(date, time)}`;
+    const courtKey = (court: string, date: string, time: string) =>
+      `${court}|${slotKey(date, time)}`;
+
+    const conflictMatches: Row[] = [];
+    for (const r of rows) {
+      const k1 = teamKey(r.team1_id, r.date, r.time);
+      const k2 = teamKey(r.team2_id, r.date, r.time);
+      const ck = courtKey(r.court, r.date, r.time);
+      if (
+        teamSlot.has(k1) ||
+        teamSlot.has(k2) ||
+        courtSlot.has(ck)
+      ) {
+        conflictMatches.push(r);
+        continue;
+      }
+      teamSlot.set(k1, r.id);
+      teamSlot.set(k2, r.id);
+      courtSlot.set(ck, r.id);
+    }
+
+    if (conflictMatches.length === 0) {
+      return {
+        conflictsDetected: 0,
+        matchesMoved: 0,
+        moves: [],
+        unresolved: 0,
+      };
+    }
+
+    // For each conflict, hunt for the next free slot. Start from the
+    // tournament's first day at the day-window opening time, advancing
+    // SLOT_MIN minutes per attempt and rolling to the next day at
+    // 18:00. Cap at 365 days so a misconfigured tournament can't spin
+    // forever.
+    const startDate = (() => {
+      const raw = tRes.rows[0].start_date;
+      if (raw instanceof Date) return raw.toISOString().slice(0, 10);
+      if (typeof raw === 'string') return raw.slice(0, 10);
+      return new Date().toISOString().slice(0, 10);
+    })();
+
+    const formatHHMM = (totalMinutes: number): string => {
+      const h = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    };
+
+    const findFreeSlot = (
+      team1Id: string,
+      team2Id: string,
+    ): { date: string; time: string; court: string } | null => {
+      const cursor = new Date(startDate + 'T00:00:00');
+      const MAX_DAYS = 365;
+      for (let d = 0; d < MAX_DAYS; d++) {
+        const dateStr = cursor.toISOString().slice(0, 10);
+        for (let mins = DAY_START_MIN; mins + 60 <= DAY_END_MIN; mins += SLOT_MIN) {
+          const time = formatHHMM(mins);
+          if (
+            teamSlot.has(teamKey(team1Id, dateStr, time)) ||
+            teamSlot.has(teamKey(team2Id, dateStr, time))
+          ) {
+            continue;
+          }
+          for (const court of courts) {
+            if (!courtSlot.has(courtKey(court, dateStr, time))) {
+              return { date: dateStr, time, court };
+            }
+          }
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      return null;
+    };
+
+    const moves: Array<{
+      matchId: string;
+      from: { date: string; time: string; court: string };
+      to: { date: string; time: string; court: string };
+    }> = [];
+    let unresolved = 0;
+    for (const r of conflictMatches) {
+      const slot = findFreeSlot(r.team1_id, r.team2_id);
+      if (!slot) {
+        unresolved++;
+        continue;
+      }
+      await pool.query(
+        `UPDATE matches
+         SET date = $1, time = $2, court = $3, updated_at = NOW()
+         WHERE id = $4`,
+        [slot.date, slot.time, slot.court, r.id],
+      );
+      teamSlot.set(teamKey(r.team1_id, slot.date, slot.time), r.id);
+      teamSlot.set(teamKey(r.team2_id, slot.date, slot.time), r.id);
+      courtSlot.set(courtKey(slot.court, slot.date, slot.time), r.id);
+      moves.push({
+        matchId: r.id,
+        from: { date: r.date, time: r.time, court: r.court },
+        to: slot,
+      });
+    }
+
+    return {
+      conflictsDetected: conflictMatches.length,
+      matchesMoved: moves.length,
+      moves,
+      unresolved,
+    };
   }
 
   async validateData(data: CreateMatchDto): Promise<ValidationResult> {

@@ -113,6 +113,29 @@ export const tournamentsApi = {
     return data.map(toFrontendBracketMatch);
   },
 
+  /**
+   * Detect every team double-booking in a tournament's matches and
+   * reschedule the offending matches into safe slots. Used by the admin
+   * "Reparar horarios" button after the SAN JOSE A bug from 2026-05-10
+   * where an old generation left some teams scheduled twice at the same
+   * date+time. Idempotent — re-running it on a clean tournament returns
+   * conflictsDetected: 0 and changes nothing.
+   */
+  async repairTournamentConflicts(id: string): Promise<{
+    conflictsDetected: number;
+    matchesMoved: number;
+    moves: Array<{
+      matchId: string;
+      from: { date: string; time: string; court: string };
+      to: { date: string; time: string; court: string };
+    }>;
+    unresolved: number;
+  }> {
+    return request(`/tournaments/${id}/repair-conflicts`, {
+      method: 'POST',
+    });
+  },
+
   // ── Enrolment ───────────────────────────────────────────────────
 
   async getEnrolledTeams(tournamentId: string): Promise<Team[]> {

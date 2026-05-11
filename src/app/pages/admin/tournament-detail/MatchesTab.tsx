@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
-import { Trophy, Filter, Edit, MapPin, Pencil, Search, X } from 'lucide-react';
+import { Trophy, Filter, Edit, MapPin, Pencil, Search, X, Wrench, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Match } from '../../../types';
 import { Badge } from '../../../components/ui/badge';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import {
   Select,
   SelectContent,
@@ -25,12 +26,21 @@ type ScoreEditor = ReturnType<typeof useScoreEditor<Match>>;
 
 interface MatchesTabProps {
   matches: Match[];
+  /** Tournament whose matches are being shown — needed by the repair-
+   *  conflicts call which is tournament-scoped. Falls back to
+   *  matches[0]?.tournamentId when not supplied so older callers don't
+   *  break. */
+  tournamentId?: string;
   /** Shared editor hook instance from the parent (so state persists
    *  across tab switches and stays in sync with other surfaces). */
   editor: ScoreEditor;
   /** Patch a match in the parent state after the metadata-edit modal
    *  saves successfully — keeps the list in sync without re-fetching. */
   onMatchUpdated?: (match: Match) => void;
+  /** Replace the entire matches list in the parent — fired after a
+   *  repair-conflicts run reshuffles many matches at once so the UI
+   *  reflects the new schedule without a full page reload. */
+  onMatchesReplaced?: (matches: Match[]) => void;
 }
 
 /**
@@ -39,7 +49,13 @@ interface MatchesTabProps {
  * score-editor from the parent because it's shared with the Cruces
  * tab.
  */
-export function MatchesTab({ matches, editor, onMatchUpdated }: MatchesTabProps) {
+export function MatchesTab({
+  matches,
+  tournamentId,
+  editor,
+  onMatchUpdated,
+  onMatchesReplaced,
+}: MatchesTabProps) {
   const [phaseFilter, setPhaseFilter] = useState<string>('all');
   const [groupFilter, setGroupFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -49,6 +65,12 @@ export function MatchesTab({ matches, editor, onMatchUpdated }: MatchesTabProps)
   const [search, setSearch] = useState<string>('');
   const [editingMatch, setEditingMatch] = useState<Match | undefined>();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  // Repair-conflicts dialog + in-flight state. Kept here (not the parent)
+  // because the trigger lives in the toolbar of this tab — the parent
+  // only needs to know about the result via onMatchesReplaced.
+  const [repairConfirmOpen, setRepairConfirmOpen] = useState(false);
+  const [repairing, setRepairing] = useState(false);
+  const effectiveTournamentId = tournamentId ?? matches[0]?.tournamentId;
 
   const normalize = (s: string): string =>
     s
@@ -62,6 +84,44 @@ export function MatchesTab({ matches, editor, onMatchUpdated }: MatchesTabProps)
   };
   const closeEditModal = () => {
     setIsEditModalOpen(false);
+  };
+
+  /**
+   * Detect + auto-reschedule team double-bookings. The button only kicks
+   * off after the admin confirms in the dialog. On success we re-fetch
+   * the tournament's matches so the UI reflects the new slots; on a
+   * "no conflicts found" response we still toast a friendly nothing-to-do
+   * message so the admin knows the click was acknowledged.
+   */
+  const handleRepairConfirm = async () => {
+    if (!effectiveTournamentId) {
+      toast.error('No se pudo determinar el torneo');
+      return;
+    }
+    setRepairing(true);
+    try {
+      const result = await api.repairTournamentConflicts(effectiveTournamentId);
+      if (result.conflictsDetected === 0) {
+        toast.success('No se encontraron conflictos. Todo en orden.');
+      } else {
+        const fresh = await api.getTournamentMatches(effectiveTournamentId);
+        onMatchesReplaced?.(fresh);
+        const moved = result.matchesMoved;
+        const unresolved = result.unresolved;
+        toast.success(
+          `Reagendé ${moved} partido${moved === 1 ? '' : 's'}` +
+            (unresolved > 0
+              ? `. Quedaron ${unresolved} sin slot disponible — revisalos a mano.`
+              : '.'),
+        );
+      }
+      setRepairConfirmOpen(false);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Error al reparar horarios'));
+      throw err; // keep dialog open so the admin can retry
+    } finally {
+      setRepairing(false);
+    }
   };
 
   // The MatchFormModal calls onSubmit with a fresh Match payload — we
@@ -180,7 +240,14 @@ export function MatchesTab({ matches, editor, onMatchUpdated }: MatchesTabProps)
         )}
       </div>
 
-      {/* Filters */}
+      {/* Filters + repair button.
+          The "Reparar horarios" button lives at the right end of this
+          row so it doesn't fight with the more frequently-used filters
+          for visual prominence. It's an admin escape-hatch for the
+          team-double-booking class of bugs (e.g. SAN JOSE A scheduled
+          14:00 on Cancha 3 AND 14:00 on Cancha 1 — physically
+          impossible). The dialog walks the admin through the consequence
+          before any rows move. */}
       <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 mb-6">
         <Filter className="w-4 h-4 text-black/40" />
         <Select value={phaseFilter} onValueChange={setPhaseFilter}>
@@ -220,6 +287,21 @@ export function MatchesTab({ matches, editor, onMatchUpdated }: MatchesTabProps)
             <SelectItem value="completed">{matchStatusLabel('completed')}</SelectItem>
           </SelectContent>
         </Select>
+        <button
+          type="button"
+          onClick={() => setRepairConfirmOpen(true)}
+          disabled={repairing || !effectiveTournamentId}
+          title="Detecta y reagenda partidos con conflicto de horario (mismo equipo en dos partidos a la misma hora)"
+          className="sm:ml-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-spk-blue/40 text-spk-blue hover:bg-spk-blue/10 rounded-sm text-xs sm:text-sm font-bold uppercase disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.05em' }}
+        >
+          {repairing ? (
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Wrench className="w-4 h-4" aria-hidden="true" />
+          )}
+          Reparar horarios
+        </button>
       </div>
 
       {filteredMatches.length === 0 ? (
@@ -291,6 +373,29 @@ export function MatchesTab({ matches, editor, onMatchUpdated }: MatchesTabProps)
         onClose={closeEditModal}
         onSubmit={handleEditSubmit}
         match={editingMatch}
+      />
+
+      {/* Confirm before reshuffling the schedule. The dialog body
+          spells out exactly what the operation will do (move the
+          duplicates to the next free slot, leave the original in
+          place) so the admin understands they're not about to
+          regenerate the entire fixture from scratch. */}
+      <ConfirmDialog
+        open={repairConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open && !repairing) setRepairConfirmOpen(false);
+        }}
+        title="¿Reparar horarios?"
+        description={
+          'Voy a buscar partidos donde un mismo equipo aparece dos veces a la misma hora ' +
+          'y voy a moverlos al próximo horario libre. El partido original queda en su lugar; ' +
+          'solo se reagenda el duplicado. Esta acción no afecta los marcadores ni el estado ' +
+          'de los partidos.'
+        }
+        confirmLabel="Reparar"
+        variant="default"
+        loading={repairing}
+        onConfirm={handleRepairConfirm}
       />
     </>
   );

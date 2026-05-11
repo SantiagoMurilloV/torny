@@ -431,10 +431,15 @@ export function AdminTournamentDetail() {
         <TabsContent value="matches">
           <MatchesTab
             matches={matches}
+            tournamentId={id}
             editor={matchEditor}
             onMatchUpdated={(updated) =>
               setMatches((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
             }
+            // Used by the "Reparar horarios" button after a bulk reshuffle
+            // — replaces the entire matches list so the new (date, time,
+            // court) for each moved match shows up without a page reload.
+            onMatchesReplaced={(fresh) => setMatches(fresh)}
           />
         </TabsContent>
       </Tabs>
