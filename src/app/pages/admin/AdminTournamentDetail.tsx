@@ -216,6 +216,11 @@ export function AdminTournamentDetail() {
       toast.success('Equipo desinscrito correctamente');
     } catch (err) {
       toast.error(getErrorMessage(err, 'Error al desinscribir equipo'));
+      // Re-throw so the ConfirmDialog in TeamsTab stays open on failure
+      // and the admin can retry without having to re-click the trash
+      // icon. Mirrors the pattern used by the other confirm handlers
+      // (handleDelete in AdminTournaments / AdminMatches / etc.).
+      throw err;
     } finally {
       setUnenrollingId(null);
     }

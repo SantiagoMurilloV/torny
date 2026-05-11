@@ -6,6 +6,7 @@ import { CategorySection } from '../../../components/admin/CategorySection';
 import { TeamFormModal } from '../../../components/admin/TeamFormModal';
 import { TeamRosterCard } from '../../../components/admin/TeamRosterCard';
 import { TeamPickerModal } from '../../../components/admin/TeamPickerModal';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
 interface TeamsTabProps {
   tournament: Tournament;
@@ -38,6 +39,13 @@ export function TeamsTab({
   const [showPicker, setShowPicker] = useState(false);
   const [showNewTeamModal, setShowNewTeamModal] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | undefined>();
+  // Pending un-enrollment — clicking the trash icon stages the team here
+  // so the ConfirmDialog can show its name in the body copy. The dialog
+  // calls onUnenroll(team.id) on confirm, which routes to the parent's
+  // handleUnenroll → api.unenrollTeam. Modeling pending-confirm as a
+  // full Team object (instead of just the id) avoids a second lookup
+  // from `enrolledTeams` when rendering the dialog message.
+  const [pendingUnenrollTeam, setPendingUnenrollTeam] = useState<Team | null>(null);
 
   const enrolledIds = useMemo(
     () => new Set(enrolledTeams.map((t) => t.id)),
@@ -111,7 +119,10 @@ export function TeamsTab({
                     key={team.id}
                     team={team}
                     onEditTeam={(t) => setEditingTeam(t)}
-                    onDeleteTeam={(t) => onUnenroll(t.id)}
+                    // Stage the team in pending state instead of un-enrolling
+                    // immediately — the ConfirmDialog at the bottom of this
+                    // component asks before firing the destructive call.
+                    onDeleteTeam={(t) => setPendingUnenrollTeam(t)}
                     deletingTeam={unenrollingId === team.id}
                     deleteButtonLabel={(t) => `Desinscribir ${t.name} del torneo`}
                   />
@@ -143,6 +154,35 @@ export function TeamsTab({
         onSubmit={handleFormSubmit}
         team={editingTeam}
         allowedCategories={tournament.categories}
+      />
+
+      {/* Confirm un-enrollment — `unenrollingId === pending.id` keeps the
+          confirm button in its loading state while the request is in
+          flight. The dialog stays open on error (ConfirmDialog catches
+          throws); the parent surfaces the failure via toast. */}
+      <ConfirmDialog
+        open={pendingUnenrollTeam !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingUnenrollTeam(null);
+        }}
+        title="¿Desinscribir equipo?"
+        description={
+          pendingUnenrollTeam
+            ? `Vas a desinscribir a ${pendingUnenrollTeam.name} de ${tournament.name}. ` +
+              'Sus partidos programados de este torneo se eliminarán y no podrá ser ' +
+              'reinscrito automáticamente. Esta acción no se puede deshacer.'
+            : ''
+        }
+        confirmLabel="Desinscribir"
+        loading={
+          pendingUnenrollTeam !== null &&
+          unenrollingId === pendingUnenrollTeam.id
+        }
+        onConfirm={async () => {
+          if (!pendingUnenrollTeam) return;
+          await onUnenroll(pendingUnenrollTeam.id);
+          setPendingUnenrollTeam(null);
+        }}
       />
     </>
   );
