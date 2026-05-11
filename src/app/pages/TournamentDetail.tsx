@@ -12,6 +12,7 @@ import { MatchesTab } from './tournament-detail/tabs/MatchesTab';
 import { StandingsTab } from './tournament-detail/tabs/StandingsTab';
 import { BracketTab } from './tournament-detail/tabs/BracketTab';
 import { InfoTab } from './tournament-detail/tabs/InfoTab';
+import { CronogramaTab } from './tournament-detail/tabs/CronogramaTab';
 import type { TabDescriptor, TabId } from './tournament-detail/tabs/types';
 
 /**
@@ -26,7 +27,10 @@ import type { TabDescriptor, TabId } from './tournament-detail/tabs/types';
 export function TournamentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabId>('teams');
+  // Default to the cronograma — spectators land directly on the
+  // day's schedule. Hits "today" if it's inside the tournament range,
+  // otherwise the start date (handled inside CronogramaTab).
+  const [activeTab, setActiveTab] = useState<TabId>('cronograma');
   const [isFollowing, setIsFollowing] = useState(false);
 
   const {
@@ -101,6 +105,10 @@ export function TournamentDetail() {
   const liveMatches = matches.filter((m) => m.status === 'live');
 
   const tabs: TabDescriptor[] = [
+    // Cronograma is the entry point — spectators see the day's
+    // schedule the moment they open the tournament. Counter shows the
+    // total scheduled across all days so they know the size at a glance.
+    { id: 'cronograma', label: 'Cronograma', count: matches.length },
     {
       id: 'teams',
       label: 'Equipos',
@@ -131,6 +139,9 @@ export function TournamentDetail() {
       <TabNav tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
       <div className="max-w-[1600px] mx-auto px-6 md:px-12 py-12 md:py-20">
+        {activeTab === 'cronograma' && (
+          <CronogramaTab tournament={tournament} matches={matches} />
+        )}
         {activeTab === 'teams' && (
           <TeamsTab standings={standings} enrolledTeams={enrolledTeams} />
         )}

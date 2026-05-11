@@ -290,6 +290,15 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
     return map;
   }, [matches, selectedDay, selectedCategory]);
 
+  // Total matches matching the active filters — drives the small
+  // counter badge in the header so the admin sees "12 partidos" at a
+  // glance without counting cells.
+  const visibleMatchCount = useMemo<number>(() => {
+    let n = 0;
+    for (const list of matchesByCell.values()) n += list.length;
+    return n;
+  }, [matchesByCell]);
+
   /**
    * How many grid rows does a match's card span, given the current
    * stride. A match of `globalDuration` with `slotStride = globalDuration
@@ -602,13 +611,28 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
 
   return (
     <div className="space-y-4">
-      {/* Header */}
+      {/* Header — title + live counter ("12 partidos") so the admin
+          sees how many matches the active filter resolves to without
+          counting cells. The badge updates as soon as the day or
+          category dropdown changes. */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <Calendar className="w-5 h-5 text-black/60" />
           <h2 className="text-xl font-bold" style={FONT}>
             CRONOGRAMA
           </h2>
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-sm bg-black text-white text-xs font-bold tabular-nums"
+            style={FONT}
+            title={
+              selectedCategory === 'all'
+                ? 'Partidos programados ese día'
+                : 'Partidos del día filtrados por categoría'
+            }
+          >
+            {visibleMatchCount}{' '}
+            {visibleMatchCount === 1 ? 'partido' : 'partidos'}
+          </span>
         </div>
         <span className="text-xs text-black/50">
           Arrastrá para mover, soltá en una celda ocupada para intercambiar.
@@ -912,21 +936,33 @@ function Cell({
           ⚠ {matches.length} partidos en este slot
         </div>
       )}
-      <div className="space-y-1 h-full">
-        {matches.map((m) => (
-          <MatchCard
-            key={m.id}
-            match={m}
-            color={categoryColorMap.get(getMatchCategory(m)) ?? CATEGORY_COLORS[0]}
-            days={days}
-            currentDay={selectedDay}
-            onMoveToDay={onMoveToDay}
-            formatDayLabel={formatDayLabel}
-            isInFlight={inFlight.has(m.id)}
-            tournament={tournament}
-          />
-        ))}
-      </div>
+      {matches.length === 0 ? (
+        // Empty drop-target — explicit placeholder so the grid never
+        // shows a stark white void. Dashed border + ultra-faint tint
+        // reads as "slot disponible" without competing with the
+        // colourful match cards. The drag-over `dropTint` above still
+        // wraps this so the hover state remains visible.
+        <div
+          className="h-full w-full rounded-sm border border-dashed border-black/15 bg-black/[0.015]"
+          aria-hidden="true"
+        />
+      ) : (
+        <div className="space-y-1 h-full flex flex-col">
+          {matches.map((m) => (
+            <MatchCard
+              key={m.id}
+              match={m}
+              color={categoryColorMap.get(getMatchCategory(m)) ?? CATEGORY_COLORS[0]}
+              days={days}
+              currentDay={selectedDay}
+              onMoveToDay={onMoveToDay}
+              formatDayLabel={formatDayLabel}
+              isInFlight={inFlight.has(m.id)}
+              tournament={tournament}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1089,22 +1125,31 @@ function MatchCard({
           {match.team2.name}
         </span>
       </div>
-      {/* Duration badge — shows the configured category duration and
-          the computed end time. Pulls the admin's attention to long
-          categories so they understand why the card visually occupies
-          two rows in the grid. mt-auto pushes it to the bottom when the
-          cell is taller than the card content (multi-row spans). */}
+      {/* Time-range + duration badge — shows the EXACT start → end
+          time inside the card so a 60-min cell reads "08:00 → 09:00"
+          without needing to consult the row label. Duration on the
+          right side is the badge that pulls the admin's attention to
+          long categories so they understand why the card visually
+          occupies two rows in the grid. mt-auto pushes this row to
+          the bottom when the cell is taller than the card content
+          (multi-row spans). */}
       {(durationMin > 0 || endTime) && (
         <div
-          className="mt-auto pt-1 flex items-center justify-between gap-1 text-[9px] font-bold uppercase tracking-wider text-black/60"
+          className="mt-auto pt-1 flex items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider text-black/70"
           style={FONT}
           title={endTime ? `Termina aprox ${endTime}` : 'Duración del partido'}
         >
-          <span className="inline-flex items-center gap-0.5">
+          <span className="inline-flex items-center gap-1 tabular-nums">
             <Timer className="w-2.5 h-2.5" aria-hidden="true" />
-            {durationMin}&prime;
+            {match.time}
+            {endTime && (
+              <>
+                <span className="opacity-40">→</span>
+                {endTime}
+              </>
+            )}
           </span>
-          {endTime && <span className="opacity-60">→ {endTime}</span>}
+          <span className="opacity-60 tabular-nums">{durationMin}&prime;</span>
         </div>
       )}
     </div>
