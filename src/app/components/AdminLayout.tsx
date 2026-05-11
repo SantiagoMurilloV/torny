@@ -13,6 +13,7 @@ import {
   Users as UsersIcon,
   Shuffle,
   Swords,
+  Calendar,
 } from 'lucide-react';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -39,6 +40,7 @@ const TOURNAMENT_TABS = [
   { id: 'teams', label: 'Equipos inscritos', icon: UsersIcon },
   { id: 'fixtures', label: 'Cruces', icon: Shuffle },
   { id: 'matches', label: 'Partidos', icon: Swords },
+  { id: 'cronograma', label: 'Cronograma', icon: Calendar },
 ] as const;
 
 export function AdminLayout() {
