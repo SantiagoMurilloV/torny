@@ -289,59 +289,104 @@ export function ScheduleField({
         )}
       </div>
 
-      {/* Category priority — which categories play first each day */}
+      {/* Category priority — opt-in. Hidden behind a toggle so admins
+          who don't care about ordering don't see a giant list of
+          numbered categories taking up form real estate. The toggle:
+            · OFF (default when categoryPriority is empty) → small
+              header + "Personalizar orden" button. Scheduler keeps
+              the natural / insertion order.
+            · ON (categoryPriority has at least one entry) → full
+              reorderable list + "Quitar orden personalizado" link
+              that clears the array back to [].
+          The "personalizado" state is derived from `categoryPriority`
+          itself so the form doesn't need an extra toggle field — turn
+          off = clear the array, turn on = seed it with the current
+          availableCategories. */}
       {availableCategories.length > 0 && (
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <ArrowUp className="w-4 h-4 text-black/60" aria-hidden="true" />
-            <label className="text-sm font-bold" style={FONT}>
-              Orden de categorías (quién juega primero)
-            </label>
-          </div>
-          <p className="text-[11px] text-black/45 mb-3">
-            Las categorías de arriba juegan más temprano. Arrastrá o usá las flechas para reordenar.
-          </p>
-          <div className="space-y-1.5">
-            {(categoryPriority.length > 0 ? categoryPriority : availableCategories).map((cat, idx, arr) => (
-              <div
-                key={cat}
-                className="flex items-center gap-2 bg-white border border-black/10 rounded-sm px-3 py-2"
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <ArrowUp className="w-4 h-4 text-black/60" aria-hidden="true" />
+              <label className="text-sm font-bold" style={FONT}>
+                Orden de categorías{' '}
+                <span className="text-black/40 font-normal">(opcional)</span>
+              </label>
+            </div>
+            {categoryPriority.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => onCategoryPriorityChange([...availableCategories])}
+                className="text-xs text-spk-red hover:underline font-bold"
+                style={FONT}
               >
-                <span className="text-xs font-bold text-black/40 w-5" style={FONT}>
-                  {idx + 1}.
-                </span>
-                <span className="text-sm font-medium flex-1">{cat}</span>
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    disabled={idx === 0}
-                    onClick={() => {
-                      const next = [...arr];
-                      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-                      onCategoryPriorityChange(next);
-                    }}
-                    className="p-1 text-black/30 hover:text-black disabled:opacity-20 transition-colors"
-                    aria-label="Subir"
-                  >
-                    <ArrowUp className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={idx === arr.length - 1}
-                    onClick={() => {
-                      const next = [...arr];
-                      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-                      onCategoryPriorityChange(next);
-                    }}
-                    className="p-1 text-black/30 hover:text-black disabled:opacity-20 transition-colors"
-                    aria-label="Bajar"
-                  >
-                    <ArrowDown className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
+                Personalizar orden
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onCategoryPriorityChange([])}
+                className="text-xs text-black/55 hover:text-black hover:underline"
+                style={FONT}
+              >
+                Quitar orden personalizado
+              </button>
+            )}
           </div>
+          {categoryPriority.length === 0 ? (
+            <p className="text-[11px] text-black/45">
+              Las categorías juegan en el orden natural. Si querés que
+              alguna juegue siempre más temprano (por ejemplo categorías
+              chicas primero), tocá &ldquo;Personalizar orden&rdquo;.
+            </p>
+          ) : (
+            <>
+              <p className="text-[11px] text-black/45 mb-3">
+                Las categorías de arriba juegan más temprano. Usá las
+                flechas para reordenar.
+              </p>
+              <div className="space-y-1.5">
+                {categoryPriority.map((cat, idx, arr) => (
+                  <div
+                    key={cat}
+                    className="flex items-center gap-2 bg-white border border-black/10 rounded-sm px-3 py-2"
+                  >
+                    <span className="text-xs font-bold text-black/40 w-5" style={FONT}>
+                      {idx + 1}.
+                    </span>
+                    <span className="text-sm font-medium flex-1">{cat}</span>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        disabled={idx === 0}
+                        onClick={() => {
+                          const next = [...arr];
+                          [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                          onCategoryPriorityChange(next);
+                        }}
+                        className="p-1 text-black/30 hover:text-black disabled:opacity-20 transition-colors"
+                        aria-label="Subir"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={idx === arr.length - 1}
+                        onClick={() => {
+                          const next = [...arr];
+                          [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                          onCategoryPriorityChange(next);
+                        }}
+                        className="p-1 text-black/30 hover:text-black disabled:opacity-20 transition-colors"
+                        aria-label="Bajar"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
