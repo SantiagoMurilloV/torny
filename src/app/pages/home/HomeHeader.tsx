@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
-import { TornyWordmark } from '../../components/TornyWordmark';
+import { TornyTrophy } from '../../components/brand/TornyTrophy';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
