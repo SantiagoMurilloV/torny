@@ -656,12 +656,24 @@ export class MatchService {
     // AND so we can detect matches that fall outside the tournament's
     // declared window (e.g. admin shifts start_date forward after fixtures
     // were generated → old matches now sit "before" the tournament).
+    //
+    // Both dates are cast to text in PG so we get plain 'YYYY-MM-DD'
+    // strings instead of JS Date instances. Without this cast,
+    // pg returns DATE columns as Date objects at LOCAL midnight, and
+    // `.toISOString().slice(0, 10)` can return the previous day on a
+    // server whose timezone is east of UTC. Casting to text inside the
+    // query makes the value timezone-agnostic regardless of where the
+    // server runs.
     const tRes = await pool.query<{
-      start_date: string | Date;
-      end_date: string | Date | null;
+      start_date: string;
+      end_date: string | null;
       courts: string[] | null;
     }>(
-      'SELECT start_date, end_date, courts FROM tournaments WHERE id = $1',
+      `SELECT
+         start_date::text AS start_date,
+         end_date::text   AS end_date,
+         courts
+       FROM tournaments WHERE id = $1`,
       [tournamentId],
     );
     if (tRes.rows.length === 0) {
@@ -670,17 +682,8 @@ export class MatchService {
     const courtsRow = tRes.rows[0].courts ?? [];
     const courts: string[] = courtsRow.length > 0 ? courtsRow : ['Cancha 1'];
 
-    // Normalise both dates to YYYY-MM-DD strings for plain string
-    // comparison. Handles both shapes the pg driver returns (Date
-    // instance vs ISO string) so the same code works on local dev
-    // (driver may give Date) and Railway prod.
-    const toDateStr = (raw: string | Date | null | undefined): string | null => {
-      if (raw instanceof Date) return raw.toISOString().slice(0, 10);
-      if (typeof raw === 'string') return raw.slice(0, 10);
-      return null;
-    };
-    const tournamentStart = toDateStr(tRes.rows[0].start_date) ?? '';
-    const tournamentEnd = toDateStr(tRes.rows[0].end_date) ?? tournamentStart;
+    const tournamentStart = (tRes.rows[0].start_date ?? '').slice(0, 10);
+    const tournamentEnd = (tRes.rows[0].end_date ?? tournamentStart).slice(0, 10);
 
     const DAY_START_MIN = 8 * 60; // 08:00
     const DAY_END_MIN = 18 * 60; // 18:00

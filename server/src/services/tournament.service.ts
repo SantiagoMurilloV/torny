@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler';
 import { validate, validateDateRange } from '../middleware/validation';
+import { matchService } from './match.service';
 
 /**
  * Context for listing tournaments. Matches caller roles:
@@ -421,6 +422,33 @@ export class TournamentService {
 
     const query = 'UPDATE tournaments SET ' + fields.join(', ') + ' WHERE id = $' + idx + ' RETURNING *';
     const result = await pool.query(query, values);
+
+    // Auto-repair the schedule whenever the tournament window shifts.
+    // The user-facing flow is: admin moves start_date forward → all
+    // matches still tied to the old start_date are now "out of range"
+    // → they need to slide forward into the new window. Same for the
+    // end_date. Running this here (instead of just from the FE handler)
+    // makes the fix bullet-proof against:
+    //   · API consumers that don't know about the repair endpoint
+    //   · Race conditions where the FE auto-repair fires before the
+    //     update commit lands
+    //   · Manual SQL edits via the platform admin
+    //
+    // Errors are swallowed because the tournament UPDATE itself is the
+    // primary contract — a transient repair failure shouldn't make the
+    // settings save look broken. The "Reparar horarios" button is still
+    // available for manual retry.
+    if (data.startDate !== undefined || data.endDate !== undefined) {
+      try {
+        await matchService.repairTeamConflicts(id);
+      } catch (err) {
+        console.warn(
+          '[tournament.update] schedule auto-repair failed for ' + id + ':',
+          err,
+        );
+      }
+    }
+
     return mapRow(result.rows[0]);
   }
 
