@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import {
   getAll,
   getById,
@@ -6,6 +6,7 @@ import {
   update,
   updateScore,
   remove,
+  swap,
 } from '../controllers/match.controller';
 import { cacheGet } from '../middleware/cache';
 import {
@@ -36,5 +37,27 @@ router.delete('/:id', requireMatchAccess, remove);
 // owner_id so a judge created by Admin A cannot score Admin B's match
 // (even if they happened to learn the match id).
 router.put('/:id/score', requireMatchAccess, updateScore);
+
+/**
+ * Swap (date, time, court) between two matches. Used by the
+ * Cronograma drag-and-drop UI. Both matches must belong to the same
+ * tournament (validated in-service); we gate the route by treating
+ * `matchAId` from the body as the "primary" match for the ownership
+ * check via a tiny adapter that mirrors what `requireMatchAccess`
+ * does with `req.params.id`.
+ */
+router.post(
+  '/swap',
+  (req: Request, _res: Response, next: NextFunction) => {
+    // requireMatchAccess reads req.params.id — inject the body id so
+    // the existing guard works without code duplication.
+    const body = req.body as { matchAId?: string };
+    req.params = req.params || {};
+    (req.params as Record<string, string>).id = body.matchAId ?? '';
+    next();
+  },
+  requireMatchAccess,
+  swap,
+);
 
 export default router;

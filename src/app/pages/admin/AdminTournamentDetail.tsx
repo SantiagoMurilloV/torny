@@ -515,7 +515,20 @@ export function AdminTournamentDetail() {
         </TabsContent>
 
         <TabsContent value="cronograma">
-          <CronogramaTab matches={matches} />
+          {tournament && (
+            <CronogramaTab
+              tournament={tournament}
+              matches={matches}
+              // Optimistic update from the drag-and-drop swap/move so
+              // the grid reflects the new slot without re-fetching.
+              onMatchesPatched={(patched) => {
+                setMatches((prev) => {
+                  const byId = new Map(patched.map((m) => [m.id, m]));
+                  return prev.map((m) => byId.get(m.id) ?? m);
+                });
+              }}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>

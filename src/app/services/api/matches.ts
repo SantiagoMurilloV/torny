@@ -58,4 +58,31 @@ export const matchesApi = {
   async deleteMatch(id: string): Promise<void> {
     await request<void>(`/matches/${id}`, { method: 'DELETE' });
   },
+
+  /**
+   * Atomically swap (date, time, court) between two matches. Used by
+   * the Cronograma drag-and-drop UI when the admin drops match A on
+   * match B's slot — a regular PUT on either side would crash into
+   * the other's row at the conflict check, so the backend exposes a
+   * dedicated `/matches/swap` endpoint that bypasses that guard.
+   * Returns both matches with their NEW slots so the UI can update
+   * state in one go.
+   */
+  async swapMatches(
+    matchAId: string,
+    matchBId: string,
+  ): Promise<{ matchA: Match; matchB: Match }> {
+    await ensureTeamsCached();
+    const data = await request<{ matchA: BackendMatch; matchB: BackendMatch }>(
+      '/matches/swap',
+      {
+        method: 'POST',
+        body: JSON.stringify({ matchAId, matchBId }),
+      },
+    );
+    return {
+      matchA: toFrontendMatch(data.matchA),
+      matchB: toFrontendMatch(data.matchB),
+    };
+  },
 };

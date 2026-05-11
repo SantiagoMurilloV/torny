@@ -75,6 +75,32 @@ export async function updateScore(req: Request, res: Response, next: NextFunctio
   }
 }
 
+/**
+ * POST /api/matches/swap
+ *
+ * Atomically swaps (date, time, court) between two matches. Used by
+ * the Cronograma drag-and-drop UI: when the admin drops match A onto
+ * the slot occupied by match B, the regular `update()` path would
+ * reject either single move because of the team/court conflict guard.
+ * This endpoint performs both UPDATEs inside a transaction with row
+ * locks, bypassing the per-row conflict check (the swap is symmetric
+ * by construction). Service ensures both matches share a tournament
+ * so an admin can't move a match across tenants.
+ */
+export async function swap(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const body = req.body as { matchAId?: string; matchBId?: string };
+    const a = body.matchAId ?? '';
+    const b = body.matchBId ?? '';
+    validateUUID(a, 'matchAId');
+    validateUUID(b, 'matchBId');
+    const result = await matchService.swapSlots(a, b);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function remove(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const id = req.params.id as string;

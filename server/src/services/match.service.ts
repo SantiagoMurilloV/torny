@@ -409,6 +409,93 @@ export class MatchService {
     return mapRow(result.rows[0]);
   }
 
+  /**
+   * Atomically swap (date, time, court) between two matches. Used by
+   * the Cronograma drag-and-drop UI when the admin drops match A on
+   * the slot occupied by match B — neither plain UPDATE would succeed
+   * standalone because each would crash into the other's row at the
+   * service-level conflict check. The swap reads both originals first,
+   * then issues two raw UPDATEs inside a transaction, bypassing the
+   * per-row validation that powers the regular `update()` path.
+   *
+   * Constraints we DO enforce:
+   *   · both matches must belong to the same tournament — admins can't
+   *     accidentally move a match across tenants;
+   *   · same tournament implies same ownership scope (the route is
+   *     gated by `requireMatchAccess`).
+   *
+   * What we DON'T enforce (intentional):
+   *   · team double-bookings against OTHER matches — we trust the FE
+   *     to only swap pairs the admin actually picked, and the
+   *     "Reparar horarios" tool exists for cleanup after the fact;
+   *   · the (date, time) being inside the tournament window — admins
+     *     can drag matches into days the schedule doesn't formally
+   *     cover yet.
+   * Both decisions favour flexibility — the admin sometimes needs to
+   * test layouts before saving the new tournament window.
+   */
+  async swapSlots(matchAId: string, matchBId: string): Promise<{
+    matchA: Match;
+    matchB: Match;
+  }> {
+    if (matchAId === matchBId) {
+      throw new ValidationError('Los IDs son iguales: no hay nada que intercambiar');
+    }
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // SELECT FOR UPDATE so a concurrent score write on either match
+      // gets serialised after the swap commits, preventing the rare
+      // race where two admins each drag the same card.
+      const res = await client.query(
+        `SELECT id, tournament_id, date::text AS date, time, court
+           FROM matches
+           WHERE id = ANY($1)
+           FOR UPDATE`,
+        [[matchAId, matchBId]],
+      );
+      if (res.rows.length !== 2) {
+        throw new NotFoundError('Partido');
+      }
+      const rowA = res.rows.find((r) => r.id === matchAId);
+      const rowB = res.rows.find((r) => r.id === matchBId);
+      if (!rowA || !rowB) {
+        throw new NotFoundError('Partido');
+      }
+      if (rowA.tournament_id !== rowB.tournament_id) {
+        throw new ValidationError(
+          'No se pueden intercambiar partidos de torneos distintos',
+        );
+      }
+      // Apply A → B's slot and B → A's slot. The order doesn't matter
+      // because the rows were already locked above; the two writes are
+      // independent and Postgres will only commit both together.
+      await client.query(
+        `UPDATE matches SET date = $1, time = $2, court = $3, updated_at = NOW() WHERE id = $4`,
+        [rowB.date, rowB.time, rowB.court, matchAId],
+      );
+      await client.query(
+        `UPDATE matches SET date = $1, time = $2, court = $3, updated_at = NOW() WHERE id = $4`,
+        [rowA.date, rowA.time, rowA.court, matchBId],
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    // Re-read both matches OUTSIDE the transaction so the returned
+    // payload carries the full hydrated objects (with sets, etc.)
+    // that the existing mapRow path produces.
+    const [matchA, matchB] = await Promise.all([
+      this.getById(matchAId),
+      this.getById(matchBId),
+    ]);
+    return { matchA, matchB };
+  }
+
   async updateScore(id: string, score: ScoreUpdate): Promise<Match> {
     // Ensure match exists
     const existing = await this.getById(id);
