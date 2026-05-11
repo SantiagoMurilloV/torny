@@ -213,6 +213,12 @@ export function AdminTournamentDetail() {
       // Migration 026 — preferred court for semis + finals. Send null
       // to clear the preference; undefined leaves it untouched.
       finalsCourt: updated.finalsCourt ?? null,
+      // Migration 027 — per-category match durations. Without this line
+      // the form values for "Duración por categoría" were being filled
+      // in by the admin but silently dropped here, so the backend never
+      // persisted them and the cronograma kept showing the old (or
+      // default) durations after save.
+      matchDurationsByCategory: updated.matchDurationsByCategory ?? null,
     };
     const fresh = await updateTournament(tournament.id, dto);
     setTournament(fresh);

@@ -132,6 +132,10 @@ export function AdminTournaments() {
         categoryPriority: tournament.categoryPriority,
         // Migration 026 — preferred court for semis + finals.
         finalsCourt: tournament.finalsCourt ?? null,
+        // Migration 027 — per-category match durations. Without this
+        // line the form values were filled in but silently dropped
+        // here, so the backend never persisted them.
+        matchDurationsByCategory: tournament.matchDurationsByCategory ?? null,
       };
       await updateTournament(editingTournament.id, dto);
       toast.success('Torneo actualizado correctamente');
@@ -164,6 +168,8 @@ export function AdminTournaments() {
         categoryPriority: tournament.categoryPriority,
         // Migration 026 — preferred court for semis + finals.
         finalsCourt: tournament.finalsCourt ?? null,
+        // Migration 027 — per-category match durations.
+        matchDurationsByCategory: tournament.matchDurationsByCategory ?? null,
       };
       await addTournament(dto);
       toast.success('Torneo creado correctamente');
