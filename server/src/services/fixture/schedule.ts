@@ -48,8 +48,15 @@ export function calculateMatchTimes<T extends FixtureShape>(
 ): Slot[] {
   const startTime = config?.startTime || DEFAULT_START;
   const endTime = config?.endTime || DEFAULT_END;
-  const matchDuration = config?.matchDuration || DEFAULT_MATCH_MIN;
-  const breakDuration = config?.breakDuration || DEFAULT_BREAK_MIN;
+  // Use `??` instead of `||` for the numeric knobs so an explicit 0
+  // from the admin is honoured (e.g. matchBreakMinutes=0 means "no
+  // break between matches"). The `||` operator was coercing 0 to the
+  // default 15-minute break, making the slot stride add a phantom
+  // 15-min gap that the admin never asked for. matchDuration also
+  // gets `??` for symmetry; in practice 0 is rejected upstream by the
+  // CHECK constraint (5..600) so the fallback is defence-in-depth.
+  const matchDuration = config?.matchDuration ?? DEFAULT_MATCH_MIN;
+  const breakDuration = config?.breakDuration ?? DEFAULT_BREAK_MIN;
   const courtCount = config?.courtCount || courts.length || 1;
   const dailySchedules = config?.dailySchedules ?? {};
   // Migration-025 schedule constraints. Defaulting empty/0 keeps legacy
