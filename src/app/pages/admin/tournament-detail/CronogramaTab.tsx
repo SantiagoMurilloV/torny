@@ -326,12 +326,23 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
    * over them via CSS Grid `grid-row: span N`. Drop targets on covered
    * cells are intentionally absent so a drop snaps to the next free
    * top-cell instead of mid-span.
+   *
+   * IMPORTANT: scope by the SAME filter that drives `matchesByCell`.
+   * If we covered cells based on the unfiltered match list, hidden
+   * cards would leave invisible holes in the grid (covered slot but
+   * no painting card on top), breaking drag-drop into those slots.
    */
   const coveredCells = useMemo<Set<string>>(() => {
     const out = new Set<string>();
     const timeIndex = new Map<string, number>(times.map((t, i) => [t, i]));
     for (const m of matches) {
       if (toIso(m.date) !== selectedDay) continue;
+      if (
+        selectedCategory !== 'all' &&
+        getMatchCategory(m) !== selectedCategory
+      ) {
+        continue;
+      }
       const topIdx = timeIndex.get(m.time);
       if (topIdx === undefined) continue;
       const span = spanFor(m);
@@ -342,7 +353,7 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
       }
     }
     return out;
-  }, [matches, selectedDay, times, spanFor]);
+  }, [matches, selectedDay, selectedCategory, times, spanFor]);
 
   // Matches on the selected day that don't fit in the current grid
   // (court not in the columns, or time not in the rows). Currently
@@ -938,14 +949,17 @@ function Cell({
       )}
       {matches.length === 0 ? (
         // Empty drop-target — explicit placeholder so the grid never
-        // shows a stark white void. Dashed border + ultra-faint tint
-        // reads as "slot disponible" without competing with the
-        // colourful match cards. The drag-over `dropTint` above still
-        // wraps this so the hover state remains visible.
+        // shows a stark white void. Bumped to a clearly visible dashed
+        // border + light grey fill (the previous 1.5% tint was so
+        // subtle the user reported the cells looked "null"). Hover
+        // brightens it so the drop target is unmistakable.
         <div
-          className="h-full w-full rounded-sm border border-dashed border-black/15 bg-black/[0.015]"
+          className="h-full w-full rounded-sm border-2 border-dashed border-black/20 bg-black/[0.035] flex items-center justify-center text-[9px] text-black/30 uppercase tracking-wider hover:bg-black/[0.06] transition-colors"
+          style={FONT}
           aria-hidden="true"
-        />
+        >
+          Disponible
+        </div>
       ) : (
         <div className="space-y-1 h-full flex flex-col">
           {matches.map((m) => (

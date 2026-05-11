@@ -411,15 +411,18 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
                     }}
                   >
                     {cellMatches.length === 0 ? (
-                      // Soft "empty slot" placeholder — keeps the grid
-                      // visually complete instead of leaving white voids.
-                      // The diagonal gradient is super subtle (3% opacity)
-                      // so it reads as "empty cell" without competing
-                      // with the colourful match cards.
+                      // Visible "empty slot" placeholder — bumped from
+                      // a 1.5% tint to a clearly-visible dashed cell so
+                      // the grid never reads as a white void. Gentle
+                      // hint copy ("Libre") makes the intent explicit
+                      // without competing with the match cards.
                       <div
-                        className="h-full w-full rounded-sm border border-dashed border-black/10 bg-black/[0.015]"
+                        className="h-full w-full rounded-sm border-2 border-dashed border-black/15 bg-black/[0.025] flex items-center justify-center text-[9px] text-black/30 uppercase tracking-wider"
+                        style={FONT}
                         aria-hidden="true"
-                      />
+                      >
+                        Libre
+                      </div>
                     ) : (
                       <div className="space-y-1 h-full flex flex-col">
                         {cellMatches.map((m) => (
