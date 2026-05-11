@@ -678,10 +678,17 @@ export class MatchService {
       court: string;
       created_at: string | Date;
     };
+    // Cast `date` to text so we get a stable YYYY-MM-DD string instead
+    // of pg's JS Date instance (the driver normalises DATE columns to
+    // Date objects which break our `${date}|${time}` cache keys).
+    // `time` is already a VARCHAR(10) column ("14:00") so it travels
+    // back as a plain string without any extra cast — using to_char
+    // here would crash with "function to_char(character varying, …)
+    // does not exist".
     const allRes = await pool.query<Row>(
       `SELECT id, team1_id, team2_id,
-              to_char(date, 'YYYY-MM-DD') AS date,
-              to_char(time, 'HH24:MI')    AS time,
+              date::text AS date,
+              time,
               court, created_at
        FROM matches
        WHERE tournament_id = $1
