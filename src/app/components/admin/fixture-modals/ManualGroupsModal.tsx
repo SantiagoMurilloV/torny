@@ -14,6 +14,7 @@ import {
 import { ScheduleFields } from './ScheduleFields';
 import { DEFAULT_SCHEDULE, type ScheduleConfig } from './shared';
 import { autoDistributeGroups } from '../../../lib/autoGroups';
+import { ConfirmDialog } from '../../ConfirmDialog';
 
 interface ManualGroupsModalProps {
   open: boolean;
@@ -52,6 +53,11 @@ export function ManualGroupsModal({
     ...DEFAULT_SCHEDULE,
     courtCount: defaultCourtCount || DEFAULT_SCHEDULE.courtCount,
   });
+  // When the admin tries to remove the last group AND that group has
+  // teams already assigned, we stage the group letter here so the
+  // ConfirmDialog can warn before wiping those assignments. Empty
+  // groups skip the dialog and remove immediately (no work to lose).
+  const [pendingRemoveGroup, setPendingRemoveGroup] = useState<string | null>(null);
 
   const groupNames = useMemo(
     () => Array.from({ length: groupCount }, (_, i) => String.fromCharCode(65 + i)),
@@ -91,16 +97,40 @@ export function ManualGroupsModal({
     if (groupCount < MAX_GROUPS) setGroupCount((c) => c + 1);
   };
 
-  const removeGroup = () => {
-    if (groupCount > MIN_GROUPS) {
-      const removedName = String.fromCharCode(65 + groupCount - 1);
-      setAssignments((prev) => {
-        const next = { ...prev };
-        delete next[removedName];
-        return next;
-      });
-      setGroupCount((c) => c - 1);
+  /**
+   * Actually drop the trailing group. Always removes the LAST group in
+   * the alphabet (the "−" button can only shrink from the right, since
+   * groups are addressed by sequential letters). Splitting this from
+   * the click handler lets us route through the ConfirmDialog when the
+   * group has assignments, while still no-op'ing safely if MIN_GROUPS
+   * has already been reached.
+   */
+  const performRemoveLastGroup = () => {
+    if (groupCount <= MIN_GROUPS) return;
+    const removedName = String.fromCharCode(65 + groupCount - 1);
+    setAssignments((prev) => {
+      const next = { ...prev };
+      delete next[removedName];
+      return next;
+    });
+    setGroupCount((c) => c - 1);
+  };
+
+  /**
+   * "−" click handler — confirms only when the group about to be
+   * removed has teams in it (the assignments will fall back to "Sin
+   * asignar" but still, an accidental click should not silently undo
+   * the admin's drag-and-drop work). Empty groups remove immediately.
+   */
+  const requestRemoveGroup = () => {
+    if (groupCount <= MIN_GROUPS) return;
+    const lastName = String.fromCharCode(65 + groupCount - 1);
+    const teamsInGroup = assignments[lastName]?.length ?? 0;
+    if (teamsInGroup === 0) {
+      performRemoveLastGroup();
+      return;
     }
+    setPendingRemoveGroup(lastName);
   };
 
   const canGenerate = unassignedTeams.length === 0 && teams.length > 0;
@@ -158,7 +188,7 @@ export function ManualGroupsModal({
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6">
             <div className="flex items-center gap-3">
               <span className="text-sm font-medium">Grupos:</span>
-              <Button size="sm" variant="outline" onClick={removeGroup} disabled={groupCount <= MIN_GROUPS}>
+              <Button size="sm" variant="outline" onClick={requestRemoveGroup} disabled={groupCount <= MIN_GROUPS}>
                 −
               </Button>
               <span className="text-lg font-bold w-8 text-center">{groupCount}</span>
@@ -289,6 +319,28 @@ export function ManualGroupsModal({
           </div>
         </div>
       </div>
+
+      {/* Confirm wiping a non-empty group. The dialog is rendered as a
+          sibling of the modal shell because Radix portals it to the
+          body — putting it inside the modal's max-h container would
+          let the modal's overflow clip the dialog on small screens. */}
+      <ConfirmDialog
+        open={pendingRemoveGroup !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemoveGroup(null);
+        }}
+        title={`¿Quitar Grupo ${pendingRemoveGroup ?? ''}?`}
+        description={
+          pendingRemoveGroup
+            ? `Los ${assignments[pendingRemoveGroup]?.length ?? 0} equipos asignados volverán a "Sin asignar". Podés re-arrastrarlos a otro grupo después.`
+            : ''
+        }
+        confirmLabel="Quitar grupo"
+        onConfirm={() => {
+          performRemoveLastGroup();
+          setPendingRemoveGroup(null);
+        }}
+      />
     </div>
   );
 }
