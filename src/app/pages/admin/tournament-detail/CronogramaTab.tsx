@@ -1198,29 +1198,37 @@ function MatchCard({
           </PopoverContent>
         </Popover>
       </div>
-      <div className="flex items-center gap-1.5">
-        <TeamAvatar team={match.team1} size="xs" />
-        <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
-          {match.team1.name}
-        </span>
-      </div>
-      <div className="flex items-center gap-1.5 mt-1">
-        <TeamAvatar team={match.team2} size="xs" />
-        <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
-          {match.team2.name}
-        </span>
+      {/* Teams cluster — wrapped in a flex-1 column with
+          justify-center so when the card is TALLER than its content
+          (multi-row spans for long categories) the two team rows sit
+          centered between the header and the footer instead of
+          glueing to the top with a giant blank space below. For
+          single-row cards the wrapper has minimal extra height so the
+          centering is invisible — content stays compact. */}
+      <div className="flex-1 flex flex-col justify-center gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <TeamAvatar team={match.team1} size="xs" />
+          <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
+            {match.team1.name}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <TeamAvatar team={match.team2} size="xs" />
+          <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
+            {match.team2.name}
+          </span>
+        </div>
       </div>
       {/* Time-range + duration badge — shows the EXACT start → end
           time inside the card so a 60-min cell reads "08:00 → 09:00"
           without needing to consult the row label. Duration on the
-          right side is the badge that pulls the admin's attention to
-          long categories so they understand why the card visually
-          occupies two rows in the grid. mt-auto pushes this row to
-          the bottom when the cell is taller than the card content
-          (multi-row spans). */}
+          right pulls the admin's attention to long categories so they
+          understand why the card visually occupies two rows. The
+          flex-1 wrapper above already pushes this footer to the
+          bottom — no need for `mt-auto` anymore. */}
       {(durationMin > 0 || endTime) && (
         <div
-          className="mt-auto pt-1 flex items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider text-black/70"
+          className="pt-1 flex items-center justify-between gap-1 text-[10px] font-bold uppercase tracking-wider text-black/70"
           style={FONT}
           title={endTime ? `Termina aprox ${endTime}` : 'Duración del partido'}
         >

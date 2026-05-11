@@ -534,21 +534,29 @@ function PublicMatchCard({
           </span>
         )}
       </div>
-      <div className="flex items-center gap-1.5">
-        <TeamAvatar team={match.team1} size="xs" />
-        <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
-          {match.team1.name}
-        </span>
-      </div>
-      <div className="flex items-center gap-1.5 mt-1">
-        <TeamAvatar team={match.team2} size="xs" />
-        <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
-          {match.team2.name}
-        </span>
+      {/* Teams cluster vertically centered when the card is taller
+          than its content (multi-row spans for long categories), so
+          the empty area in the middle of a stretched card disappears.
+          Footer below sits at the bottom because flex-1 here pushes
+          it down. Single-row cards stay compact since flex-1 has no
+          extra height to absorb. */}
+      <div className="flex-1 flex flex-col justify-center gap-1.5">
+        <div className="flex items-center gap-1.5">
+          <TeamAvatar team={match.team1} size="xs" />
+          <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
+            {match.team1.name}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <TeamAvatar team={match.team2} size="xs" />
+          <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
+            {match.team2.name}
+          </span>
+        </div>
       </div>
       {(durationMin > 0 || endTime) && (
         <div
-          className="mt-auto pt-1 flex items-center justify-between gap-1 text-[9px] font-bold uppercase tracking-wider text-black/60"
+          className="pt-1 flex items-center justify-between gap-1 text-[9px] font-bold uppercase tracking-wider text-black/60"
           style={FONT}
         >
           <span className="inline-flex items-center gap-0.5">
