@@ -313,16 +313,17 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
         </span>
       </div>
 
-      {/* Filters — collapsed to two dropdowns to save vertical space.
-          Day is the primary axis of the grid and lives left; category
-          is a secondary filter that hides matches whose category
-          doesn't match (does NOT touch which courts/times render).
-          On mobile the two dropdowns stack; on >=sm they sit side by
-          side at fixed-ish widths. */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex items-center gap-2 min-w-0">
+      {/* Filters — two dropdowns in ONE row, always side by side.
+          On mobile the labels collapse to icons (Día → calendar icon
+          stays inside the SelectValue placeholder) so the two pickers
+          fit even on the narrowest screens. On desktop the labels
+          come back as small uppercase captions. flex-1 splits the
+          available width 50/50 so neither picker overpowers the
+          other regardless of viewport. */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0 flex items-center gap-2">
           <span
-            className="text-xs font-bold text-black/55 uppercase tracking-wider whitespace-nowrap"
+            className="hidden sm:inline text-xs font-bold text-black/55 uppercase tracking-wider whitespace-nowrap"
             style={FONT}
           >
             Día
@@ -340,9 +341,9 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex-1 min-w-0 flex items-center gap-2">
           <span
-            className="text-xs font-bold text-black/55 uppercase tracking-wider whitespace-nowrap"
+            className="hidden sm:inline text-xs font-bold text-black/55 uppercase tracking-wider whitespace-nowrap"
             style={FONT}
           >
             Categoría
@@ -352,7 +353,7 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
               <SelectValue placeholder="Todas" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="all">Todas las categorías</SelectItem>
               {categories.map((cat) => (
                 <SelectItem key={cat} value={cat}>
                   {cat}
