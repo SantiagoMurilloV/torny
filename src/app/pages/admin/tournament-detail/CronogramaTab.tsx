@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Calendar, Filter, GripVertical } from 'lucide-react';
+import { Calendar, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Match, Tournament } from '../../../types';
 import { TeamAvatar } from '../../../components/TeamAvatar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../components/ui/select';
 import { api } from '../../../services/api';
 import { getErrorMessage } from '../../../lib/errors';
 
@@ -306,80 +313,53 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
         </span>
       </div>
 
-      {/* Filters: day + category. The day picker is the primary axis
-          of this redesign — only one day is visible at a time so the
-          court-per-column layout reads cleanly. */}
-      <div className="bg-white border border-black/10 rounded-lg p-4 space-y-3">
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Calendar className="w-4 h-4 text-black/50" />
-            <span className="text-sm font-bold text-black/70" style={FONT}>
-              DÍA
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {days.map((d) => {
-              const active = d === selectedDay;
-              return (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setSelectedDay(d)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                    active
-                      ? 'bg-black text-white border-black'
-                      : 'bg-white border-black/10 text-black/60 hover:bg-black/5'
-                  }`}
-                  style={FONT}
-                >
+      {/* Filters — collapsed to two dropdowns to save vertical space.
+          Day is the primary axis of the grid and lives left; category
+          is a secondary filter that hides matches whose category
+          doesn't match (does NOT touch which courts/times render).
+          On mobile the two dropdowns stack; on >=sm they sit side by
+          side at fixed-ish widths. */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="text-xs font-bold text-black/55 uppercase tracking-wider whitespace-nowrap"
+            style={FONT}
+          >
+            Día
+          </span>
+          <Select value={selectedDay} onValueChange={setSelectedDay}>
+            <SelectTrigger className="w-full sm:w-[220px]">
+              <SelectValue placeholder="Elegí un día" />
+            </SelectTrigger>
+            <SelectContent>
+              {days.map((d) => (
+                <SelectItem key={d} value={d}>
                   {formatDayLabel(d)}
-                </button>
-              );
-            })}
-          </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-
-        <div className="pt-3 border-t border-black/10">
-          <div className="flex items-center gap-2 mb-2">
-            <Filter className="w-4 h-4 text-black/50" />
-            <span className="text-sm font-bold text-black/70" style={FONT}>
-              CATEGORÍAS
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedCategory('all')}
-              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-                selectedCategory === 'all'
-                  ? 'bg-black text-white'
-                  : 'bg-black/5 text-black/60 hover:bg-black/10'
-              }`}
-              style={FONT}
-            >
-              Todas
-            </button>
-            {categories.map((cat) => {
-              const color = categoryColorMap.get(cat)!;
-              const isActive = selectedCategory === cat;
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                    isActive
-                      ? `${color.bg} ${color.border} ${color.text}`
-                      : 'bg-white border-black/10 text-black/60 hover:bg-black/5'
-                  }`}
-                  style={FONT}
-                >
-                  <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${color.dot}`} />
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="text-xs font-bold text-black/55 uppercase tracking-wider whitespace-nowrap"
+            style={FONT}
+          >
+            Categoría
+          </span>
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="w-full sm:w-[220px]">
+              <SelectValue placeholder="Todas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
                   {cat}
-                </button>
-              );
-            })}
-          </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
