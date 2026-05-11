@@ -113,6 +113,13 @@ export interface Tournament {
   deadTimeBlocks?: Array<{ start: string; end: string }>;
   categoryPriority?: string[];
   /**
+   * Preferred court for semifinals and finals (migration 026). The
+   * bracket materializer tries to pin "semi" / "final" rounds onto
+   * this court before falling back to the normal rotation. NULL /
+   * undefined means "no preference" — the legacy rotation wins.
+   */
+  finalsCourt?: string;
+  /**
    * Decorated by the SELECT in tournament.service (LIST_SELECT). The
    * home cards / public detail use these instead of the static
    * `teamsCount` cap so the numbers reflect reality.
@@ -302,6 +309,9 @@ export interface CreateTournamentDto {
   deadTimeBlocks?: Array<{ start: string; end: string }>;
   /** See `Tournament.categoryPriority` — ordered category names. */
   categoryPriority?: string[];
+  /** See `Tournament.finalsCourt` — preferred court for semis + finals.
+   *  `null` clears the column; `undefined` leaves it untouched. */
+  finalsCourt?: string | null;
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

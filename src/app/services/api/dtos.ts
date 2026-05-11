@@ -60,6 +60,10 @@ export interface CreateTournamentDto {
   maxMatchesPerDay?: number;
   deadTimeBlocks?: Array<{ start: string; end: string }>;
   categoryPriority?: string[];
+  /** Preferred court for semis + finals — migration 026. `null`
+   *  clears the column (back to "no preference"); `undefined` leaves
+   *  it untouched on PATCH. */
+  finalsCourt?: string | null;
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

@@ -155,6 +155,9 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
     maxMatchesPerDay: t.maxMatchesPerDay ?? 0,
     deadTimeBlocks: t.deadTimeBlocks ?? [],
     categoryPriority: t.categoryPriority ?? [],
+    // Migration 026 — undefined when no preference, so the form's
+    // <select> can default to "Sin preferencia".
+    finalsCourt: t.finalsCourt ?? undefined,
     enrolledCount: t.enrolledCount,
     matchesCount: t.matchesCount,
   };

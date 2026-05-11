@@ -118,6 +118,9 @@ export function useTournamentForm({
       maxMatchesPerDay: tournament.maxMatchesPerDay ?? 0,
       deadTimeBlocks: tournament.deadTimeBlocks ?? [],
       categoryPriority: tournament.categoryPriority ?? [],
+      // Migration 026 — empty string represents "Sin preferencia". Be
+      // tolerant of legacy rows that don't have the field at all.
+      finalsCourt: tournament.finalsCourt ?? '',
     });
     setCoverFile(null);
     setCoverPreview(tournament.coverImage ?? null);
@@ -352,6 +355,11 @@ export function useTournamentForm({
         maxMatchesPerDay: formData.maxMatchesPerDay,
         deadTimeBlocks: formData.deadTimeBlocks.length > 0 ? formData.deadTimeBlocks : undefined,
         categoryPriority: formData.categoryPriority.length > 0 ? formData.categoryPriority : undefined,
+        // Migration 026 — empty string in the form means "Sin
+        // preferencia". Send undefined so the API doesn't overwrite
+        // the column with an empty string (the BE collapses '' to NULL
+        // anyway but undefined is the cleaner contract).
+        finalsCourt: formData.finalsCourt.trim() || undefined,
       };
 
       try {

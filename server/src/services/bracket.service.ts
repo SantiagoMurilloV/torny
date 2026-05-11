@@ -637,13 +637,43 @@ export class BracketGenerator {
     const pool = getPool();
 
     const tournRes = await pool.query(
-      'SELECT id, courts, start_date FROM tournaments WHERE id = $1',
+      'SELECT id, courts, start_date, finals_court FROM tournaments WHERE id = $1',
       [tournamentId],
     );
     if (tournRes.rows.length === 0) return empty;
     const tournament = tournRes.rows[0];
     const courts: string[] = (tournament.courts as string[] | null) ?? [];
     const courtNames = courts.length > 0 ? courts : ['Cancha 1'];
+    // Migration 026 — preferred court for "semi" / "final" rounds. NULL
+    // means "no preference" → the rotation below wins. We keep it
+    // optional so a misconfigured value (court no longer in the
+    // tournament's courts array) silently falls back to rotation
+    // instead of crashing the materializer.
+    const rawFinalsCourt =
+      (tournament.finals_court as string | null | undefined) ?? null;
+    const finalsCourt =
+      rawFinalsCourt && courtNames.includes(rawFinalsCourt)
+        ? rawFinalsCourt
+        : null;
+    /**
+     * Returns true when the bracket round name maps to a semi or final
+     * round. The `round` column is free-form text (e.g.
+     * "Mini Femenino|gold|final", "Cuartos · Oro", "Tercer puesto") so
+     * we just look for the substrings 'semi' / 'final' case-insensitive.
+     * "Tercer puesto" / "tercer-puesto" is NOT considered a final — the
+     * admin reserves the preferred court for THE final, not the
+     * 3rd-place play-off.
+     */
+    const isFinalsRound = (round: string): boolean => {
+      const normalized = round.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (normalized.includes('tercer')) return false;
+      return normalized.includes('semi') || normalized.includes('final');
+    };
+    // Track which (date, time) pairs have already pinned a match to
+    // the finals court within this materializer pass. Lets us fall
+    // back to rotation when two semis would otherwise want the same
+    // court at the same minute.
+    const finalsCourtBookings = new Set<string>();
 
     // Snapshot every bracket row for the tournament so we can report
     // counters even when nothing materialized.
@@ -674,13 +704,32 @@ export class BracketGenerator {
     }
 
     // Existing materialized matches keyed by their bracket pointer so we
-    // can detect "already there" vs "needs team re-sync".
+    // can detect "already there" vs "needs team re-sync". We also pre-
+    // populate finalsCourtBookings with any existing match on the
+    // finals court so the new placements never collide with what the
+    // admin already has scheduled there.
     const existRes = await pool.query(
-      `SELECT id, bracket_match_id, team1_id, team2_id, status
+      `SELECT id, bracket_match_id, team1_id, team2_id, status,
+              date::text AS date, time, court
          FROM matches
          WHERE tournament_id = $1 AND bracket_match_id IS NOT NULL`,
       [tournamentId],
     );
+    if (finalsCourt) {
+      // Seed bookings with rows that already live on the finals court.
+      // The materializer below will skip the preferred-court branch for
+      // any (date, time) already in the set, regardless of who placed
+      // the match — admin manual edit, group regeneration, etc.
+      const allFinalsCourtRes = await pool.query(
+        `SELECT date::text AS date, time
+           FROM matches
+           WHERE tournament_id = $1 AND court = $2`,
+        [tournamentId, finalsCourt],
+      );
+      for (const r of allFinalsCourtRes.rows) {
+        finalsCourtBookings.add(`${r.date as string}|${r.time as string}`);
+      }
+    }
     const existing = new Map<
       string,
       { id: string; team1_id: string; team2_id: string; status: string }
@@ -770,7 +819,29 @@ export class BracketGenerator {
         }
         const dateStr = dateToSlug(cursorDate);
         const time = formatHHMM(cursorMinutes);
-        const court = courtNames[courtIdx % courtNames.length];
+        // Migration 026 — pick the finals court when the round is a
+        // semi or final AND no other match has already claimed that
+        // court at this minute. Otherwise stick to the rotation so two
+        // bracket-semis don't get pinned to the same court at the same
+        // time. We also DON'T bump courtIdx when we pin to the finals
+        // court — that way the rotation slot stays available for the
+        // NEXT non-finals match in the same minute.
+        const slotKey = `${dateStr}|${time}`;
+        const preferFinalsCourt =
+          finalsCourt !== null &&
+          isFinalsRound(round) &&
+          !finalsCourtBookings.has(slotKey);
+        const court = preferFinalsCourt
+          ? finalsCourt!
+          : courtNames[courtIdx % courtNames.length];
+        // Mark the slot as booked on the finals court whenever the
+        // chosen court IS the finals court — covers both the pinned
+        // path AND the case where a non-finals match happens to rotate
+        // onto the finals court (which would otherwise let a later
+        // semi at the same minute think the court was free).
+        if (finalsCourt !== null && court === finalsCourt) {
+          finalsCourtBookings.add(slotKey);
+        }
 
         const phase = bracketRoundToMatchPhase(round);
 
@@ -782,10 +853,17 @@ export class BracketGenerator {
         );
         matchesCreated++;
 
-        courtIdx++;
-        // After filling every court at this minute, jump forward.
-        if (courtIdx % courtNames.length === 0) {
-          cursorMinutes += DEFAULT_MATCH_MIN + DEFAULT_BREAK_MIN;
+        // When we pinned a semi/final to the finals court we DON'T
+        // bump the rotation counter — the rotation slot at this minute
+        // is still free for a regular bracket match. We DO advance the
+        // time cursor when every rotation court has been used at this
+        // minute, which still triggers correctly because non-finals
+        // placements always increment courtIdx.
+        if (!preferFinalsCourt) {
+          courtIdx++;
+          if (courtIdx % courtNames.length === 0) {
+            cursorMinutes += DEFAULT_MATCH_MIN + DEFAULT_BREAK_MIN;
+          }
         }
       }
 

@@ -28,12 +28,15 @@ export function ScheduleField({
   dailySchedules,
   categoryPriority,
   availableCategories,
+  finalsCourt,
+  availableCourts,
   onMatchDurationChange,
   onMatchBreakChange,
   onMaxMatchesPerDayChange,
   onDeadTimeBlocksChange,
   onDailyScheduleChange,
   onCategoryPriorityChange,
+  onFinalsCourtChange,
 }: {
   matchDurationMinutes: number;
   matchBreakMinutes: number;
@@ -42,12 +45,18 @@ export function ScheduleField({
   dailySchedules: DailyScheduleEntry[];
   categoryPriority: string[];
   availableCategories: string[];
+  /** Migration 026 — current preference. '' means "Sin preferencia". */
+  finalsCourt: string;
+  /** Court names from the tournament's `courts` array — feeds the
+   *  finals-court <select> options. */
+  availableCourts: string[];
   onMatchDurationChange: (n: number) => void;
   onMatchBreakChange: (n: number) => void;
   onMaxMatchesPerDayChange: (n: number) => void;
   onDeadTimeBlocksChange: (blocks: Array<{ start: string; end: string }>) => void;
   onDailyScheduleChange: (index: number, patch: Partial<DailyScheduleEntry>) => void;
   onCategoryPriorityChange: (order: string[]) => void;
+  onFinalsCourtChange: (court: string) => void;
 }) {
   // Format a YYYY-MM-DD string as "vie 15 may" for the row label. Uses
   // the browser's es-CO locale so the day-of-week is short + Spanish.
@@ -133,6 +142,34 @@ export function ScheduleField({
             0 = sin límite. Útil para no sobrecargar un día.
           </p>
         </div>
+      </div>
+
+      {/* Finals court — admin's pick of the "best" court for the
+          semis + final. The bracket materializer pins matches whose
+          round name contains "semi" or "final" to this court (with
+          a fallback to the rotation when the slot is already taken
+          by another bracket match). */}
+      <div>
+        <label className="block text-sm font-bold mb-1" style={FONT}>
+          Localidad de semifinales y finales
+        </label>
+        <select
+          value={finalsCourt}
+          onChange={(e) => onFinalsCourtChange(e.target.value)}
+          className="w-full px-3 py-2 bg-white border-2 border-black/10 rounded-sm focus:outline-none focus:border-spk-red"
+        >
+          <option value="">Sin preferencia (rotación normal)</option>
+          {availableCourts.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <p className="text-[11px] text-black/45 mt-1">
+          Cancha donde se preferirá programar las semis y finales del
+          cuadro de eliminación. Si está ocupada en ese horario por otro
+          partido del cuadro, cae a la rotación normal.
+        </p>
       </div>
 
       {/* Dead-time blocks */}

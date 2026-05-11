@@ -81,6 +81,12 @@ export interface TournamentFormState {
   deadTimeBlocks: Array<{ start: string; end: string }>;
   /** Category play order — first in array plays earliest in the day. */
   categoryPriority: string[];
+  /**
+   * Preferred court for semifinals and finals (migration 026). The
+   * <select> writes the literal court name; '' means "Sin preferencia"
+   * which the API converts to NULL.
+   */
+  finalsCourt: string;
 }
 
 export const DEFAULT_COURTS: CourtEntry[] = [
@@ -114,5 +120,6 @@ export function emptyForm(): TournamentFormState {
     maxMatchesPerDay: 0,
     deadTimeBlocks: [],
     categoryPriority: [],
+    finalsCourt: '',
   };
 }

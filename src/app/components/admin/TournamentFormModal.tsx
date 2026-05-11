@@ -273,6 +273,11 @@ export function TournamentFormModal({
         dailySchedules={form.formData.dailySchedules}
         categoryPriority={form.formData.categoryPriority}
         availableCategories={form.formData.categories}
+        // Migration 026 — preferred court for semis + finals. Sourced
+        // from the form's own courts list so the dropdown stays in
+        // sync as the admin renames or adds courts.
+        finalsCourt={form.formData.finalsCourt}
+        availableCourts={form.formData.courts.map((c) => c.name).filter((n) => n.trim() !== '')}
         onMatchDurationChange={(n) => form.patch({ matchDurationMinutes: n })}
         onMatchBreakChange={(n) => form.patch({ matchBreakMinutes: n })}
         onMaxMatchesPerDayChange={(n) => form.patch({ maxMatchesPerDay: n })}
@@ -284,6 +289,7 @@ export function TournamentFormModal({
           form.patch({ dailySchedules: next });
         }}
         onCategoryPriorityChange={(order) => form.patch({ categoryPriority: order })}
+        onFinalsCourtChange={(court) => form.patch({ finalsCourt: court })}
       />
 
       <RegulationField

@@ -184,6 +184,13 @@ export interface Tournament {
   /** Category play order — first in array plays earliest each day. */
   categoryPriority?: string[];
   /**
+   * Preferred court for semifinal + final bracket matches (migration
+   * 026). When set, the bracket materializer pins those rounds onto
+   * this court instead of the normal rotation. Empty / undefined =
+   * no preference.
+   */
+  finalsCourt?: string;
+  /**
    * Real counts populated by the backend SELECT (LIST_SELECT) — used by
    * the home cards and the public detail hero so the numbers reflect
    * actual enrollment / scheduled matches instead of the cap configured

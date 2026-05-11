@@ -210,6 +210,9 @@ export function AdminTournamentDetail() {
       maxMatchesPerDay: updated.maxMatchesPerDay,
       deadTimeBlocks: updated.deadTimeBlocks,
       categoryPriority: updated.categoryPriority,
+      // Migration 026 — preferred court for semis + finals. Send null
+      // to clear the preference; undefined leaves it untouched.
+      finalsCourt: updated.finalsCourt ?? null,
     };
     const fresh = await updateTournament(tournament.id, dto);
     setTournament(fresh);

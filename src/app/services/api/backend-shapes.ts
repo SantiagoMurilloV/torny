@@ -56,6 +56,8 @@ export interface BackendTournament {
   maxMatchesPerDay?: number;
   deadTimeBlocks?: Array<{ start: string; end: string }>;
   categoryPriority?: string[];
+  /** Preferred court for semis + finals — migration 026. */
+  finalsCourt?: string;
   /** Real counts decorated by the LIST_SELECT in tournament.service. */
   enrolledCount?: number;
   matchesCount?: number;

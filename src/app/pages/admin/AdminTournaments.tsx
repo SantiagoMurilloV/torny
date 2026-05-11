@@ -130,6 +130,8 @@ export function AdminTournaments() {
         maxMatchesPerDay: tournament.maxMatchesPerDay,
         deadTimeBlocks: tournament.deadTimeBlocks,
         categoryPriority: tournament.categoryPriority,
+        // Migration 026 — preferred court for semis + finals.
+        finalsCourt: tournament.finalsCourt ?? null,
       };
       await updateTournament(editingTournament.id, dto);
       toast.success('Torneo actualizado correctamente');
@@ -160,6 +162,8 @@ export function AdminTournaments() {
         maxMatchesPerDay: tournament.maxMatchesPerDay,
         deadTimeBlocks: tournament.deadTimeBlocks,
         categoryPriority: tournament.categoryPriority,
+        // Migration 026 — preferred court for semis + finals.
+        finalsCourt: tournament.finalsCourt ?? null,
       };
       await addTournament(dto);
       toast.success('Torneo creado correctamente');

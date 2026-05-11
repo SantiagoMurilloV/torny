@@ -1,0 +1,35 @@
+-- Migration 026: persist the admin's preference for which court should
+-- host semifinals and finals.
+--
+-- Rationale: at every real tournament one court turns out to be "the
+-- main one" — better surface, more space for the audience, closer to
+-- the awards table, or simply where the cameras live. The admin wants
+-- to make sure the big matches (semis + finals) actually land on that
+-- court instead of whichever court the round-robin scheduler happened
+-- to rotate through last.
+--
+-- Column:
+--   finals_court — nullable VARCHAR(255). NULL means "no preference,
+--                  use the normal court rotation". When set, the
+--                  bracket materializer (server/src/services/bracket.
+--                  service.ts → materializePendingBracketMatches) tries
+--                  to assign this court to any bracket-stage match
+--                  whose round name contains "semi" or "final" (case-
+--                  insensitive). If the court is already booked at the
+--                  chosen slot we fall back to the rotation so two
+--                  semis don't collide on the same court at the same
+--                  time.
+--
+-- Why VARCHAR vs FK to a courts table: courts live as a TEXT[] column
+-- on tournaments today (no separate table), so we keep the same
+-- representation here — the form's dropdown sources its options from
+-- `tournaments.courts` and writes the literal court name. No JOIN
+-- needed for reads.
+--
+-- Why nullable: the form treats "Sin preferencia" as the default, so
+-- existing tournaments need NULL to mean "no change" — we don't want
+-- to retroactively pin every running tournament's finals to a court
+-- the admin never picked.
+
+ALTER TABLE tournaments
+  ADD COLUMN IF NOT EXISTS finals_court VARCHAR(255);

@@ -133,6 +133,9 @@ function mapRow(row: Record<string, unknown>): Tournament {
     categoryPriority: Array.isArray(row.category_priority)
       ? (row.category_priority as string[])
       : [],
+    // Migration 026 — preferred court for semis + finals. NULL on
+    // legacy rows means "no preference" so we surface undefined.
+    finalsCourt: (row.finals_court as string | null) ?? undefined,
     enrolledCount:
       typeof enrolledRaw === 'number'
         ? enrolledRaw
@@ -370,9 +373,18 @@ export class TournamentService {
     const categoryPriority = Array.isArray(data.categoryPriority)
       ? data.categoryPriority
       : [];
+    // Migration 026 — preferred court for semis/finals. We store the
+    // raw court name so the FE dropdown (sourced from
+    // tournaments.courts) writes back exactly what it read. Empty /
+    // null collapses to NULL so "Sin preferencia" doesn't leave an
+    // empty string masquerading as a court name.
+    const finalsCourt =
+      typeof data.finalsCourt === 'string' && data.finalsCourt.trim() !== ''
+        ? data.finalsCourt.trim()
+        : null;
     const result = await pool.query(
-      `INSERT INTO tournaments (name, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
+      `INSERT INTO tournaments (name, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority, finals_court)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
        RETURNING *`,
       [
         data.name,
@@ -403,6 +415,7 @@ export class TournamentService {
         maxMatchesPerDay,
         JSON.stringify(deadTimeBlocks),
         categoryPriority,
+        finalsCourt,
       ],
     );
     return mapRow(result.rows[0]);
@@ -463,6 +476,8 @@ export class TournamentService {
       maxMatchesPerDay: 'max_matches_per_day',
       deadTimeBlocks: 'dead_time_blocks',
       categoryPriority: 'category_priority',
+      // Migration 026 — preferred court for semis + finals.
+      finalsCourt: 'finals_court',
     };
 
     for (const [key, column] of Object.entries(columnMap)) {
@@ -503,6 +518,14 @@ export class TournamentService {
           // TEXT[] in Postgres — pg serialises arrays natively, no JSON
           // wrap. Non-array / null collapses to an empty array.
           stored = Array.isArray(rawValue) ? rawValue : [];
+        } else if (key === 'finalsCourt') {
+          // Empty / whitespace / null = "Sin preferencia" → NULL in DB.
+          // Otherwise keep the raw string so the bracket materializer
+          // can compare it directly against tournaments.courts entries.
+          stored =
+            typeof rawValue === 'string' && rawValue.trim() !== ''
+              ? rawValue.trim()
+              : null;
         } else if (key === 'regulationText' || key === 'regulationPdf') {
           // Normaliza '' → null para que "limpiar" desde el form deje
           // la columna realmente vacía en vez de un string vacío. El
