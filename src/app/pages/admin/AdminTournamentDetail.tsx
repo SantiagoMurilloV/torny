@@ -24,6 +24,7 @@ import { InfoTab } from './tournament-detail/InfoTab';
 import { TeamsTab } from './tournament-detail/TeamsTab';
 import { FixturesTab } from './tournament-detail/FixturesTab';
 import { MatchesTab } from './tournament-detail/MatchesTab';
+import { CronogramaTab } from './tournament-detail/CronogramaTab';
 import { getErrorMessage } from '../../lib/errors';
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -33,7 +34,7 @@ const FORMAT_LABELS: Record<string, string> = {
   league: 'Liga (Todos contra Todos)',
 };
 
-const VALID_TABS = ['info', 'teams', 'fixtures', 'matches'] as const;
+const VALID_TABS = ['info', 'teams', 'fixtures', 'matches', 'cronograma'] as const;
 type TabId = (typeof VALID_TABS)[number];
 
 const SECTION_TITLE: Record<TabId, string> = {
@@ -41,6 +42,7 @@ const SECTION_TITLE: Record<TabId, string> = {
   teams: 'Inscripción equipos y plantel',
   fixtures: 'Cruces',
   matches: 'Partidos',
+  cronograma: 'Cronograma',
 };
 
 /**
@@ -500,6 +502,10 @@ export function AdminTournamentDetail() {
             // court) for each moved match shows up without a page reload.
             onMatchesReplaced={(fresh) => setMatches(fresh)}
           />
+        </TabsContent>
+
+        <TabsContent value="cronograma">
+          <CronogramaTab matches={matches} />
         </TabsContent>
       </Tabs>
     </div>
