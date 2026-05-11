@@ -65,6 +65,26 @@ export function calculateMatchTimes<T extends FixtureShape>(
   const categoryPriority = Array.isArray(config?.categoryPriority)
     ? config!.categoryPriority!
     : [];
+  // Migration 027 — per-category overrides for match length. When a
+  // fixture's category appears here, that match's slot length uses the
+  // override instead of `matchDuration`. The slot itself advances by
+  // the MAX of the durations of every match placed in it (since all
+  // courts share a single time row in this scheduler), so a long
+  // Senior match won't bleed into the next Sub-13 slot.
+  const durationsByCategory: Record<string, number> =
+    config?.matchDurationsByCategory && typeof config.matchDurationsByCategory === 'object'
+      ? config.matchDurationsByCategory
+      : {};
+  const overrideMinutes = Object.values(durationsByCategory).filter(
+    (n): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0,
+  );
+  // The window-fits and dead-time checks must use the SHORTEST possible
+  // match duration so a slot near the day's end doesn't get skipped just
+  // because a Senior match wouldn't fit — a Sub-13 still might.
+  const minSlotMinutes =
+    overrideMinutes.length > 0
+      ? Math.min(matchDuration, ...overrideMinutes)
+      : matchDuration;
 
   const courtNames: string[] = [];
   for (let i = 0; i < courtCount; i++) {
@@ -109,7 +129,10 @@ export function calculateMatchTimes<T extends FixtureShape>(
     if (s >= 0 && e > s) deadRanges.push({ startMin: s, endMin: e });
   }
   const slotIntersectsDeadTime = (slotStartMin: number): boolean => {
-    const slotEndMin = slotStartMin + matchDuration;
+    // Use the SHORTEST possible duration so a slot whose tail only
+    // overlaps a dead block when filled with a long match still gets
+    // tried first (a short Sub-13 could fit cleanly).
+    const slotEndMin = slotStartMin + minSlotMinutes;
     for (const r of deadRanges) {
       if (slotStartMin < r.endMin && slotEndMin > r.startMin) return true;
     }
@@ -123,6 +146,15 @@ export function calculateMatchTimes<T extends FixtureShape>(
     if (!phase) return '';
     const idx = phase.indexOf('|');
     return idx === -1 ? phase : phase.substring(0, idx);
+  };
+
+  // Per-fixture duration resolver. Falls back to the global `matchDuration`
+  // when the fixture's category isn't overridden (or has no phase at all).
+  const durationForPhase = (phase: string | undefined): number => {
+    if (!phase) return matchDuration;
+    const cat = categoryOf(phase);
+    const override = durationsByCategory[cat];
+    return typeof override === 'number' && override > 0 ? override : matchDuration;
   };
   // Map each prioritised category to its rank (lower = earlier slot);
   // anything not listed gets a sentinel rank that lands AFTER the
@@ -166,7 +198,10 @@ export function calculateMatchTimes<T extends FixtureShape>(
   while (unscheduled.length > 0 && iterations < maxIterations) {
     iterations++;
 
-    if (currentMinutes + matchDuration > currentWindow.endMin) {
+    // Use the SHORTEST possible match duration for the day-fits check
+    // so a slot near the day's end isn't skipped just because a long
+    // category wouldn't fit — a short Sub-13 still might.
+    if (currentMinutes + minSlotMinutes > currentWindow.endMin) {
       advanceToNextDay();
       continue;
     }
@@ -183,7 +218,7 @@ export function calculateMatchTimes<T extends FixtureShape>(
     // configured block (lunch, ceremony, etc.) we advance past it
     // without trying to assign matches.
     if (slotIntersectsDeadTime(currentMinutes)) {
-      currentMinutes += matchDuration + breakDuration;
+      currentMinutes += minSlotMinutes + breakDuration;
       continue;
     }
 
@@ -191,6 +226,12 @@ export function calculateMatchTimes<T extends FixtureShape>(
     const dateStr = currentDateStr;
     const busyTeams = new Set<string>();
     let assignedInSlot = 0;
+    // Track the longest match placed in this shared slot so the next
+    // slot starts at currentMinutes + maxPlacedDuration + breakDuration.
+    // All courts in this scheduler share a single time row, so a 90-min
+    // Senior + 45-min Sub-13 in the same slot still cost 90 min of
+    // calendar time. (A future per-court timeline would do better.)
+    let maxPlacedDuration = 0;
 
     for (let c = 0; c < courtCount && unscheduled.length > 0; c++) {
       // Stop placing on this slot once the per-day cap fires mid-slot
@@ -199,9 +240,22 @@ export function calculateMatchTimes<T extends FixtureShape>(
       if (maxMatchesPerDay > 0 && matchesAssignedToday >= maxMatchesPerDay) {
         break;
       }
-      const candidateIdx = unscheduled.findIndex(
-        (f) => !busyTeams.has(f.team1Id) && !busyTeams.has(f.team2Id),
+      // Prefer a candidate whose duration still fits in the day's
+      // remaining window; if none fits, fall back to ANY candidate so
+      // we don't deadlock.
+      const remainingInDay = currentWindow.endMin - currentMinutes;
+      const fitsIdx = unscheduled.findIndex(
+        (f) =>
+          !busyTeams.has(f.team1Id) &&
+          !busyTeams.has(f.team2Id) &&
+          durationForPhase(f.phase) <= remainingInDay,
       );
+      const candidateIdx =
+        fitsIdx !== -1
+          ? fitsIdx
+          : unscheduled.findIndex(
+              (f) => !busyTeams.has(f.team1Id) && !busyTeams.has(f.team2Id),
+            );
       if (candidateIdx === -1) break;
 
       const candidate = unscheduled.splice(candidateIdx, 1)[0];
@@ -210,9 +264,16 @@ export function calculateMatchTimes<T extends FixtureShape>(
       results[candidate.__idx] = { date: dateStr, time: timeStr, court: courtNames[c] };
       assignedInSlot++;
       matchesAssignedToday++;
+      const placedDur = durationForPhase(candidate.phase);
+      if (placedDur > maxPlacedDuration) maxPlacedDuration = placedDur;
     }
 
-    currentMinutes += matchDuration + breakDuration;
+    // Advance by the longest duration placed in the slot (so a Senior
+    // doesn't bleed into a Sub-13's start time on the next row), or by
+    // the global default when nothing was placed (then we'll roll the
+    // day below).
+    currentMinutes +=
+      (maxPlacedDuration > 0 ? maxPlacedDuration : matchDuration) + breakDuration;
 
     // If the slot was completely empty AND there are still matches to
     // place, bump to the next day so we don't spin endlessly.

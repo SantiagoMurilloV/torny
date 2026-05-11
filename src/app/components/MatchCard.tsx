@@ -1,9 +1,10 @@
-import { Match } from '../types';
-import { Clock, MapPin, User, ArrowRight } from 'lucide-react';
+import { Match, Tournament } from '../types';
+import { Clock, MapPin, User, ArrowRight, Timer } from 'lucide-react';
 import { motion } from 'motion/react';
 import { TeamAvatar } from './TeamAvatar';
 import { LiveBadge } from './LiveBadge';
 import { formatShortDate } from '../lib/format';
+import { getMatchDurationMinutes, getMatchEndTime } from '../lib/matchDuration';
 
 interface MatchCardProps {
   match: Match;
@@ -12,6 +13,17 @@ interface MatchCardProps {
   onClick?: () => void;
   /** Optional tournament label shown in the footer (e.g. "Copa del Eje · Grupo A"). */
   tournamentLabel?: string;
+  /**
+   * Tournament whose schedule defaults drive the EXPECTED match
+   * duration shown on upcoming / live cards. Optional so legacy
+   * callers without the tournament loaded keep working — they just
+   * won't see the duration badge for unfinished matches. Completed
+   * matches always show the actual `match.duration` regardless.
+   */
+  tournament?: Pick<
+    Tournament,
+    'matchDurationMinutes' | 'matchDurationsByCategory'
+  >;
 }
 
 /**
@@ -21,10 +33,17 @@ interface MatchCardProps {
  * On screens <520px the body grid collapses vertically so team names
  * don't get squeezed next to the score — see `.spk-match-*` rules.
  */
-export function MatchCard({ match, variant = 'default', onClick, tournamentLabel }: MatchCardProps) {
+export function MatchCard({ match, variant = 'default', onClick, tournamentLabel, tournament }: MatchCardProps) {
   const isLive = match.status === 'live';
   const isCompleted = match.status === 'completed';
   const isUpcoming = match.status === 'upcoming';
+  // Expected duration + end-time string for the badge on
+  // upcoming/live cards. Completed cards continue to use the real
+  // `match.duration` lower in the footer.
+  const expectedDuration = tournament
+    ? getMatchDurationMinutes(match, tournament)
+    : null;
+  const expectedEnd = tournament ? getMatchEndTime(match, tournament) : '';
 
   if (variant === 'compact') {
     return (
@@ -276,6 +295,23 @@ export function MatchCard({ match, variant = 'default', onClick, tournamentLabel
               style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
             >
               {match.duration} min
+            </span>
+          )}
+          {!isCompleted && expectedDuration && (
+            <span
+              className="inline-flex items-center gap-1.5 font-bold bg-black/5 px-2 py-0.5 rounded-sm tabular-nums"
+              style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+              title={
+                expectedEnd
+                  ? `Duración estimada — termina aprox ${expectedEnd}`
+                  : 'Duración estimada del partido'
+              }
+            >
+              <Timer className="w-3 h-3" aria-hidden="true" />
+              {expectedDuration}&prime;
+              {expectedEnd && (
+                <span className="opacity-60 font-normal">→ {expectedEnd}</span>
+              )}
             </span>
           )}
           {tournamentLabel && (

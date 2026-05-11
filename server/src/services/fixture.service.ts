@@ -683,6 +683,13 @@ export class FixtureGenerator {
         | string[]
         | null
         | undefined;
+      // Migration 027 — per-category match duration overrides. Same
+      // fallback pattern: modal value beats tournament value beats
+      // global default.
+      const tournamentDurationsByCategory = tournament.match_durations_by_category as
+        | Record<string, number>
+        | null
+        | undefined;
       const effectiveSchedule: ScheduleConfig = {
         ...(schedule ?? {}),
         matchDuration:
@@ -700,6 +707,8 @@ export class FixtureGenerator {
           schedule?.deadTimeBlocks ?? tournamentDeadTimeBlocks ?? undefined,
         categoryPriority:
           schedule?.categoryPriority ?? tournamentCategoryPriority ?? undefined,
+        matchDurationsByCategory:
+          schedule?.matchDurationsByCategory ?? tournamentDurationsByCategory ?? undefined,
       } as ScheduleConfig;
       const slots = calculateMatchTimes(matchFixtures, startDate, courts, effectiveSchedule);
 

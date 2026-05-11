@@ -1,0 +1,34 @@
+-- Migration 027: persist per-category match durations.
+--
+-- Until now `match_duration_minutes` was a single global value applied
+-- to every match in the tournament regardless of category. Real-world
+-- tournaments are mixed (Sub-13, Sub-15, Senior, etc.) and each
+-- category has its own match length expectation: a Sub-13 best-of-3
+-- might run 40-50 minutes while a Senior best-of-5 can stretch to 90.
+-- Forcing a single value either wastes court time on short matches or
+-- bleeds long matches into the next slot.
+--
+-- Column:
+--   match_durations_by_category — JSONB object keyed by category name
+--                                 with the shape
+--                                 { "<category>": <minutes> }.
+--                                 Categories NOT in the object fall
+--                                 back to `match_duration_minutes`
+--                                 (the global default), and that
+--                                 falls back to 60 if also missing.
+--                                 Empty object {} (the default) means
+--                                 "no overrides — use the global for
+--                                 everything", so existing tournaments
+--                                 keep behaving exactly like before.
+--
+-- Why JSONB instead of a child table:
+--   · Categories live as a TEXT[] on tournaments today; there's no
+--     separate `categories` table to FK against.
+--   · A tournament rarely has more than ~6 categories, so the JSONB
+--     overhead is minimal and we never need to query "all tournaments
+--     with category X having duration Y".
+--   · The form renders one row per category; reading the whole map at
+--     once is the dominant pattern.
+
+ALTER TABLE tournaments
+  ADD COLUMN IF NOT EXISTS match_durations_by_category JSONB NOT NULL DEFAULT '{}'::jsonb;

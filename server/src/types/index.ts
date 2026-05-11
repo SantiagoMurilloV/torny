@@ -120,6 +120,15 @@ export interface Tournament {
    */
   finalsCourt?: string;
   /**
+   * Per-category match duration overrides (migration 027). Keyed by
+   * category name with the value in MINUTES. Categories not present
+   * fall back to `matchDurationMinutes`, which falls back to 60. The
+   * scheduler reads this when computing each match's slot length so
+   * mixed tournaments (Sub-13 short matches alongside Senior long
+   * matches) don't have to force a single global value.
+   */
+  matchDurationsByCategory?: Record<string, number>;
+  /**
    * Decorated by the SELECT in tournament.service (LIST_SELECT). The
    * home cards / public detail use these instead of the static
    * `teamsCount` cap so the numbers reflect reality.
@@ -312,6 +321,12 @@ export interface CreateTournamentDto {
   /** See `Tournament.finalsCourt` — preferred court for semis + finals.
    *  `null` clears the column; `undefined` leaves it untouched. */
   finalsCourt?: string | null;
+  /**
+   * See `Tournament.matchDurationsByCategory` — keyed by category, value
+   * in minutes. Send `null` or `{}` to clear all overrides. Categories
+   * not present fall back to `matchDurationMinutes`.
+   */
+  matchDurationsByCategory?: Record<string, number> | null;
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

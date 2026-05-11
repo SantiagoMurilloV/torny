@@ -30,6 +30,27 @@ export function categoryOfMatchPhase(phase: string): string {
   return afterFirstSegment(phase).trim();
 }
 
+/**
+ * Resolve the category of a match in a single call, consulting both
+ * `match.group` ("Cat|A") and `match.phase` ("Grupos|Cat") since
+ * different match types fill different fields:
+ *   · group-stage matches always have `group`.
+ *   · bracket matches usually only have `phase`.
+ *   · single-category legacy matches may have neither separator.
+ *
+ * Returns '' when no category can be derived so callers can decide
+ * whether to fall back to a global default or a "General" bucket.
+ */
+export function categoryOfMatch(
+  m: { group?: string; phase?: string },
+): string {
+  const g = m.group ?? '';
+  if (g.includes(CATEGORY_SEP)) return firstSegment(g).trim();
+  const p = m.phase ?? '';
+  if (p.includes(CATEGORY_SEP)) return afterFirstSegment(p).trim();
+  return '';
+}
+
 // ── match.group ("category|letter") ───────────────────────────────
 
 /** Category segment of a group name. Empty when there's no separator. */

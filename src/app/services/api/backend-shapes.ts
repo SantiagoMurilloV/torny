@@ -58,6 +58,9 @@ export interface BackendTournament {
   categoryPriority?: string[];
   /** Preferred court for semis + finals — migration 026. */
   finalsCourt?: string;
+  /** Per-category match duration overrides — migration 027. Keyed by
+   *  category name; values in minutes. */
+  matchDurationsByCategory?: Record<string, number>;
   /** Real counts decorated by the LIST_SELECT in tournament.service. */
   enrolledCount?: number;
   matchesCount?: number;

@@ -58,6 +58,15 @@ export interface ScheduleConfig {
   maxMatchesPerDay?: number;
   deadTimeBlocks?: Array<{ start: string; end: string }>;
   categoryPriority?: string[];
+  /**
+   * Per-category match duration overrides (migration 027). When a
+   * fixture's `phase` carries a category prefix that appears as a key
+   * here, the scheduler uses the override duration for that match's
+   * slot length INSTEAD of the global `matchDuration`. Categories not
+   * in the map fall back to `matchDuration`. Empty / undefined → no
+   * overrides (legacy behaviour).
+   */
+  matchDurationsByCategory?: Record<string, number>;
 }
 
 /** Minimum team count required to generate fixtures for each format. */

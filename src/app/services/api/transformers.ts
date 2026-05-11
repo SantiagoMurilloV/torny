@@ -158,6 +158,9 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
     // Migration 026 — undefined when no preference, so the form's
     // <select> can default to "Sin preferencia".
     finalsCourt: t.finalsCourt ?? undefined,
+    // Migration 027 — empty-fallback so the form's "duración por
+    // categoría" section can iterate without null checks.
+    matchDurationsByCategory: t.matchDurationsByCategory ?? {},
     enrolledCount: t.enrolledCount,
     matchesCount: t.matchesCount,
   };

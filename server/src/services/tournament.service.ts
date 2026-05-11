@@ -103,6 +103,24 @@ function mapRow(row: Record<string, unknown>): Tournament {
       (row.match_duration_minutes as number | null) ?? undefined,
     matchBreakMinutes:
       (row.match_break_minutes as number | null) ?? undefined,
+    // Per-category duration overrides — added by migration 027. Same
+    // null-safe shape as `dailySchedules`: legacy rows without the
+    // column return {} so callers can iterate without null checks.
+    matchDurationsByCategory: (() => {
+      const raw = row.match_durations_by_category as
+        | Record<string, number>
+        | null
+        | undefined;
+      if (!raw || typeof raw !== 'object') return {};
+      // Sanitize numeric values so a hand-edited DB row with strings
+      // doesn't propagate garbage through the API.
+      const out: Record<string, number> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        const n = typeof v === 'number' ? v : Number(v);
+        if (Number.isFinite(n) && n >= 5 && n <= 600) out[k] = Math.round(n);
+      }
+      return out;
+    })(),
     // Per-day schedule overrides keyed by 'YYYY-MM-DD'. Empty object
     // (the default) means "use the global 08:00-18:00 fallback for every
     // day". The pg driver parses jsonb into an object automatically; if
@@ -382,9 +400,23 @@ export class TournamentService {
       typeof data.finalsCourt === 'string' && data.finalsCourt.trim() !== ''
         ? data.finalsCourt.trim()
         : null;
+    // Migration 027 — per-category match duration overrides. Same
+    // sanitisation approach as the read path: out-of-range / non-numeric
+    // values get dropped so the JSONB never holds garbage.
+    const matchDurationsByCategory: Record<string, number> = {};
+    const rawCatDur = (data as { matchDurationsByCategory?: Record<string, unknown> })
+      .matchDurationsByCategory;
+    if (rawCatDur && typeof rawCatDur === 'object') {
+      for (const [cat, val] of Object.entries(rawCatDur)) {
+        const n = typeof val === 'number' ? val : Number(val);
+        if (Number.isFinite(n) && n >= 5 && n <= 600) {
+          matchDurationsByCategory[cat] = Math.round(n);
+        }
+      }
+    }
     const result = await pool.query(
-      `INSERT INTO tournaments (name, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority, finals_court)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
+      `INSERT INTO tournaments (name, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority, finals_court, match_durations_by_category)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
        RETURNING *`,
       [
         data.name,
@@ -416,6 +448,7 @@ export class TournamentService {
         JSON.stringify(deadTimeBlocks),
         categoryPriority,
         finalsCourt,
+        JSON.stringify(matchDurationsByCategory),
       ],
     );
     return mapRow(result.rows[0]);
@@ -478,6 +511,8 @@ export class TournamentService {
       categoryPriority: 'category_priority',
       // Migration 026 — preferred court for semis + finals.
       finalsCourt: 'finals_court',
+      // Migration 027 — per-category match duration overrides.
+      matchDurationsByCategory: 'match_durations_by_category',
     };
 
     for (const [key, column] of Object.entries(columnMap)) {
@@ -526,6 +561,23 @@ export class TournamentService {
             typeof rawValue === 'string' && rawValue.trim() !== ''
               ? rawValue.trim()
               : null;
+        } else if (key === 'matchDurationsByCategory') {
+          // jsonb object keyed by category. Same sanitisation as the
+          // INSERT path: drop non-numeric / out-of-range entries so the
+          // map never holds garbage. Empty object collapses to '{}' so
+          // sending null clears all overrides.
+          const obj: Record<string, number> = {};
+          if (rawValue && typeof rawValue === 'object') {
+            for (const [cat, val] of Object.entries(
+              rawValue as Record<string, unknown>,
+            )) {
+              const n = typeof val === 'number' ? val : Number(val);
+              if (Number.isFinite(n) && n >= 5 && n <= 600) {
+                obj[cat] = Math.round(n);
+              }
+            }
+          }
+          stored = JSON.stringify(obj);
         } else if (key === 'regulationText' || key === 'regulationPdf') {
           // Normaliza '' → null para que "limpiar" desde el form deje
           // la columna realmente vacía en vez de un string vacío. El

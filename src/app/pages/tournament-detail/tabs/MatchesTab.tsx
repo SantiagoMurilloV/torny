@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Search, X, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { Match } from '../../../types';
+import type { Match, Tournament } from '../../../types';
 import { MatchCard } from '../../../components/MatchCard';
 import {
   categoryOfMatchPhase,
@@ -74,7 +74,15 @@ const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
  *     stays compact on tournaments with many divisions. Inside each
  *     category, phase sub-headers preserve the tournament progression.
  */
-export function MatchesTab({ matches }: { matches: Match[] }) {
+export function MatchesTab({
+  matches,
+  tournament,
+}: {
+  matches: Match[];
+  /** Drives the expected-duration badge on each MatchCard. Optional so
+   *  the tab still renders before the tournament loads. */
+  tournament?: Tournament;
+}) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -215,7 +223,12 @@ export function MatchesTab({ matches }: { matches: Match[] }) {
               </div>
               <div className="space-y-2">
                 {live.map((m) => (
-                  <MatchCard key={m.id} match={m} onClick={() => go(m.id)} />
+                  <MatchCard
+                    key={m.id}
+                    match={m}
+                    onClick={() => go(m.id)}
+                    tournament={tournament}
+                  />
                 ))}
               </div>
             </section>
@@ -230,6 +243,7 @@ export function MatchesTab({ matches }: { matches: Match[] }) {
               defaultOpen={hasActiveFilters || idx === 0}
               expandPhases={hasActiveFilters}
               onMatchClick={go}
+              tournament={tournament}
             />
           ))}
         </div>
@@ -284,6 +298,7 @@ function CategoryAccordion({
   defaultOpen,
   expandPhases,
   onMatchClick,
+  tournament,
 }: {
   category: string;
   phases: PhaseSection[];
@@ -293,6 +308,7 @@ function CategoryAccordion({
    *  filter is active so the result is visible without extra clicks. */
   expandPhases: boolean;
   onMatchClick: (id: string) => void;
+  tournament?: Tournament;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
@@ -337,6 +353,7 @@ function CategoryAccordion({
                   matches={phaseMatches}
                   defaultOpen={expandPhases}
                   onClick={onMatchClick}
+                  tournament={tournament}
                 />
               ))}
             </div>
@@ -352,11 +369,13 @@ function PhaseAccordion({
   matches,
   defaultOpen,
   onClick,
+  tournament,
 }: {
   phase: string;
   matches: Match[];
   defaultOpen: boolean;
   onClick: (id: string) => void;
+  tournament?: Tournament;
 }) {
   // Phase sub-sections start collapsed by default when no filter is
   // active — opening a category already shows everything, and keeping
@@ -403,7 +422,12 @@ function PhaseAccordion({
           >
             <div className="space-y-2 pt-3">
               {matches.map((m) => (
-                <MatchCard key={m.id} match={m} onClick={() => onClick(m.id)} />
+                <MatchCard
+                  key={m.id}
+                  match={m}
+                  onClick={() => onClick(m.id)}
+                  tournament={tournament}
+                />
               ))}
             </div>
           </motion.div>

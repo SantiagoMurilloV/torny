@@ -135,7 +135,9 @@ export function TournamentDetail() {
           <TeamsTab standings={standings} enrolledTeams={enrolledTeams} />
         )}
         {activeTab === 'grupos' && <GruposTab matches={matches} standings={standings} />}
-        {activeTab === 'matches' && <MatchesTab matches={matches} />}
+        {activeTab === 'matches' && (
+          <MatchesTab matches={matches} tournament={tournament} />
+        )}
         {activeTab === 'standings' && (
           <StandingsTab
             matches={matches}

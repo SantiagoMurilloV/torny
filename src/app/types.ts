@@ -191,6 +191,15 @@ export interface Tournament {
    */
   finalsCourt?: string;
   /**
+   * Per-category match duration overrides (migration 027). Keyed by
+   * category name with the value in MINUTES. Categories not present
+   * fall back to `matchDurationMinutes`, which falls back to 60. Mixed
+   * tournaments (Sub-13 short matches + Senior long matches) use this
+   * to avoid a single global value either wasting court time on short
+   * matches or bleeding long ones into the next slot.
+   */
+  matchDurationsByCategory?: Record<string, number>;
+  /**
    * Real counts populated by the backend SELECT (LIST_SELECT) — used by
    * the home cards and the public detail hero so the numbers reflect
    * actual enrollment / scheduled matches instead of the cap configured

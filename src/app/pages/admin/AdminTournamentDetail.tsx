@@ -502,6 +502,7 @@ export function AdminTournamentDetail() {
         <TabsContent value="matches">
           <MatchesTab
             matches={matches}
+            tournament={tournament ?? undefined}
             tournamentId={id}
             editor={matchEditor}
             onMatchUpdated={(updated) =>

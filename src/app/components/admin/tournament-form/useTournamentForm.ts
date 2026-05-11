@@ -121,6 +121,9 @@ export function useTournamentForm({
       // Migration 026 — empty string represents "Sin preferencia". Be
       // tolerant of legacy rows that don't have the field at all.
       finalsCourt: tournament.finalsCourt ?? '',
+      // Migration 027 — empty object means "no overrides; use the
+      // global matchDurationMinutes for every category".
+      matchDurationsByCategory: tournament.matchDurationsByCategory ?? {},
     });
     setCoverFile(null);
     setCoverPreview(tournament.coverImage ?? null);
@@ -360,6 +363,23 @@ export function useTournamentForm({
         // the column with an empty string (the BE collapses '' to NULL
         // anyway but undefined is the cleaner contract).
         finalsCourt: formData.finalsCourt.trim() || undefined,
+        // Migration 027 — only persist categories the admin actually
+        // set a number for. The form may carry a stale entry for a
+        // category that's since been removed from the tournament; the
+        // backend re-sanitises but it's nice to send a clean payload.
+        matchDurationsByCategory:
+          Object.keys(formData.matchDurationsByCategory).length > 0
+            ? Object.fromEntries(
+                Object.entries(formData.matchDurationsByCategory).filter(
+                  ([cat, val]) =>
+                    formData.categories.includes(cat) &&
+                    typeof val === 'number' &&
+                    Number.isFinite(val) &&
+                    val >= 5 &&
+                    val <= 600,
+                ),
+              )
+            : undefined,
       };
 
       try {

@@ -64,6 +64,13 @@ export interface CreateTournamentDto {
    *  clears the column (back to "no preference"); `undefined` leaves
    *  it untouched on PATCH. */
   finalsCourt?: string | null;
+  /**
+   * Per-category match duration overrides — migration 027. Keyed by
+   * category name; values in minutes (5..600). Send `null` or `{}` to
+   * clear all overrides; `undefined` leaves the column untouched on
+   * PATCH. Categories not present fall back to `matchDurationMinutes`.
+   */
+  matchDurationsByCategory?: Record<string, number> | null;
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

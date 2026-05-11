@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { AlertTriangle, Calendar, CalendarDays, GripVertical, Loader2 } from 'lucide-react';
+import { AlertTriangle, Calendar, CalendarDays, GripVertical, Loader2, Timer } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Match, Tournament } from '../../../types';
 import { TeamAvatar } from '../../../components/TeamAvatar';
+import { getMatchDurationMinutes, addMinutesToHHMM } from '../../../lib/matchDuration';
 import {
   Select,
   SelectContent,
@@ -175,9 +176,22 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
     return [...set];
   }, [tournament.courts, matches]);
 
-  const matchDuration = tournament.matchDurationMinutes ?? 60;
+  const globalDuration = tournament.matchDurationMinutes ?? 60;
   const matchBreak = tournament.matchBreakMinutes ?? 15;
-  const slotStride = Math.max(15, matchDuration + matchBreak);
+  // Per-category overrides (mig 027). The grid stride uses the SHORTEST
+  // duration across all categories so a card whose category is longer
+  // simply spans 2+ rows visually. Cards in the shortest category fit
+  // in 1 row. This is "option B": no over-painting, no truncation —
+  // the grid reflects real match lengths.
+  const durationsByCategory = tournament.matchDurationsByCategory ?? {};
+  const overrideValues = Object.values(durationsByCategory).filter(
+    (n): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0,
+  );
+  const minDuration =
+    overrideValues.length > 0 ? Math.min(globalDuration, ...overrideValues) : globalDuration;
+  // The stride is `minDuration + break` clamped to ≥15 min so the grid
+  // never produces hundreds of micro-rows on degenerate config.
+  const slotStride = Math.max(15, minDuration + matchBreak);
 
   const parseHHMM = (raw: string | undefined, fallback: number): number => {
     if (!raw) return fallback;
@@ -204,7 +218,10 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
       const override = dailySchedules[day];
       const startMin = parseHHMM(override?.start, DEFAULT_DAY_START_MIN);
       const endMin = parseHHMM(override?.end, DEFAULT_DAY_END_MIN);
-      for (let m = startMin; m + matchDuration <= endMin; m += slotStride) {
+      // Step by the shortest-duration stride so longer matches can span
+      // multiple rows visually. Still gate on `minDuration` (not stride)
+      // so the last short slot of the day shows up.
+      for (let m = startMin; m + minDuration <= endMin; m += slotStride) {
         set.add(formatHHMM(m));
       }
       for (const m of matches) {
@@ -213,7 +230,7 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
       const sorted = [...set].sort();
       return sorted.length > 0 ? sorted : ['08:00'];
     },
-    [dailySchedules, matchDuration, slotStride, matches],
+    [dailySchedules, minDuration, slotStride, matches],
   );
 
   // Time slots are generated FOR THE SELECTED DAY using its specific
@@ -272,6 +289,51 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
     }
     return map;
   }, [matches, selectedDay, selectedCategory]);
+
+  /**
+   * How many grid rows does a match's card span, given the current
+   * stride. A match of `globalDuration` with `slotStride = globalDuration
+   * + matchBreak` spans 1 row. A match of `2 × globalDuration` spans 2
+   * rows. We always render at least 1 row so a degenerate sub-stride
+   * duration (e.g. 25-min match in a 30-min stride config) still has a
+   * visible cell. Hover the badge to see the exact end time.
+   */
+  const spanFor = useCallback(
+    (m: Match): number => {
+      const dur = getMatchDurationMinutes(m, tournament);
+      // The stride includes the break, so the equivalent "span budget"
+      // for a single-row match is `slotStride - matchBreak` minutes of
+      // play time. We add the break back inside ceil so two adjacent
+      // matches with the same duration each span 1 row exactly.
+      const span = Math.max(1, Math.ceil((dur + matchBreak) / slotStride));
+      return span;
+    },
+    [tournament, slotStride, matchBreak],
+  );
+
+  /**
+   * Cells covered by a multi-row card (top cell excluded). We skip
+   * rendering these in the grid because the card above already paints
+   * over them via CSS Grid `grid-row: span N`. Drop targets on covered
+   * cells are intentionally absent so a drop snaps to the next free
+   * top-cell instead of mid-span.
+   */
+  const coveredCells = useMemo<Set<string>>(() => {
+    const out = new Set<string>();
+    const timeIndex = new Map<string, number>(times.map((t, i) => [t, i]));
+    for (const m of matches) {
+      if (toIso(m.date) !== selectedDay) continue;
+      const topIdx = timeIndex.get(m.time);
+      if (topIdx === undefined) continue;
+      const span = spanFor(m);
+      for (let i = 1; i < span; i++) {
+        const t = times[topIdx + i];
+        if (!t) break;
+        out.add(`${m.court}|${t}`);
+      }
+    }
+    return out;
+  }, [matches, selectedDay, times, spanFor]);
 
   // Matches on the selected day that don't fit in the current grid
   // (court not in the columns, or time not in the rows). Currently
@@ -624,31 +686,40 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
                 onMoveToDay={handleMoveToDay}
                 formatDayLabel={formatDayLabel}
                 isInFlight={inFlight.has(m.id)}
+                tournament={tournament}
               />
             ))}
           </div>
         </div>
       )}
 
-      {/* The grid — sticky time column on the left, court columns on
-          top, single match per cell. min-width-per-column keeps cards
-          legible on narrow screens; overflow-x scroll handles
-          tournaments with many courts. */}
+      {/* The grid — explicit row/column placement so multi-row cards
+          (long-duration categories) span N rows naturally. Row 1 is
+          the sticky court header band; rows 2..N+1 are time slots.
+          Each cell knows its (rowStart, span) and CSS Grid handles
+          the layout. Covered cells (positions a multi-row card paints
+          over) are skipped — drops there are intentionally blocked so
+          a card never lands "mid-other-card". */}
       <div className="bg-white border border-black/10 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <div
             className="inline-grid"
             style={{
               gridTemplateColumns: `60px repeat(${courts.length}, minmax(180px, 1fr))`,
+              gridAutoRows: 'minmax(72px, auto)',
             }}
           >
-            {/* Top-left empty corner */}
-            <div className="sticky top-0 left-0 z-20 bg-white border-b border-r border-black/10" />
-            {/* Court headers */}
-            {courts.map((court) => (
+            {/* Top-left empty corner — row 1, col 1 */}
+            <div
+              className="sticky top-0 left-0 z-20 bg-white border-b border-r border-black/10"
+              style={{ gridRow: 1, gridColumn: 1 }}
+            />
+            {/* Court headers — row 1, cols 2..N+1 */}
+            {courts.map((court, colIdx) => (
               <div
                 key={court}
                 className="sticky top-0 z-10 bg-black text-white px-3 py-2 border-b border-black/10"
+                style={{ gridRow: 1, gridColumn: colIdx + 2 }}
               >
                 <div className="text-xs font-bold uppercase tracking-wide truncate" style={FONT}>
                   {court}
@@ -656,23 +727,59 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
               </div>
             ))}
 
-            {/* Time rows */}
-            {times.map((time) => (
-              <RowFragment
-                key={time}
-                time={time}
-                courts={courts}
-                matchesByCell={matchesByCell}
-                categoryColorMap={categoryColorMap}
-                getMatchCategory={getMatchCategory}
-                onDrop={handleDrop}
-                onMoveToDay={handleMoveToDay}
-                days={days}
-                selectedDay={selectedDay}
-                formatDayLabel={formatDayLabel}
-                inFlight={inFlight}
-              />
+            {/* Time labels — col 1, rows 2..N+1 */}
+            {times.map((time, rowIdx) => (
+              <div
+                key={`time-${time}`}
+                className="sticky left-0 z-10 bg-white border-b border-r border-black/10 px-2 py-2 text-xs font-bold text-black/70 tabular-nums"
+                style={{ gridRow: rowIdx + 2, gridColumn: 1, ...FONT }}
+              >
+                {time}
+              </div>
             ))}
+
+            {/* Cells — one per (court, time), with multi-row spans for
+                long-duration matches. Skip cells that are covered by a
+                span from above so the grid doesn't shift columns. */}
+            {courts.flatMap((court, colIdx) =>
+              times.map((time, rowIdx) => {
+                const key = `${court}|${time}`;
+                if (coveredCells.has(key)) return null;
+                const cellMatches = matchesByCell.get(key) ?? [];
+                // Span = max of placed cards' spans (so a 90-min
+                // Senior in a 30-min stride takes 3 rows even when
+                // sitting next to a 30-min Sub-13).
+                let span = 1;
+                for (const m of cellMatches) {
+                  const s = spanFor(m);
+                  if (s > span) span = s;
+                }
+                // Don't let a span overshoot the day's last row — the
+                // card just clamps to whatever's left on the grid.
+                const maxAvailable = times.length - rowIdx;
+                const renderSpan = Math.min(span, maxAvailable);
+                return (
+                  <Cell
+                    key={key}
+                    court={court}
+                    time={time}
+                    matches={cellMatches}
+                    categoryColorMap={categoryColorMap}
+                    getMatchCategory={getMatchCategory}
+                    onDrop={handleDrop}
+                    onMoveToDay={handleMoveToDay}
+                    days={days}
+                    selectedDay={selectedDay}
+                    formatDayLabel={formatDayLabel}
+                    inFlight={inFlight}
+                    tournament={tournament}
+                    gridRow={rowIdx + 2}
+                    gridColumn={colIdx + 2}
+                    rowSpan={renderSpan}
+                  />
+                );
+              }),
+            )}
           </div>
         </div>
       </div>
@@ -717,66 +824,6 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
 // Sub-components
 // ─────────────────────────────────────────────────────────────────
 
-interface RowFragmentProps {
-  time: string;
-  courts: string[];
-  matchesByCell: Map<string, Match[]>;
-  categoryColorMap: Map<string, typeof CATEGORY_COLORS[0]>;
-  getMatchCategory: (m: Match) => string;
-  onDrop: (dragged: Match, destCourt: string, destTime: string) => void;
-  onMoveToDay: (m: Match, targetDay: string) => void;
-  days: string[];
-  selectedDay: string;
-  formatDayLabel: (iso: string) => string;
-  inFlight: Set<string>;
-}
-
-/**
- * A single time row. The leftmost cell shows the HH:MM label; one
- * Cell per court follows. Each Cell owns its own `useDrop` so a hover
- * highlight reflects only that cell, not the whole row.
- */
-function RowFragment({
-  time,
-  courts,
-  matchesByCell,
-  categoryColorMap,
-  getMatchCategory,
-  onDrop,
-  onMoveToDay,
-  days,
-  selectedDay,
-  formatDayLabel,
-  inFlight,
-}: RowFragmentProps) {
-  return (
-    <>
-      <div
-        className="sticky left-0 z-10 bg-white border-b border-r border-black/10 px-2 py-2 text-xs font-bold text-black/70 tabular-nums"
-        style={FONT}
-      >
-        {time}
-      </div>
-      {courts.map((court) => (
-        <Cell
-          key={`${court}|${time}`}
-          court={court}
-          time={time}
-          matches={matchesByCell.get(`${court}|${time}`) ?? []}
-          categoryColorMap={categoryColorMap}
-          getMatchCategory={getMatchCategory}
-          onDrop={onDrop}
-          onMoveToDay={onMoveToDay}
-          days={days}
-          selectedDay={selectedDay}
-          formatDayLabel={formatDayLabel}
-          inFlight={inFlight}
-        />
-      ))}
-    </>
-  );
-}
-
 interface CellProps {
   court: string;
   time: string;
@@ -796,6 +843,18 @@ interface CellProps {
   selectedDay: string;
   formatDayLabel: (iso: string) => string;
   inFlight: Set<string>;
+  /**
+   * Tournament for resolving the per-category duration on each card —
+   * drives the badge "60' → termina 15:00" and the cell's row span.
+   * Optional so the orphans banner (which doesn't have grid context)
+   * can omit it.
+   */
+  tournament?: Tournament;
+  /** CSS Grid placement (1-indexed). */
+  gridRow: number;
+  gridColumn: number;
+  /** How many rows this cell occupies. 1 = the previous behaviour. */
+  rowSpan: number;
 }
 
 function Cell({
@@ -810,6 +869,10 @@ function Cell({
   selectedDay,
   formatDayLabel,
   inFlight,
+  tournament,
+  gridRow,
+  gridColumn,
+  rowSpan,
 }: CellProps) {
   const [{ isOver, canDrop }, drop] = useDrop<
     { match: Match },
@@ -835,6 +898,10 @@ function Cell({
     <div
       ref={drop as unknown as React.Ref<HTMLDivElement>}
       className={`min-h-[72px] border-b border-r border-black/10 p-1.5 transition-colors ${dropTint}`}
+      style={{
+        gridRow: rowSpan > 1 ? `${gridRow} / span ${rowSpan}` : gridRow,
+        gridColumn,
+      }}
     >
       {isStacked && (
         <div
@@ -845,7 +912,7 @@ function Cell({
           ⚠ {matches.length} partidos en este slot
         </div>
       )}
-      <div className="space-y-1">
+      <div className="space-y-1 h-full">
         {matches.map((m) => (
           <MatchCard
             key={m.id}
@@ -856,6 +923,7 @@ function Cell({
             onMoveToDay={onMoveToDay}
             formatDayLabel={formatDayLabel}
             isInFlight={inFlight.has(m.id)}
+            tournament={tournament}
           />
         ))}
       </div>
@@ -879,6 +947,13 @@ interface MatchCardProps {
   formatDayLabel: (iso: string) => string;
   /** True while this match's PUT/SWAP is in flight. */
   isInFlight: boolean;
+  /**
+   * Tournament for per-category duration lookup (mig 027). Optional so
+   * the orphans banner — which renders before the user has chosen a
+   * grid context — can omit it and silently fall back to the global
+   * default.
+   */
+  tournament?: Tournament;
 }
 
 function MatchCard({
@@ -889,6 +964,7 @@ function MatchCard({
   onMoveToDay,
   formatDayLabel,
   isInFlight,
+  tournament,
 }: MatchCardProps) {
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
 
@@ -910,11 +986,18 @@ function MatchCard({
   const groupLabel = match.group?.includes('|')
     ? match.group.split('|').slice(1).join('|')
     : match.group || '';
+  // Per-category duration + end-time for the badge. Falls back to the
+  // global default when no tournament is supplied (orphans banner) so
+  // we still surface something useful.
+  const durationMin = tournament
+    ? getMatchDurationMinutes(match, tournament)
+    : 60;
+  const endTime = addMinutesToHHMM(match.time ?? '', durationMin);
 
   return (
     <div
       ref={preview as unknown as React.Ref<HTMLDivElement>}
-      className={`${color.bg} ${color.border} border rounded-md px-2 py-1.5 cursor-grab active:cursor-grabbing transition-all ${opacity}`}
+      className={`${color.bg} ${color.border} border rounded-md px-2 py-1.5 cursor-grab active:cursor-grabbing transition-all ${opacity} h-full flex flex-col`}
     >
       <div className="flex items-center gap-1.5 mb-1">
         <span
@@ -1006,6 +1089,24 @@ function MatchCard({
           {match.team2.name}
         </span>
       </div>
+      {/* Duration badge — shows the configured category duration and
+          the computed end time. Pulls the admin's attention to long
+          categories so they understand why the card visually occupies
+          two rows in the grid. mt-auto pushes it to the bottom when the
+          cell is taller than the card content (multi-row spans). */}
+      {(durationMin > 0 || endTime) && (
+        <div
+          className="mt-auto pt-1 flex items-center justify-between gap-1 text-[9px] font-bold uppercase tracking-wider text-black/60"
+          style={FONT}
+          title={endTime ? `Termina aprox ${endTime}` : 'Duración del partido'}
+        >
+          <span className="inline-flex items-center gap-0.5">
+            <Timer className="w-2.5 h-2.5" aria-hidden="true" />
+            {durationMin}&prime;
+          </span>
+          {endTime && <span className="opacity-60">→ {endTime}</span>}
+        </div>
+      )}
     </div>
   );
 }

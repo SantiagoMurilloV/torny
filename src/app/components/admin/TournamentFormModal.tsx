@@ -290,6 +290,14 @@ export function TournamentFormModal({
         }}
         onCategoryPriorityChange={(order) => form.patch({ categoryPriority: order })}
         onFinalsCourtChange={(court) => form.patch({ finalsCourt: court })}
+        // Migration 027 — per-category match duration overrides. The
+        // map is sparse (only categories with explicit values are
+        // present) so the field UI shows an empty input for missing
+        // entries that hint at the global default.
+        matchDurationsByCategory={form.formData.matchDurationsByCategory}
+        onMatchDurationsByCategoryChange={(next) =>
+          form.patch({ matchDurationsByCategory: next })
+        }
       />
 
       <RegulationField

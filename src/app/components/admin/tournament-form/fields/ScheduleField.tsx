@@ -30,6 +30,7 @@ export function ScheduleField({
   availableCategories,
   finalsCourt,
   availableCourts,
+  matchDurationsByCategory,
   onMatchDurationChange,
   onMatchBreakChange,
   onMaxMatchesPerDayChange,
@@ -37,6 +38,7 @@ export function ScheduleField({
   onDailyScheduleChange,
   onCategoryPriorityChange,
   onFinalsCourtChange,
+  onMatchDurationsByCategoryChange,
 }: {
   matchDurationMinutes: number;
   matchBreakMinutes: number;
@@ -50,6 +52,9 @@ export function ScheduleField({
   /** Court names from the tournament's `courts` array — feeds the
    *  finals-court <select> options. */
   availableCourts: string[];
+  /** Migration 027 — sparse map: only categories with explicit
+   *  overrides are present. Missing keys hint at the global default. */
+  matchDurationsByCategory: Record<string, number>;
   onMatchDurationChange: (n: number) => void;
   onMatchBreakChange: (n: number) => void;
   onMaxMatchesPerDayChange: (n: number) => void;
@@ -57,6 +62,7 @@ export function ScheduleField({
   onDailyScheduleChange: (index: number, patch: Partial<DailyScheduleEntry>) => void;
   onCategoryPriorityChange: (order: string[]) => void;
   onFinalsCourtChange: (court: string) => void;
+  onMatchDurationsByCategoryChange: (next: Record<string, number>) => void;
 }) {
   // Format a YYYY-MM-DD string as "vie 15 may" for the row label. Uses
   // the browser's es-CO locale so the day-of-week is short + Spanish.
@@ -171,6 +177,68 @@ export function ScheduleField({
           partido del cuadro, cae a la rotación normal.
         </p>
       </div>
+
+      {/* Per-category match durations — migration 027. Each row is a
+          category from the tournament with its own duration override.
+          Empty / 0 input means "use the global default above" (the
+          form drops the entry from the map at submit time). Lets the
+          admin run mixed tournaments where Sub-13 partidos are 40 min
+          but Senior best-of-5 stretch to 90 — no need to lock the
+          whole tournament to the longest category. */}
+      {availableCategories.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Clock className="w-4 h-4 text-black/60" aria-hidden="true" />
+            <label className="text-sm font-bold" style={FONT}>
+              Duración por categoría
+            </label>
+          </div>
+          <p className="text-[11px] text-black/45 mb-3">
+            Si dejás un campo vacío, esa categoría usa la duración global
+            de arriba ({matchDurationMinutes} min). Útil cuando una
+            categoría dura más o menos que el resto.
+          </p>
+          <div className="space-y-2">
+            {availableCategories.map((cat) => {
+              const current = matchDurationsByCategory[cat];
+              return (
+                <div
+                  key={cat}
+                  className="flex items-center gap-3 bg-black/[0.02] border border-black/10 rounded-sm px-3 py-2"
+                >
+                  <span className="flex-1 text-sm text-black/80 truncate" title={cat}>
+                    {cat}
+                  </span>
+                  <input
+                    type="number"
+                    min={5}
+                    max={600}
+                    inputMode="numeric"
+                    placeholder={String(matchDurationMinutes)}
+                    value={typeof current === 'number' ? String(current) : ''}
+                    onChange={(e) => {
+                      const raw = e.target.value.trim();
+                      const next = { ...matchDurationsByCategory };
+                      if (raw === '') {
+                        delete next[cat];
+                      } else {
+                        const n = parseInt(raw, 10);
+                        if (Number.isFinite(n) && n > 0) next[cat] = n;
+                      }
+                      onMatchDurationsByCategoryChange(next);
+                    }}
+                    className="w-20 px-2 py-1 text-sm bg-white border border-black/10 rounded-sm focus:outline-none focus:border-spk-red text-right tabular-nums"
+                    aria-label={`Duración para ${cat} en minutos`}
+                  />
+                  <span className="text-[11px] text-black/55 uppercase tracking-wide w-8">
+                    min
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Dead-time blocks */}
       <div>

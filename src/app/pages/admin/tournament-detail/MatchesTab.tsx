@@ -6,7 +6,7 @@ import {
   PopoverTrigger,
 } from '../../../components/ui/popover';
 import { toast } from 'sonner';
-import { Match } from '../../../types';
+import { Match, Tournament } from '../../../types';
 import { Badge } from '../../../components/ui/badge';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import {
@@ -25,6 +25,7 @@ import { categoryOfMatchPhase } from '../../../lib/phase';
 import { matchStatusLabel } from '../../../lib/status';
 import { formatShortDate } from '../../../lib/format';
 import { getErrorMessage } from '../../../lib/errors';
+import { getMatchDurationMinutes, getMatchEndTime } from '../../../lib/matchDuration';
 import type { useScoreEditor } from '../../../hooks/useScoreEditor';
 
 type ScoreEditor = ReturnType<typeof useScoreEditor<Match>>;
@@ -36,6 +37,9 @@ interface MatchesTabProps {
    *  matches[0]?.tournamentId when not supplied so older callers don't
    *  break. */
   tournamentId?: string;
+  /** Tournament object — drives the per-card "expected duration" badge.
+   *  Optional so the tab still renders before the tournament loads. */
+  tournament?: Tournament;
   /** Shared editor hook instance from the parent (so state persists
    *  across tab switches and stays in sync with other surfaces). */
   editor: ScoreEditor;
@@ -57,6 +61,7 @@ interface MatchesTabProps {
 export function MatchesTab({
   matches,
   tournamentId,
+  tournament,
   editor,
   onMatchUpdated,
   onMatchesReplaced,
@@ -433,6 +438,7 @@ export function MatchesTab({
                     match={m}
                     editor={editor}
                     onOpenEditModal={openEditModal}
+                    tournament={tournament}
                   />
                 ))}
               </div>
@@ -456,6 +462,7 @@ export function MatchesTab({
                     match={m}
                     editor={editor}
                     onOpenEditModal={openEditModal}
+                    tournament={tournament}
                   />
                 ))}
               </div>
@@ -506,13 +513,21 @@ function MatchCard({
   match,
   editor,
   onOpenEditModal,
+  tournament,
 }: {
   match: Match;
   editor: ScoreEditor;
   onOpenEditModal: (m: Match) => void;
+  /** Drives the per-card "expected duration" badge (migration 027).
+   *  Optional so callers without the tournament loaded keep working. */
+  tournament?: Tournament;
 }) {
   const isEditing = editor.isEditing(match);
   const displayScore = isEditing ? editor.editedScore : match.score;
+  const expectedDuration = tournament
+    ? getMatchDurationMinutes(match, tournament)
+    : null;
+  const expectedEnd = tournament ? getMatchEndTime(match, tournament) : '';
   return (
     <div
       className={`p-4 bg-white border rounded-sm ${
@@ -552,6 +567,25 @@ function MatchCard({
           <span className="whitespace-nowrap">
             {formatShortDate(match.date)} · {match.time}
           </span>
+          {/* Expected duration (migration 027) — only on non-completed
+              matches; completed cards already show the actual duration
+              elsewhere in the listing. The "→ HH:MM" suffix makes the
+              expected end-time skimmable without doing math. */}
+          {expectedDuration && match.status !== 'completed' && (
+            <span
+              className="inline-flex items-center gap-1 text-black/60 bg-black/5 px-1.5 py-0.5 rounded-sm tabular-nums whitespace-nowrap"
+              title={
+                expectedEnd
+                  ? `Duración estimada — termina aprox ${expectedEnd}`
+                  : 'Duración estimada'
+              }
+            >
+              {expectedDuration}&prime;
+              {expectedEnd && (
+                <span className="opacity-60">→ {expectedEnd}</span>
+              )}
+            </span>
+          )}
         </div>
       </div>
 

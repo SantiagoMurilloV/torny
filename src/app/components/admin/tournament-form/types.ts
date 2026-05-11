@@ -87,6 +87,14 @@ export interface TournamentFormState {
    * which the API converts to NULL.
    */
   finalsCourt: string;
+  /**
+   * Per-category match duration overrides (migration 027). Keyed by
+   * category name; the value is in MINUTES. Categories not present in
+   * this map fall back to `matchDurationMinutes`. The form only writes
+   * a key when the admin explicitly sets a value — leaving the input
+   * blank keeps the global default for that category.
+   */
+  matchDurationsByCategory: Record<string, number>;
 }
 
 export const DEFAULT_COURTS: CourtEntry[] = [
@@ -121,5 +129,6 @@ export function emptyForm(): TournamentFormState {
     deadTimeBlocks: [],
     categoryPriority: [],
     finalsCourt: '',
+    matchDurationsByCategory: {},
   };
 }
