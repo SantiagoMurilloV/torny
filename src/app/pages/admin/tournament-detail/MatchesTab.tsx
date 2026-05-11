@@ -17,6 +17,7 @@ import { TeamAvatar } from '../../../components/TeamAvatar';
 import { api, type UpdateMatchDto } from '../../../services/api';
 import { categoryOfMatchPhase } from '../../../lib/phase';
 import { matchStatusLabel } from '../../../lib/status';
+import { formatShortDate } from '../../../lib/format';
 import { getErrorMessage } from '../../../lib/errors';
 import type { useScoreEditor } from '../../../hooks/useScoreEditor';
 
@@ -341,7 +342,14 @@ function MatchCard({
               {match.court}
             </span>
           )}
-          <span>{match.time}</span>
+          {/* Date + time. Date format "15 abr" comes from formatShortDate
+              (date-fns es locale) — same helper the public TournamentCard
+              uses, so the styling stays consistent across surfaces.
+              `whitespace-nowrap` prevents the "15 abr · 10:00" cluster
+              from breaking across two lines on narrow screens. */}
+          <span className="whitespace-nowrap">
+            {formatShortDate(match.date)} · {match.time}
+          </span>
         </div>
       </div>
 
