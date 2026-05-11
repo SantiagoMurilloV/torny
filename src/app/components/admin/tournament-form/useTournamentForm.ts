@@ -354,30 +354,35 @@ export function useTournamentForm({
         matchBreakMinutes: formData.matchBreakMinutes,
         dailySchedules: dailySchedulesMap,
         maxMatchesPerDay: formData.maxMatchesPerDay,
-        deadTimeBlocks: formData.deadTimeBlocks.length > 0 ? formData.deadTimeBlocks : undefined,
-        categoryPriority: formData.categoryPriority.length > 0 ? formData.categoryPriority : undefined,
+        // Always send the array (even when empty) so removing every
+        // dead-time block actually clears the column. `undefined`
+        // would mean "leave it untouched" → old blocks persist.
+        deadTimeBlocks: formData.deadTimeBlocks,
+        // Always send the array (even when empty) so clicking "Quitar
+        // orden personalizado" actually wipes the column. Sending
+        // undefined would mean "leave it untouched" — the previous
+        // ordering would persist after save.
+        categoryPriority: formData.categoryPriority,
         // Migration 026 — empty string in the form means "Sin
         // preferencia". Send undefined so the API doesn't overwrite
         // the column with an empty string (the BE collapses '' to NULL
         // anyway but undefined is the cleaner contract).
         finalsCourt: formData.finalsCourt.trim() || undefined,
-        // Migration 027 — only persist categories the admin actually
-        // set a number for. The form may carry a stale entry for a
-        // category that's since been removed from the tournament; the
-        // backend re-sanitises but it's nice to send a clean payload.
-        matchDurationsByCategory:
-          Object.keys(formData.matchDurationsByCategory).length > 0
-            ? Object.fromEntries(
-                Object.entries(formData.matchDurationsByCategory).filter(
-                  ([cat, val]) =>
-                    formData.categories.includes(cat) &&
-                    typeof val === 'number' &&
-                    Number.isFinite(val) &&
-                    val >= 5 &&
-                    val <= 600,
-                ),
-              )
-            : undefined,
+        // Migration 027 — always send the map (filtering only stale
+        // category keys whose category was deleted). Sending `{}`
+        // explicitly clears every override, matching the same "empty
+        // = clear" semantics as deadTimeBlocks + categoryPriority
+        // above. Out-of-range numeric values get dropped before send.
+        matchDurationsByCategory: Object.fromEntries(
+          Object.entries(formData.matchDurationsByCategory).filter(
+            ([cat, val]) =>
+              formData.categories.includes(cat) &&
+              typeof val === 'number' &&
+              Number.isFinite(val) &&
+              val >= 5 &&
+              val <= 600,
+          ),
+        ),
       };
 
       try {

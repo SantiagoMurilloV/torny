@@ -335,14 +335,28 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
   const coveredCells = useMemo<Set<string>>(() => {
     const out = new Set<string>();
     const timeIndex = new Map<string, number>(times.map((t, i) => [t, i]));
-    for (const m of matches) {
-      if (toIso(m.date) !== selectedDay) continue;
-      if (
-        selectedCategory !== 'all' &&
-        getMatchCategory(m) !== selectedCategory
-      ) {
-        continue;
-      }
+    // Process matches CHRONOLOGICALLY so we can break the cascade: if
+    // a match's own top cell is already covered by an earlier card
+    // (overlap-stacked data), we don't propagate its own span downward.
+    // Without this, back-to-back 60-min matches at 8:00, 8:45, 9:30…
+    // in the same column with stride 45 would chain covers all the way
+    // down, leaving entire rows blank with no card painting over them
+    // — the user reads those blanks as "null spaces I can't drag to",
+    // which is exactly the bug we're fixing.
+    const dayMatches = matches
+      .filter((m) => toIso(m.date) === selectedDay)
+      .filter(
+        (m) =>
+          selectedCategory === 'all' ||
+          getMatchCategory(m) === selectedCategory,
+      )
+      .sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
+    for (const m of dayMatches) {
+      const topKey = `${m.court}|${m.time}`;
+      // Skip cascading when this match's own top cell is already
+      // covered — it can't paint anything visible there, so its span
+      // shouldn't extend the gap.
+      if (out.has(topKey)) continue;
       const topIdx = timeIndex.get(m.time);
       if (topIdx === undefined) continue;
       const span = spanFor(m);
@@ -932,10 +946,15 @@ function Cell({
   return (
     <div
       ref={drop as unknown as React.Ref<HTMLDivElement>}
-      className={`min-h-[72px] border-b border-r border-black/10 p-1.5 transition-colors ${dropTint}`}
+      className={`border-b border-r border-black/10 p-1.5 transition-colors ${dropTint}`}
+      // Inline minHeight beats the Tailwind arbitrary class — turns out
+      // `min-h-[72px]` isn't always honoured by CSS Grid items in the
+      // browser. Inline style on the grid item enforces the row-track
+      // floor so empty cells never collapse to a thin strip.
       style={{
         gridRow: rowSpan > 1 ? `${gridRow} / span ${rowSpan}` : gridRow,
         gridColumn,
+        minHeight: 72,
       }}
     >
       {isStacked && (
@@ -948,18 +967,17 @@ function Cell({
         </div>
       )}
       {matches.length === 0 ? (
-        // Empty drop-target — explicit placeholder so the grid never
-        // shows a stark white void. Bumped to a clearly visible dashed
-        // border + light grey fill (the previous 1.5% tint was so
-        // subtle the user reported the cells looked "null"). Hover
-        // brightens it so the drop target is unmistakable.
+        // Empty drop-target — visible but text-free placeholder. Just
+        // a dashed-bordered tinted box that fills the cell so the grid
+        // never reads as a white void AND the admin can clearly see
+        // "this is a slot you can drop a match into". Hover brightens
+        // it so the drop target is unmistakable. minHeight on the
+        // wrapper Cell guarantees this never collapses.
         <div
-          className="h-full w-full rounded-sm border-2 border-dashed border-black/20 bg-black/[0.035] flex items-center justify-center text-[9px] text-black/30 uppercase tracking-wider hover:bg-black/[0.06] transition-colors"
-          style={FONT}
+          className="h-full w-full rounded-sm border-2 border-dashed border-black/20 bg-black/[0.035] hover:bg-black/[0.06] transition-colors"
+          style={{ minHeight: 60 }}
           aria-hidden="true"
-        >
-          Disponible
-        </div>
+        />
       ) : (
         <div className="space-y-1 h-full flex flex-col">
           {matches.map((m) => (

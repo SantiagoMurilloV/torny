@@ -221,10 +221,21 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
 
   // Cells covered by a multi-row card (top cell excluded). Skipped at
   // render time so CSS Grid lays out the spanning card correctly.
+  //
+  // Process matches chronologically and SKIP cascading whenever a
+  // match's own top cell is already covered — otherwise back-to-back
+  // long matches in the same column (data overlap) would chain covers
+  // all the way down, leaving entire rows blank with no card painting
+  // over them.
   const coveredCells = useMemo<Set<string>>(() => {
     const out = new Set<string>();
     const timeIndex = new Map<string, number>(times.map((t, i) => [t, i]));
-    for (const m of visibleMatches) {
+    const sortedByTime = [...visibleMatches].sort((a, b) =>
+      (a.time ?? '').localeCompare(b.time ?? ''),
+    );
+    for (const m of sortedByTime) {
+      const topKey = `${m.court}|${m.time}`;
+      if (out.has(topKey)) continue;
       const topIdx = timeIndex.get(m.time);
       if (topIdx === undefined) continue;
       const span = spanFor(m);
@@ -401,28 +412,32 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
                 return (
                   <div
                     key={key}
-                    className="border-b border-r border-black/10 p-1.5 min-h-[72px]"
+                    className="border-b border-r border-black/10 p-1.5"
+                    // Inline minHeight beats the Tailwind arbitrary
+                    // class for grid items — turns out CSS Grid doesn't
+                    // always honour `min-h-[72px]` when the row track
+                    // is auto-sized, leaving cells flat. Inline forces
+                    // the grid track floor.
                     style={{
                       gridRow:
                         renderSpan > 1
                           ? `${rowIdx + 2} / span ${renderSpan}`
                           : rowIdx + 2,
                       gridColumn: colIdx + 2,
+                      minHeight: 72,
                     }}
                   >
                     {cellMatches.length === 0 ? (
-                      // Visible "empty slot" placeholder — bumped from
-                      // a 1.5% tint to a clearly-visible dashed cell so
-                      // the grid never reads as a white void. Gentle
-                      // hint copy ("Libre") makes the intent explicit
-                      // without competing with the match cards.
+                      // Visible empty-slot placeholder, text-free —
+                      // dashed-bordered tinted box that never collapses
+                      // (minHeight forced on parent Cell). The grid
+                      // always reads as a complete matrix so the
+                      // spectator never sees a white void.
                       <div
-                        className="h-full w-full rounded-sm border-2 border-dashed border-black/15 bg-black/[0.025] flex items-center justify-center text-[9px] text-black/30 uppercase tracking-wider"
-                        style={FONT}
+                        className="h-full w-full rounded-sm border-2 border-dashed border-black/15 bg-black/[0.025]"
+                        style={{ minHeight: 60 }}
                         aria-hidden="true"
-                      >
-                        Libre
-                      </div>
+                      />
                     ) : (
                       <div className="space-y-1 h-full flex flex-col">
                         {cellMatches.map((m) => (
