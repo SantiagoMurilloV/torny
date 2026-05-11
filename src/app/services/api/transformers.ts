@@ -178,7 +178,13 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
  */
 function parseWireDate(raw: string): Date {
   if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    return new Date(`${raw}T12:00:00Z`);
+    return new Date(`${raw}T12:00:00`);
+  }
+  // Handle ISO datetime strings like "2026-05-15T05:00:00.000Z"
+  // Extract just the date part and create at noon local to avoid timezone shift
+  if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+    const datePart = raw.split('T')[0];
+    return new Date(`${datePart}T12:00:00`);
   }
   return new Date(raw);
 }
