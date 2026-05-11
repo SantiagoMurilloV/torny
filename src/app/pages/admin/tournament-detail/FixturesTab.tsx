@@ -313,18 +313,28 @@ export function FixturesTab({
             <p className="text-sm text-black/60">{matches.length} partidos generados</p>
           )}
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-wrap">
+        {/* Action toolbar — all buttons in a single row at every
+            viewport. On mobile each button shrinks to its icon (text
+            label hidden) so the four actions fit on a single phone-
+            width line; the title attribute keeps the affordance copy
+            discoverable on hover/long-press. On desktop (>=sm) the
+            full label comes back. flex-1 splits width evenly on
+            mobile; sm:flex-none returns each button to its content
+            width on desktop. */}
+        <div className="flex flex-row gap-2 sm:gap-3 flex-wrap">
           <Button
             onClick={handleGenerateClick}
             disabled={generating || enrolledTeams.length < 2}
-            className="bg-spk-blue hover:bg-spk-blue/90 w-full sm:w-auto"
+            title="Creación de Grupos"
+            aria-label="Creación de Grupos"
+            className="flex-1 sm:flex-none bg-spk-blue hover:bg-spk-blue/90"
           >
             {generating ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Shuffle className="w-4 h-4" />
             )}
-            Creación de Grupos
+            <span className="hidden sm:inline">Creación de Grupos</span>
           </Button>
           {tournament.format === 'groups+knockout' &&
             matches.length > 0 &&
@@ -332,29 +342,34 @@ export function FixturesTab({
               <Button
                 onClick={startPostGroupsCrossings}
                 disabled={generating}
-                className="bg-spk-win hover:bg-spk-win/90 text-white w-full sm:w-auto"
+                title="Definir Eliminación Directa"
+                aria-label="Definir Eliminación Directa"
+                className="flex-1 sm:flex-none bg-spk-win hover:bg-spk-win/90 text-white"
               >
                 {generating ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <Trophy className="w-4 h-4" />
                 )}
-                Definir Eliminación Directa
+                <span className="hidden sm:inline">Definir Eliminación Directa</span>
               </Button>
             )}
           {tournament.format === 'groups+knockout' &&
             matches.length > 0 &&
             bracketMode === 'divisions' && (
+              // Status pill for divisions mode (the bracket auto-
+              // generates when groups close). On mobile we keep just
+              // the icon + tooltip so the 4-button row still fits.
               <div
-                className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-sm text-xs text-amber-800 w-full sm:w-auto"
+                className="flex-1 sm:flex-none flex items-center justify-center sm:justify-start gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-sm text-xs text-amber-800"
                 style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
                 title="El cruce Oro + Plata se genera solo cuando todos los grupos de la categoría terminan."
               >
                 <Trophy className="w-4 h-4 flex-shrink-0" />
-                <span className="font-semibold uppercase tracking-wider">
+                <span className="hidden sm:inline font-semibold uppercase tracking-wider">
                   Cruces por divisiones
                 </span>
-                <span className="text-amber-700/80">
+                <span className="hidden sm:inline text-amber-700/80">
                   · se genera automático al terminar los grupos
                 </span>
               </div>
@@ -364,15 +379,16 @@ export function FixturesTab({
               onClick={onRecalculateStandings}
               disabled={recalculating}
               variant="outline"
-              className="border-spk-blue text-spk-blue hover:bg-spk-blue/10 w-full sm:w-auto"
-              title="Fuerza un recálculo de la tabla con la lógica actual"
+              title="Recalcular Tabla y Cruces — fuerza un recálculo de la tabla con la lógica actual"
+              aria-label="Recalcular Tabla y Cruces"
+              className="flex-1 sm:flex-none border-spk-blue text-spk-blue hover:bg-spk-blue/10"
             >
               {recalculating ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <RefreshCw className="w-4 h-4" />
               )}
-              Recalcular Tabla y Cruces
+              <span className="hidden sm:inline">Recalcular Tabla y Cruces</span>
             </Button>
           )}
           {(matches.length > 0 || bracketMatches.length > 0) && (
@@ -380,14 +396,16 @@ export function FixturesTab({
               onClick={() => setShowClearDialog(true)}
               disabled={clearing}
               variant="outline"
-              className="border-spk-red text-spk-red hover:bg-spk-red/10 w-full sm:w-auto"
+              title="Limpiar Cruces"
+              aria-label="Limpiar Cruces"
+              className="flex-1 sm:flex-none border-spk-red text-spk-red hover:bg-spk-red/10"
             >
               {clearing ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
                 <Trash2 className="w-4 h-4" />
               )}
-              Limpiar Cruces
+              <span className="hidden sm:inline">Limpiar Cruces</span>
             </Button>
           )}
         </div>
