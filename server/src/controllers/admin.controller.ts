@@ -1,24 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { adminService } from '../services/admin.service';
 import { getPool } from '../config/database';
 import { getActiveUserIds, getActiveVisitorsCount } from '../services/presence';
-
-/**
- * Wipe every data table except users, push subscriptions and app config.
- * Requires the admin role (enforced at the router via `requireRole`).
- */
-export async function resetData(
-  _req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    await adminService.resetData();
-    res.status(204).send();
-  } catch (error) {
-    next(error);
-  }
-}
 
 /**
  * Lightweight dashboard rollup for the admin home. Scoped to the caller:

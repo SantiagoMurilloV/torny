@@ -1,9 +1,7 @@
-import { Save, Globe, Shield, Mail, Eye, EyeOff, Loader2, Trash2, AlertTriangle } from 'lucide-react';
+import { Save, Globe, Shield, Mail, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { api, type SystemSettings } from '../../services/api';
-import { useData } from '../../context/DataContext';
-import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { getErrorMessage } from '../../lib/errors';
 
 export function AdminSettings() {
@@ -13,9 +11,6 @@ export function AdminSettings() {
   const [savingPassword, setSavingPassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const { refreshTournaments, refreshTeams, refreshMatches } = useData();
 
   const [settings, setSettings] = useState<SystemSettings>({
     systemName: '',
@@ -255,79 +250,6 @@ export function AdminSettings() {
           Guardar Cambios
         </button>
       </div>
-
-      {/* Danger zone — wipe all tournament / team / match data. Kept at the
-          bottom of the page and visually separated so it's not a casual
-          click. Users and push subscriptions are preserved. */}
-      <div className="mt-10 bg-white border-2 border-spk-red/30 rounded-sm overflow-hidden">
-        <div className="bg-spk-red/10 px-4 sm:px-6 py-3 border-b border-spk-red/20 flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5 text-spk-red" aria-hidden="true" />
-          <h2
-            className="font-bold text-spk-red uppercase tracking-wider"
-            style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.06em' }}
-          >
-            Zona Peligrosa
-          </h2>
-        </div>
-        <div className="p-4 sm:p-6 space-y-4">
-          <div>
-            <h3
-              className="font-bold text-base"
-              style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
-            >
-              Reiniciar datos del sistema
-            </h3>
-            <p className="text-sm text-black/60 mt-1">
-              Borra todos los torneos, equipos, partidos, cruces y
-              clasificaciones. <strong>Se conservan</strong> las cuentas
-              (administrador y jueces) y las suscripciones de
-              notificaciones. Acción irreversible.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setResetConfirmOpen(true)}
-            disabled={resetting}
-            className="inline-flex items-center gap-2 px-4 py-2 border-2 border-spk-red text-spk-red hover:bg-spk-red hover:text-white rounded-sm font-medium transition-colors disabled:opacity-50"
-          >
-            {resetting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Trash2 className="w-4 h-4" />
-            )}
-            Reiniciar base de datos
-          </button>
-        </div>
-      </div>
-
-      <ConfirmDialog
-        open={resetConfirmOpen}
-        onOpenChange={(open) => {
-          if (!open) setResetConfirmOpen(false);
-        }}
-        title="¿Reiniciar toda la base de datos?"
-        description="Se eliminarán TODOS los torneos, equipos, partidos, cruces y clasificaciones. Las cuentas de administrador y jueces, más las suscripciones de notificaciones, se conservan. Esta acción NO se puede deshacer."
-        confirmLabel="Sí, borrar todo"
-        loading={resetting}
-        onConfirm={async () => {
-          setResetting(true);
-          try {
-            await api.resetData();
-            // Refetch so the admin lands on empty-state views instead of
-            // stale cached data.
-            await Promise.all([refreshTournaments(), refreshTeams(), refreshMatches()]);
-            toast.success('Datos eliminados. Cuentas conservadas.');
-            setResetConfirmOpen(false);
-          } catch (err) {
-            toast.error(
-              getErrorMessage(err, 'Error al reiniciar los datos'),
-            );
-            throw err;
-          } finally {
-            setResetting(false);
-          }
-        }}
-      />
     </div>
   );
 }

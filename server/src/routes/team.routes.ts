@@ -7,6 +7,7 @@ import {
   updateLogo,
   remove,
   getMatches,
+  getTournaments,
   generateCredentials,
   getCredentials,
   search,
@@ -47,6 +48,14 @@ router.put('/:teamId/logo', requireTeamOwnership, updateLogo);
 
 // Team sub-resources
 router.get('/:id/matches', cacheGet(10), getMatches);
+
+// Tournaments where this team is enrolled. Gated by requireTeamOwnership
+// so the captain (own team only), the owner-admin, and super_admins can
+// list it. Skip the public cache because the response is tenant-scoped:
+// `Cache-Control: private, no-store` is emitted by the auth branch of
+// cacheGet, but we go further and don't even invoke that middleware
+// since this route is never legitimately public.
+router.get('/:teamId/tournaments', requireTeamOwnership, getTournaments);
 
 // Captain credentials — admins (and super_admins) can look up, (re)generate
 // a team captain's login. Owner gate keeps Admin A out of Admin B's team.

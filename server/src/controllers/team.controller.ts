@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { teamService } from '../services/team.service';
+import { tournamentService } from '../services/tournament.service';
 import { validateUUID } from '../middleware/validation';
 import { optionalUser } from '../middleware/auth';
 
@@ -142,6 +143,39 @@ export async function getMatches(req: Request, res: Response, next: NextFunction
     validateUUID(id, 'ID de equipo');
     const matches = await teamService.getMatches(id);
     res.json(matches);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /api/teams/:teamId/tournaments
+ *
+ * Lists every tournament a team is currently enrolled in. The captain
+ * panel uses this to surface the strictest `playersPerTeam` cap across
+ * inscriptions (the "X / Y" counter on the roster header) and to know
+ * which tournaments still have an open enrollment window.
+ *
+ * Auth is enforced at the route level by `requireTeamOwnership`, which
+ * lets through:
+ *   · super_admin (always)
+ *   · admin       (only if owner_id matches the team)
+ *   · judge       (only if their createdBy admin owns the team)
+ *   · captain     (only their own teamId)
+ *
+ * 404 on a team owned by another tenant — same leak-safe behaviour as the
+ * other ownership-gated endpoints.
+ */
+export async function getTournaments(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const teamId = req.params.teamId as string;
+    validateUUID(teamId, 'ID de equipo');
+    const tournaments = await tournamentService.getByTeamId(teamId);
+    res.json(tournaments);
   } catch (error) {
     next(error);
   }

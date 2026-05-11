@@ -13,7 +13,7 @@ import {
   Camera,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Player } from '../../types';
+import type { Player, Tournament } from '../../types';
 import { api, ApiError } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { PlayerFormModal } from '../../components/admin/PlayerFormModal';
@@ -45,6 +45,12 @@ export function TeamPanel() {
     category?: string;
   } | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  // Tournaments where this team is enrolled. Drives the "Plantel (X / Y)"
+  // counter — Y is the strictest playersPerTeam across them, the same
+  // cap the captain has to respect. We tolerate a fetch failure here
+  // (the panel still works, just without the cap badge) so a transient
+  // /tournaments hiccup doesn't lock the captain out of editing.
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,8 +94,16 @@ export function TeamPanel() {
         secondaryColor: me.team.secondaryColor,
         category: me.team.category,
       });
-      const roster = await api.listTeamPlayers(me.team.id);
+      // Fire roster + enrolled tournaments in parallel — they don't depend
+      // on each other and the panel only renders when both have responded.
+      // The tournaments call is wrapped so a transient failure (network /
+      // 5xx) just hides the cap badge instead of blowing up the whole load.
+      const [roster, enrolledTournaments] = await Promise.all([
+        api.listTeamPlayers(me.team.id),
+        api.getTeamTournaments(me.team.id).catch(() => [] as Tournament[]),
+      ]);
       setPlayers(roster);
+      setTournaments(enrolledTournaments);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         // Token rejected server-side — log out so the user sees /login.
@@ -192,6 +206,39 @@ export function TeamPanel() {
       );
     });
   }, [players, playerSearch]);
+
+  /**
+   * Strictest roster cap across the team's enrolled tournaments. We use
+   * the MIN (not MAX) so the captain sees the tightest constraint — if
+   * one tournament allows 14 and another 12, going past 12 already
+   * breaks the second one. `undefined` means "no enrolled tournament
+   * has a configured cap" → we render the legacy "(N)" counter and keep
+   * the add button enabled.
+   *
+   * Note: `playersPerTeam` is described in the admin form as "cupo
+   * recomendado" — the backend doesn't enforce it on POST /players. We
+   * still disable the button at the cap to nudge captains toward
+   * compliance; if they really need to add one more they can ask the
+   * admin to bump the tournament setting.
+   */
+  const playerCap = useMemo(() => {
+    const caps = tournaments
+      .map((t) => t.playersPerTeam)
+      .filter((n): n is number => typeof n === 'number' && n > 0);
+    if (caps.length === 0) return undefined;
+    return Math.min(...caps);
+  }, [tournaments]);
+
+  const atRosterCap = playerCap !== undefined && players.length >= playerCap;
+  // Which tournament drives the cap — used to label the hint when the
+  // captain hits the limit. When two tournaments tie at the strictest
+  // value we just show the first; that's a corner case for the rare
+  // multi-tournament team and the helper text already says "más
+  // restrictivo" so the wording stays accurate.
+  const capTournamentName = useMemo(() => {
+    if (playerCap === undefined) return undefined;
+    return tournaments.find((t) => t.playersPerTeam === playerCap)?.name;
+  }, [tournaments, playerCap]);
 
   if (loading) {
     return (
@@ -318,7 +365,7 @@ export function TeamPanel() {
 
       {/* Roster */}
       <section className="bg-white border border-black/10 rounded-sm overflow-hidden">
-        <div className="px-4 sm:px-5 py-3 border-b border-black/10 flex items-center justify-between gap-3">
+        <div className="px-4 sm:px-5 py-3 border-b border-black/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
           <div className="flex items-center gap-2 min-w-0">
             <Users className="w-4 h-4 text-black/60 flex-shrink-0" aria-hidden="true" />
             <h2
@@ -326,19 +373,81 @@ export function TeamPanel() {
               style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.08em' }}
             >
               Plantel{' '}
-              <span className="text-black/50 font-normal tabular-nums">({players.length})</span>
+              {/* Counter — when the team is enrolled in at least one
+                  tournament with a configured cap we render "X / Y" so
+                  the captain sees the strictest tournament's limit. We
+                  highlight the count in red the moment it hits or
+                  exceeds the cap so the visual cue lands before they
+                  even try to click the disabled button below. */}
+              <span
+                className={`font-normal tabular-nums ${atRosterCap ? 'text-spk-red font-bold' : 'text-black/50'}`}
+              >
+                ({players.length}
+                {playerCap !== undefined ? ` / ${playerCap}` : ''})
+              </span>
             </h2>
           </div>
           <button
             type="button"
             onClick={handleCreate}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-spk-red text-white hover:bg-spk-red-dark rounded-sm text-xs sm:text-sm font-bold uppercase"
+            disabled={atRosterCap}
+            // When the cap is hit we surface the reason in the tooltip
+            // (most browsers show `title` on hover, and screen readers
+            // pick up `aria-label` overrides). The button stays in the
+            // DOM so the layout doesn't jump — just visually + behaviorally
+            // disabled.
+            title={
+              atRosterCap
+                ? `Alcanzaste el cupo de ${playerCap} jugador@s${
+                    capTournamentName ? ` (torneo ${capTournamentName})` : ''
+                  }.`
+                : undefined
+            }
+            aria-label={
+              atRosterCap
+                ? `Cupo del plantel completo (${playerCap} jugador@s)`
+                : undefined
+            }
+            className="self-end sm:self-auto inline-flex items-center gap-1.5 px-3 py-2 bg-spk-red text-white hover:bg-spk-red-dark rounded-sm text-xs sm:text-sm font-bold uppercase disabled:bg-black/30 disabled:cursor-not-allowed disabled:hover:bg-black/30"
             style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.05em' }}
           >
             <Plus className="w-3.5 h-3.5" />
             Agregar jugador@
           </button>
         </div>
+
+        {/* Cap hint — only when there's a cap configured. Two flavours:
+            · roster bajo el cupo → micro-copy gris explicando el cupo.
+            · roster lleno        → micro-copy ámbar para reforzar por
+              qué el botón quedó deshabilitado y cómo destrabarlo. */}
+        {playerCap !== undefined && (
+          <div
+            className={`px-4 sm:px-5 py-2 text-[11px] border-b border-black/10 ${
+              atRosterCap ? 'bg-spk-gold/10 text-black/75' : 'text-black/55'
+            }`}
+          >
+            {atRosterCap ? (
+              <>
+                Alcanzaste el cupo de <strong>{playerCap}</strong> jugador@s
+                {capTournamentName ? (
+                  <>
+                    {' '}del torneo <strong>{capTournamentName}</strong>
+                  </>
+                ) : null}
+                . Para sumar más, eliminá una jugador@ o pedile al organizador
+                que amplíe el cupo.
+              </>
+            ) : (
+              <>
+                Cupo del plantel: <strong>{playerCap}</strong>
+                {capTournamentName
+                  ? ` jugador@s (según torneo ${capTournamentName})`
+                  : ' jugador@s (según el torneo más restrictivo donde estás inscrito)'}
+                .
+              </>
+            )}
+          </div>
+        )}
 
         {/* Filter bar — only renders when the roster has enough rows that
             scrolling becomes painful. For brand-new teams the empty state

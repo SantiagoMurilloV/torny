@@ -1,9 +1,10 @@
 import { request } from './client';
-import type { Team, Match, TeamCredentialsReceipt } from '../../types';
-import type { BackendTeam, BackendMatch } from './backend-shapes';
+import type { Team, Match, Tournament, TeamCredentialsReceipt } from '../../types';
+import type { BackendTeam, BackendMatch, BackendTournament } from './backend-shapes';
 import {
   toFrontendTeam,
   toFrontendMatch,
+  toFrontendTournament,
   updateTeamsCache,
   ensureTeamsCached,
 } from './transformers';
@@ -86,6 +87,20 @@ export const teamsApi = {
     await ensureTeamsCached();
     const data = await request<BackendMatch[]>(`/teams/${id}/matches`);
     return data.map(toFrontendMatch);
+  },
+
+  /**
+   * Tournaments where this team is currently enrolled. Drives the captain
+   * panel's "Plantel (X / Y)" counter — the captain needs to know the
+   * strictest `playersPerTeam` cap across their inscriptions so the UI
+   * can disable the "Agregar jugador@" button once the roster fills the
+   * tightest tournament's quota. Server-side gated by `requireTeamOwnership`
+   * so admins / super_admins / the team's own captain pass through; anyone
+   * else gets 404 (leak-safe).
+   */
+  async getTeamTournaments(id: string): Promise<Tournament[]> {
+    const data = await request<BackendTournament[]>(`/teams/${id}/tournaments`);
+    return data.map(toFrontendTournament);
   },
 
   /**

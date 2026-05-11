@@ -232,6 +232,38 @@ export class TournamentService {
   }
 
   /**
+   * List the tournaments a given team is currently enrolled in. Drives the
+   * captain panel's "Plantel (X / Y)" counter — the captain needs to know
+   * the strictest `playersPerTeam` cap across their inscriptions, plus the
+   * enrollment_deadline of each tournament so the UI can hint when edits
+   * are about to lock.
+   *
+   * Reuses LIST_SELECT so the response is the same shape every other
+   * tournament read returns; the frontend transformer (`toFrontendTournament`)
+   * works without changes. Sorted with active tournaments first
+   * (upcoming/ongoing before completed), then by start date so the most
+   * relevant ones land at the top of the captain's view.
+   */
+  async getByTeamId(teamId: string): Promise<Tournament[]> {
+    const pool = getPool();
+    const result = await pool.query(
+      `${TournamentService.LIST_SELECT}
+       JOIN tournament_teams tt ON tt.tournament_id = t.id
+       WHERE tt.team_id = $1
+       ORDER BY
+         CASE t.status
+           WHEN 'ongoing' THEN 0
+           WHEN 'upcoming' THEN 1
+           WHEN 'completed' THEN 2
+           ELSE 3
+         END,
+         t.start_date DESC`,
+      [teamId],
+    );
+    return result.rows.map(mapRow);
+  }
+
+  /**
    * Enforce the admin's tournament creation cap. No-op for super_admin or
    * when ownerId is null (legacy / platform-owned). Throws a ValidationError
    * with a human-readable message so the frontend can surface it directly.
