@@ -522,6 +522,46 @@ describe('MatchService CRUD operations', () => {
         service.update('match-1', { team1Id: 'team-2' }),
       ).rejects.toThrow('Los dos equipos deben ser diferentes');
     });
+
+    it('should reject moving a match into a slot where one of its teams is already busy', async () => {
+      // Catches the SAN JOSE A bug class (2026-05-10): moving a match
+      // into a (date, time) where one of its teams already plays. The
+      // conflict-check query returns a row where team1_id == 'team-1'
+      // (the same team1 that lives on the existing match), so the
+      // service must throw before the UPDATE fires.
+      const existingRow = sampleMatchRow();
+      mockPool(
+        vi.fn()
+          .mockResolvedValueOnce({ rows: [existingRow] })           // getById
+          .mockResolvedValueOnce({ rows: [] })                       // getSets
+          .mockResolvedValueOnce({                                   // conflict check
+            rows: [{ id: 'other-match', team1_id: 'team-1', team2_id: 'team-9', court: 'Cancha 9' }],
+          }),
+      );
+
+      await expect(
+        service.update('match-1', { time: '14:00' }),
+      ).rejects.toThrow(/equipos ya tiene un partido/);
+    });
+
+    it('should reject moving a match onto a court already in use at that time', async () => {
+      // Court collision (no team overlap): the matched conflicting row
+      // shares neither team but does share court+date+time, so the
+      // service must surface the cancha message instead.
+      const existingRow = sampleMatchRow();
+      mockPool(
+        vi.fn()
+          .mockResolvedValueOnce({ rows: [existingRow] })
+          .mockResolvedValueOnce({ rows: [] })
+          .mockResolvedValueOnce({
+            rows: [{ id: 'other-match', team1_id: 'team-7', team2_id: 'team-8', court: 'Cancha 1' }],
+          }),
+      );
+
+      await expect(
+        service.update('match-1', { court: 'Cancha 1', time: '14:00' }),
+      ).rejects.toThrow(/cancha .* ya tiene un partido/i);
+    });
   });
 
   describe('delete', () => {
