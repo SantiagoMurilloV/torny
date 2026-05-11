@@ -6,6 +6,7 @@ import { CategoriesField } from './tournament-form/fields/CategoriesField';
 import { CoverImageField } from './tournament-form/fields/CoverImageField';
 import { CourtsField } from './tournament-form/fields/CourtsField';
 import { RegulationField } from './tournament-form/fields/RegulationField';
+import { ScheduleField } from './tournament-form/fields/ScheduleField';
 import type { FieldErrors } from './tournament-form/types';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
@@ -260,6 +261,24 @@ export function TournamentFormModal({
         courts={form.formData.courts}
         error={form.errors.courts}
         onChange={(next) => form.patch({ courts: next }, ['courts'])}
+      />
+
+      {/* Programación de partidos — se persiste en el torneo y la usan
+          tanto el generador inicial como el reparador automático. */}
+      <ScheduleField
+        matchDurationMinutes={form.formData.matchDurationMinutes}
+        matchBreakMinutes={form.formData.matchBreakMinutes}
+        dailySchedules={form.formData.dailySchedules}
+        onMatchDurationChange={(n) => form.patch({ matchDurationMinutes: n })}
+        onMatchBreakChange={(n) => form.patch({ matchBreakMinutes: n })}
+        onDailyScheduleChange={(idx, patch) => {
+          // Replace the row at `idx` with the patched values. Keep the
+          // array immutable so React picks up the change cleanly.
+          const next = form.formData.dailySchedules.map((row, i) =>
+            i === idx ? { ...row, ...patch } : row,
+          );
+          form.patch({ dailySchedules: next });
+        }}
       />
 
       <RegulationField

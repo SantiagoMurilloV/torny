@@ -196,6 +196,11 @@ export function AdminTournamentDetail() {
       bracketMode: updated.bracketMode,
       regulationText: updated.regulationText ?? null,
       regulationPdf: updated.regulationPdf ?? null,
+      // Schedule defaults — persist whatever the form holds so the
+      // scheduler + repair tool both pick them up on the next run.
+      matchDurationMinutes: updated.matchDurationMinutes,
+      matchBreakMinutes: updated.matchBreakMinutes,
+      dailySchedules: updated.dailySchedules,
     };
     const fresh = await updateTournament(tournament.id, dto);
     setTournament(fresh);

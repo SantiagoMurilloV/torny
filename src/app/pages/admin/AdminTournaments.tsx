@@ -118,6 +118,12 @@ export function AdminTournaments() {
         bracketMode: tournament.bracketMode,
         regulationText: tournament.regulationText ?? null,
         regulationPdf: tournament.regulationPdf ?? null,
+        // Persisted schedule defaults — drives both initial generation
+        // and the repair tool, so saving them here means the next
+        // fixture run uses these numbers without the admin re-typing.
+        matchDurationMinutes: tournament.matchDurationMinutes,
+        matchBreakMinutes: tournament.matchBreakMinutes,
+        dailySchedules: tournament.dailySchedules,
       };
       await updateTournament(editingTournament.id, dto);
       toast.success('Torneo actualizado correctamente');
@@ -142,6 +148,9 @@ export function AdminTournaments() {
         bracketMode: tournament.bracketMode,
         regulationText: tournament.regulationText ?? null,
         regulationPdf: tournament.regulationPdf ?? null,
+        matchDurationMinutes: tournament.matchDurationMinutes,
+        matchBreakMinutes: tournament.matchBreakMinutes,
+        dailySchedules: tournament.dailySchedules,
       };
       await addTournament(dto);
       toast.success('Torneo creado correctamente');
