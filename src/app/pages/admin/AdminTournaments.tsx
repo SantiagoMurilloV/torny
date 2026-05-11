@@ -124,6 +124,12 @@ export function AdminTournaments() {
         matchDurationMinutes: tournament.matchDurationMinutes,
         matchBreakMinutes: tournament.matchBreakMinutes,
         dailySchedules: tournament.dailySchedules,
+        // Schedule constraints (migration 025) — same drive: scheduler
+        // + repair both honour these so the form values actually take
+        // effect on the next generation/repair run.
+        maxMatchesPerDay: tournament.maxMatchesPerDay,
+        deadTimeBlocks: tournament.deadTimeBlocks,
+        categoryPriority: tournament.categoryPriority,
       };
       await updateTournament(editingTournament.id, dto);
       toast.success('Torneo actualizado correctamente');
@@ -151,6 +157,9 @@ export function AdminTournaments() {
         matchDurationMinutes: tournament.matchDurationMinutes,
         matchBreakMinutes: tournament.matchBreakMinutes,
         dailySchedules: tournament.dailySchedules,
+        maxMatchesPerDay: tournament.maxMatchesPerDay,
+        deadTimeBlocks: tournament.deadTimeBlocks,
+        categoryPriority: tournament.categoryPriority,
       };
       await addTournament(dto);
       toast.success('Torneo creado correctamente');

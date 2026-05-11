@@ -52,6 +52,10 @@ export interface BackendTournament {
   matchDurationMinutes?: number;
   matchBreakMinutes?: number;
   dailySchedules?: Record<string, { start: string; end: string }>;
+  /** Schedule constraints — migration 025. */
+  maxMatchesPerDay?: number;
+  deadTimeBlocks?: Array<{ start: string; end: string }>;
+  categoryPriority?: string[];
   /** Real counts decorated by the LIST_SELECT in tournament.service. */
   enrolledCount?: number;
   matchesCount?: number;

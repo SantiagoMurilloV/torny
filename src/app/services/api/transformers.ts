@@ -150,6 +150,11 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
     matchDurationMinutes: t.matchDurationMinutes,
     matchBreakMinutes: t.matchBreakMinutes,
     dailySchedules: t.dailySchedules ?? {},
+    // Migration 025 — same empty-fallback pattern so the form fields
+    // and scheduler hooks never have to null-check.
+    maxMatchesPerDay: t.maxMatchesPerDay ?? 0,
+    deadTimeBlocks: t.deadTimeBlocks ?? [],
+    categoryPriority: t.categoryPriority ?? [],
     enrolledCount: t.enrolledCount,
     matchesCount: t.matchesCount,
   };

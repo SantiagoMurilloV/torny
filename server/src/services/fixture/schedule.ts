@@ -3,6 +3,14 @@ import type { ScheduleConfig } from './types';
 interface FixtureShape {
   team1Id: string;
   team2Id: string;
+  /**
+   * Phase string, optional. Used only for `categoryPriority` sorting:
+   * the category prefix lives in the substring before the first '|',
+   * matching the `Category|round` encoding the rest of the codebase
+   * uses. Pure team-only callers can omit this — the sort becomes a
+   * stable no-op.
+   */
+  phase?: string;
 }
 
 interface Slot {
@@ -44,6 +52,19 @@ export function calculateMatchTimes<T extends FixtureShape>(
   const breakDuration = config?.breakDuration || DEFAULT_BREAK_MIN;
   const courtCount = config?.courtCount || courts.length || 1;
   const dailySchedules = config?.dailySchedules ?? {};
+  // Migration-025 schedule constraints. Defaulting empty/0 keeps legacy
+  // callers (and tests with no schedule config) on the previous greedy
+  // path: no per-day cap, no dead-time skips, no priority reordering.
+  const maxMatchesPerDay =
+    typeof config?.maxMatchesPerDay === 'number' && config.maxMatchesPerDay > 0
+      ? config.maxMatchesPerDay
+      : 0;
+  const deadTimeBlocks = Array.isArray(config?.deadTimeBlocks)
+    ? config!.deadTimeBlocks!
+    : [];
+  const categoryPriority = Array.isArray(config?.categoryPriority)
+    ? config!.categoryPriority!
+    : [];
 
   const courtNames: string[] = [];
   for (let i = 0; i < courtCount; i++) {
@@ -77,8 +98,53 @@ export function calculateMatchTimes<T extends FixtureShape>(
     };
   };
 
+  // Pre-compute dead-time block minute ranges once so the per-slot
+  // check is O(blocks). A slot is dead if its [startMin, endMin]
+  // interval intersects ANY block; we treat a touching boundary as
+  // OK (slot ends exactly when block starts → keep the slot).
+  const deadRanges: Array<{ startMin: number; endMin: number }> = [];
+  for (const block of deadTimeBlocks) {
+    const s = parseHHMM(block.start, -1);
+    const e = parseHHMM(block.end, -1);
+    if (s >= 0 && e > s) deadRanges.push({ startMin: s, endMin: e });
+  }
+  const slotIntersectsDeadTime = (slotStartMin: number): boolean => {
+    const slotEndMin = slotStartMin + matchDuration;
+    for (const r of deadRanges) {
+      if (slotStartMin < r.endMin && slotEndMin > r.startMin) return true;
+    }
+    return false;
+  };
+
+  // Extract the category prefix from a fixture's phase (e.g.
+  // "Benjamín Femenino|grupos" → "Benjamín Femenino"). Returns ''
+  // when no phase is set so unphased fixtures don't perturb the sort.
+  const categoryOf = (phase: string | undefined): string => {
+    if (!phase) return '';
+    const idx = phase.indexOf('|');
+    return idx === -1 ? phase : phase.substring(0, idx);
+  };
+  // Map each prioritised category to its rank (lower = earlier slot);
+  // anything not listed gets a sentinel rank that lands AFTER the
+  // priorities but keeps insertion order amongst itself.
+  const categoryRank = new Map<string, number>();
+  categoryPriority.forEach((cat, i) => categoryRank.set(cat, i));
+  const rankFor = (phase: string | undefined): number => {
+    const cat = categoryOf(phase);
+    return categoryRank.get(cat) ?? Number.MAX_SAFE_INTEGER;
+  };
+
   const results: Array<Slot | null> = new Array(fixtures.length).fill(null);
-  const unscheduled = fixtures.map((f, idx) => ({ ...f, __idx: idx }));
+  // Build the unscheduled queue and sort by category priority. Stable
+  // sort preserves the round-robin order within each category so a
+  // priority change doesn't reshuffle previously-paired matchups.
+  const unscheduled = fixtures
+    .map((f, idx) => ({ ...f, __idx: idx }))
+    .sort((a, b) => rankFor(a.phase) - rankFor(b.phase));
+  // Tracks how many matches the loop has placed on the current calendar
+  // day so we can roll forward once `maxMatchesPerDay` is hit. Reset
+  // every time the day cursor advances.
+  let matchesAssignedToday = 0;
 
   const currentDate = new Date(startDate + 'T00:00:00');
   // Track the per-day window so the loop can swap windows when it
@@ -94,6 +160,7 @@ export function calculateMatchTimes<T extends FixtureShape>(
     currentDateStr = currentDate.toISOString().split('T')[0];
     currentWindow = windowForDate(currentDateStr);
     currentMinutes = currentWindow.startMin;
+    matchesAssignedToday = 0;
   };
 
   while (unscheduled.length > 0 && iterations < maxIterations) {
@@ -104,12 +171,34 @@ export function calculateMatchTimes<T extends FixtureShape>(
       continue;
     }
 
+    // Per-day cap (migration 025). When the admin sets `maxMatchesPerDay`
+    // we stop packing more than N matches into a single calendar day,
+    // even if the window still has room. 0 = no cap.
+    if (maxMatchesPerDay > 0 && matchesAssignedToday >= maxMatchesPerDay) {
+      advanceToNextDay();
+      continue;
+    }
+
+    // Dead-time skip (migration 025). When this slot overlaps with a
+    // configured block (lunch, ceremony, etc.) we advance past it
+    // without trying to assign matches.
+    if (slotIntersectsDeadTime(currentMinutes)) {
+      currentMinutes += matchDuration + breakDuration;
+      continue;
+    }
+
     const timeStr = formatHHMM(currentMinutes);
     const dateStr = currentDateStr;
     const busyTeams = new Set<string>();
     let assignedInSlot = 0;
 
     for (let c = 0; c < courtCount && unscheduled.length > 0; c++) {
+      // Stop placing on this slot once the per-day cap fires mid-slot
+      // — otherwise a single 4-court slot could overshoot the cap by
+      // up to 3 matches.
+      if (maxMatchesPerDay > 0 && matchesAssignedToday >= maxMatchesPerDay) {
+        break;
+      }
       const candidateIdx = unscheduled.findIndex(
         (f) => !busyTeams.has(f.team1Id) && !busyTeams.has(f.team2Id),
       );
@@ -120,6 +209,7 @@ export function calculateMatchTimes<T extends FixtureShape>(
       busyTeams.add(candidate.team2Id);
       results[candidate.__idx] = { date: dateStr, time: timeStr, court: courtNames[c] };
       assignedInSlot++;
+      matchesAssignedToday++;
     }
 
     currentMinutes += matchDuration + breakDuration;

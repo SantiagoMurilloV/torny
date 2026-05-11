@@ -681,6 +681,8 @@ export class MatchService {
       match_duration_minutes: number | null;
       match_break_minutes: number | null;
       daily_schedules: Record<string, { start: string; end: string }> | null;
+      max_matches_per_day: number | null;
+      dead_time_blocks: Array<{ start: string; end: string }> | null;
     }>(
       `SELECT
          start_date::text AS start_date,
@@ -688,7 +690,9 @@ export class MatchService {
          courts,
          match_duration_minutes,
          match_break_minutes,
-         daily_schedules
+         daily_schedules,
+         max_matches_per_day,
+         dead_time_blocks
        FROM tournaments WHERE id = $1`,
       [tournamentId],
     );
@@ -709,6 +713,17 @@ export class MatchService {
     const matchBreakMinutes = tRes.rows[0].match_break_minutes ?? 15;
     const dailySchedules = tRes.rows[0].daily_schedules ?? {};
     const SLOT_MIN = matchDurationMinutes + matchBreakMinutes;
+    // Migration 025 constraints. 0 / empty means "no constraint" so the
+    // repair falls back to the historic greedy behaviour when the admin
+    // hasn't configured anything.
+    const maxMatchesPerDay =
+      typeof tRes.rows[0].max_matches_per_day === 'number' &&
+      tRes.rows[0].max_matches_per_day > 0
+        ? tRes.rows[0].max_matches_per_day
+        : 0;
+    const deadTimeBlocks = Array.isArray(tRes.rows[0].dead_time_blocks)
+      ? tRes.rows[0].dead_time_blocks
+      : [];
     // Historic global window — used as the fallback for any day that
     // doesn't carry an explicit override in `dailySchedules`. Matches
     // the values the schedule modal showed before migration 024.
@@ -735,6 +750,24 @@ export class MatchService {
         startMin: parseHHMM(override?.start, DEFAULT_DAY_START_MIN),
         endMin: parseHHMM(override?.end, DEFAULT_DAY_END_MIN),
       };
+    };
+
+    // Pre-compute dead-time ranges in minutes-from-midnight so the
+    // findFreeSlot inner loop can short-circuit cheaply. A candidate
+    // slot is considered "dead" when its [start, start+matchDuration]
+    // interval intersects ANY of the configured blocks.
+    const deadRanges: Array<{ startMin: number; endMin: number }> = [];
+    for (const block of deadTimeBlocks) {
+      const s = parseHHMM(block.start, -1);
+      const e = parseHHMM(block.end, -1);
+      if (s >= 0 && e > s) deadRanges.push({ startMin: s, endMin: e });
+    }
+    const slotIntersectsDeadTime = (slotStartMin: number): boolean => {
+      const slotEndMin = slotStartMin + matchDurationMinutes;
+      for (const r of deadRanges) {
+        if (slotStartMin < r.endMin && slotEndMin > r.startMin) return true;
+      }
+      return false;
     };
 
     // Pull every match, oldest first. created_at decides which match
@@ -787,6 +820,12 @@ export class MatchService {
     //   2. Out-of-range — match.date sits before tournament_start or
     //      after tournament_end. Happens when admin shifts the
     //      tournament dates after fixtures already exist.
+    // Per-day counter seeded by the first pass so `findFreeSlot` can
+    // honour the migration-025 `maxMatchesPerDay` cap without losing
+    // track of matches that legitimately stayed in place. Bumping by
+    // 1 per court-slot is correct because the court conflict logic
+    // above already guarantees one row per (date, time, court).
+    const matchesByDay = new Map<string, number>();
     const conflictMatches: Row[] = [];
     let teamConflicts = 0;
     let courtConflicts = 0;
@@ -810,7 +849,12 @@ export class MatchService {
       const timeOutOfWindow =
         matchMin >= 0 &&
         (matchMin < win.startMin || matchMin + matchDurationMinutes > win.endMin);
-      const outsideWindow = dateOutOfRange || timeOutOfWindow;
+      // Match landed inside a configured dead-time block (e.g. 12:00
+      // lunch) — treat the same as a window violation so the repair
+      // pulls it out and finds a clean slot.
+      const inDeadTime =
+        matchMin >= 0 && slotIntersectsDeadTime(matchMin);
+      const outsideWindow = dateOutOfRange || timeOutOfWindow || inDeadTime;
       if (teamHit || courtHit || outsideWindow) {
         conflictMatches.push(r);
         if (teamHit) teamConflicts++;
@@ -821,6 +865,7 @@ export class MatchService {
       teamSlot.set(k1, r.id);
       teamSlot.set(k2, r.id);
       courtSlot.set(ck, r.id);
+      matchesByDay.set(r.date, (matchesByDay.get(r.date) ?? 0) + 1);
     }
 
     // Debug snapshot — emitted on every response so the admin tools (and
@@ -879,6 +924,16 @@ export class MatchService {
       const MAX_DAYS = 365;
       for (let d = 0; d < MAX_DAYS; d++) {
         const dateStr = cursor.toISOString().slice(0, 10);
+        // Per-day cap (migration 025) — when the day already holds the
+        // configured number of matches we skip it entirely instead of
+        // probing slots that can't be used.
+        if (
+          maxMatchesPerDay > 0 &&
+          (matchesByDay.get(dateStr) ?? 0) >= maxMatchesPerDay
+        ) {
+          cursor.setDate(cursor.getDate() + 1);
+          continue;
+        }
         // Each day's active window comes from the tournament's
         // `daily_schedules` map (with the historic 08:00–18:00 default
         // when the day isn't in the map). The match must FIT entirely
@@ -890,6 +945,10 @@ export class MatchService {
           mins + matchDurationMinutes <= endMin;
           mins += SLOT_MIN
         ) {
+          // Dead-time skip (migration 025). Slots whose body intersects
+          // any configured block (lunch, ceremony, etc.) are unusable
+          // regardless of team / court availability.
+          if (slotIntersectsDeadTime(mins)) continue;
           const time = formatHHMM(mins);
           if (
             teamSlot.has(teamKey(team1Id, dateStr, time)) ||
@@ -929,6 +988,10 @@ export class MatchService {
       teamSlot.set(teamKey(r.team1_id, slot.date, slot.time), r.id);
       teamSlot.set(teamKey(r.team2_id, slot.date, slot.time), r.id);
       courtSlot.set(courtKey(slot.court, slot.date, slot.time), r.id);
+      // Track per-day count so subsequent findFreeSlot calls respect
+      // the migration-025 cap. Without this bump, every conflict
+      // could pile onto the same day even if the cap was set to 1.
+      matchesByDay.set(slot.date, (matchesByDay.get(slot.date) ?? 0) + 1);
       moves.push({
         matchId: r.id,
         from: { date: r.date, time: r.time, court: r.court },

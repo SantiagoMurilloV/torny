@@ -93,6 +93,26 @@ export interface Tournament {
   matchBreakMinutes?: number;
   dailySchedules?: Record<string, { start: string; end: string }>;
   /**
+   * Schedule constraints added by migration 025 — the admin form was
+   * already exposing these, this round wired them through to the DB
+   * and the scheduler so they actually take effect:
+   *   · maxMatchesPerDay  → 0 = no cap; >0 stops the scheduler from
+   *                          packing more than N matches into a single
+   *                          calendar day.
+   *   · deadTimeBlocks    → array of { start, end } windows the
+   *                          scheduler must skip every day (lunch,
+   *                          ceremonies, etc.). Day-agnostic — per-day
+   *                          calendar shape lives in `dailySchedules`.
+   *   · categoryPriority  → ordered category names; the scheduler
+   *                          places higher-priority categories on the
+   *                          earlier slots of each day. Categories not
+   *                          in the list keep their natural order
+   *                          AFTER the prioritised ones.
+   */
+  maxMatchesPerDay?: number;
+  deadTimeBlocks?: Array<{ start: string; end: string }>;
+  categoryPriority?: string[];
+  /**
    * Decorated by the SELECT in tournament.service (LIST_SELECT). The
    * home cards / public detail use these instead of the static
    * `teamsCount` cap so the numbers reflect reality.
@@ -276,6 +296,12 @@ export interface CreateTournamentDto {
   matchDurationMinutes?: number;
   matchBreakMinutes?: number;
   dailySchedules?: Record<string, { start: string; end: string }>;
+  /** See `Tournament.maxMatchesPerDay` — 0 = no cap. */
+  maxMatchesPerDay?: number;
+  /** See `Tournament.deadTimeBlocks` — array of { start, end } HH:MM windows. */
+  deadTimeBlocks?: Array<{ start: string; end: string }>;
+  /** See `Tournament.categoryPriority` — ordered category names. */
+  categoryPriority?: string[];
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

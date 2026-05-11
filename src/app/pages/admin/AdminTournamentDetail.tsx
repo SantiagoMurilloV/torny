@@ -203,6 +203,13 @@ export function AdminTournamentDetail() {
       matchDurationMinutes: updated.matchDurationMinutes,
       matchBreakMinutes: updated.matchBreakMinutes,
       dailySchedules: updated.dailySchedules,
+      // Schedule constraints (migration 025). Without these three the
+      // form values were getting filled in but silently dropped by the
+      // DTO — the backend never saw them and the scheduler had nothing
+      // to honour.
+      maxMatchesPerDay: updated.maxMatchesPerDay,
+      deadTimeBlocks: updated.deadTimeBlocks,
+      categoryPriority: updated.categoryPriority,
     };
     const fresh = await updateTournament(tournament.id, dto);
     setTournament(fresh);

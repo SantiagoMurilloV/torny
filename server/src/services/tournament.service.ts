@@ -116,6 +116,23 @@ function mapRow(row: Record<string, unknown>): Tournament {
       if (!raw || typeof raw !== 'object') return {};
       return raw;
     })(),
+    // Schedule constraints from migration 025. Same fall-back-to-empty
+    // pattern as `dailySchedules`: NULL or missing column from a legacy
+    // SELECT lands on a sensible zero value so callers can iterate
+    // without null-checks.
+    maxMatchesPerDay:
+      (row.max_matches_per_day as number | null) ?? undefined,
+    deadTimeBlocks: (() => {
+      const raw = row.dead_time_blocks as
+        | Array<{ start: string; end: string }>
+        | null
+        | undefined;
+      if (!Array.isArray(raw)) return [];
+      return raw;
+    })(),
+    categoryPriority: Array.isArray(row.category_priority)
+      ? (row.category_priority as string[])
+      : [],
     enrolledCount:
       typeof enrolledRaw === 'number'
         ? enrolledRaw
@@ -344,9 +361,18 @@ export class TournamentService {
     const matchDuration = clampInt(data.matchDurationMinutes, 5, 600, 60);
     const matchBreak = clampInt(data.matchBreakMinutes, 0, 240, 15);
     const dailySchedules = data.dailySchedules ?? {};
+    // Migration 025 fields. Same clamp / default pattern as above so
+    // out-of-range payloads don't crash on the DB CHECK constraints.
+    const maxMatchesPerDay = clampInt(data.maxMatchesPerDay, 0, 500, 0);
+    const deadTimeBlocks = Array.isArray(data.deadTimeBlocks)
+      ? data.deadTimeBlocks
+      : [];
+    const categoryPriority = Array.isArray(data.categoryPriority)
+      ? data.categoryPriority
+      : [];
     const result = await pool.query(
-      `INSERT INTO tournaments (name, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+      `INSERT INTO tournaments (name, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
        RETURNING *`,
       [
         data.name,
@@ -374,6 +400,9 @@ export class TournamentService {
         matchDuration,
         matchBreak,
         JSON.stringify(dailySchedules),
+        maxMatchesPerDay,
+        JSON.stringify(deadTimeBlocks),
+        categoryPriority,
       ],
     );
     return mapRow(result.rows[0]);
@@ -428,6 +457,12 @@ export class TournamentService {
       matchDurationMinutes: 'match_duration_minutes',
       matchBreakMinutes: 'match_break_minutes',
       dailySchedules: 'daily_schedules',
+      // Migration 025 constraints. Clamping + JSON.stringify happens
+      // in the switch below so the same defensive pattern protects
+      // these from out-of-range / non-array payloads.
+      maxMatchesPerDay: 'max_matches_per_day',
+      deadTimeBlocks: 'dead_time_blocks',
+      categoryPriority: 'category_priority',
     };
 
     for (const [key, column] of Object.entries(columnMap)) {
@@ -459,6 +494,15 @@ export class TournamentService {
           // to '{}' (the same default the DB column carries) so the
           // admin can clear all per-day overrides by sending null.
           stored = JSON.stringify(rawValue ?? {});
+        } else if (key === 'maxMatchesPerDay') {
+          stored = clampInt(rawValue as number | null | undefined, 0, 500, 0);
+        } else if (key === 'deadTimeBlocks') {
+          // jsonb array; non-array / null collapses to '[]'.
+          stored = JSON.stringify(Array.isArray(rawValue) ? rawValue : []);
+        } else if (key === 'categoryPriority') {
+          // TEXT[] in Postgres — pg serialises arrays natively, no JSON
+          // wrap. Non-array / null collapses to an empty array.
+          stored = Array.isArray(rawValue) ? rawValue : [];
         } else if (key === 'regulationText' || key === 'regulationPdf') {
           // Normaliza '' → null para que "limpiar" desde el form deje
           // la columna realmente vacía en vez de un string vacío. El

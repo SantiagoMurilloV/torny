@@ -43,6 +43,21 @@ export interface ScheduleConfig {
    * in sync.
    */
   dailySchedules?: Record<string, { start: string; end: string }>;
+  /**
+   * Persisted by migration 025. When provided the scheduler honours
+   * them on top of the per-day windows:
+   *   · maxMatchesPerDay  → 0 = no cap; >0 forces a day-roll after the
+   *                          Nth match is placed.
+   *   · deadTimeBlocks    → HH:MM windows the scheduler skips every
+   *                          day (lunch, ceremonies, etc.).
+   *   · categoryPriority  → ordered list; matches whose category is
+   *                          listed earlier get the earliest slots.
+   *                          Match.phase encodes the category as
+   *                          "Category|round" so we extract it here.
+   */
+  maxMatchesPerDay?: number;
+  deadTimeBlocks?: Array<{ start: string; end: string }>;
+  categoryPriority?: string[];
 }
 
 /** Minimum team count required to generate fixtures for each format. */

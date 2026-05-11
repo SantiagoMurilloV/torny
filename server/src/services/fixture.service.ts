@@ -667,6 +667,22 @@ export class FixtureGenerator {
         | Record<string, { start: string; end: string }>
         | null
         | undefined;
+      // Migration 025 fields. Same "modal wins, otherwise fall back to
+      // the persisted column" pattern as the migration-024 trio. When
+      // the admin saves these on the tournament once, every subsequent
+      // regeneration honours them without re-typing.
+      const tournamentMaxMatchesPerDay = tournament.max_matches_per_day as
+        | number
+        | null
+        | undefined;
+      const tournamentDeadTimeBlocks = tournament.dead_time_blocks as
+        | Array<{ start: string; end: string }>
+        | null
+        | undefined;
+      const tournamentCategoryPriority = tournament.category_priority as
+        | string[]
+        | null
+        | undefined;
       const effectiveSchedule: ScheduleConfig = {
         ...(schedule ?? {}),
         matchDuration:
@@ -678,6 +694,12 @@ export class FixtureGenerator {
         // and should win whenever it's supplied.
         dailySchedules:
           schedule?.dailySchedules ?? tournamentDailySchedules ?? undefined,
+        maxMatchesPerDay:
+          schedule?.maxMatchesPerDay ?? tournamentMaxMatchesPerDay ?? undefined,
+        deadTimeBlocks:
+          schedule?.deadTimeBlocks ?? tournamentDeadTimeBlocks ?? undefined,
+        categoryPriority:
+          schedule?.categoryPriority ?? tournamentCategoryPriority ?? undefined,
       } as ScheduleConfig;
       const slots = calculateMatchTimes(matchFixtures, startDate, courts, effectiveSchedule);
 

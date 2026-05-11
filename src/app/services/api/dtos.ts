@@ -47,6 +47,19 @@ export interface CreateTournamentDto {
   matchDurationMinutes?: number;
   matchBreakMinutes?: number;
   dailySchedules?: Record<string, { start: string; end: string }>;
+  /**
+   * Schedule constraints persisted by migration 025 — the FE form had
+   * these for a while but they weren't reaching the API.
+   *   · maxMatchesPerDay — 0 = no cap; >0 forces the scheduler to roll
+   *                       into the next day once N matches are scheduled.
+   *   · deadTimeBlocks   — array of `{ start, end }` (HH:MM) windows the
+   *                       scheduler skips every day.
+   *   · categoryPriority — ordered category names; categories listed
+   *                       first take the earlier slots of each day.
+   */
+  maxMatchesPerDay?: number;
+  deadTimeBlocks?: Array<{ start: string; end: string }>;
+  categoryPriority?: string[];
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;
