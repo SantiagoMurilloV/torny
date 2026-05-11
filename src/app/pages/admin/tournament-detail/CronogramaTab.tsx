@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Calendar, Filter, GripVertical } from 'lucide-react';
@@ -10,9 +10,9 @@ import { getErrorMessage } from '../../../lib/errors';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
-// Color palette for categories — kept in sync with the previous
-// version of this tab. Indexed by category position so the same
-// category always lands on the same colour across runs.
+// Category color palette — same indexing rule as before (sorted
+// category list → CATEGORY_COLORS[idx % len]) so a category always
+// renders in the same colour across runs and across views.
 const CATEGORY_COLORS = [
   { bg: 'bg-blue-100', border: 'border-blue-400', text: 'text-blue-800', dot: 'bg-blue-500' },
   { bg: 'bg-red-100', border: 'border-red-400', text: 'text-red-800', dot: 'bg-red-500' },
@@ -41,22 +41,22 @@ interface CronogramaTabProps {
 }
 
 /**
- * Cronograma — interactive schedule grid with drag-and-drop.
+ * Cronograma — interactive single-day schedule grid.
  *
- * Columns: each calendar day in the tournament range.
- * Rows:    time slots stepped by (matchDuration + matchBreak) from the
- *          tournament's daily window (or the historic 08:00–18:00
- *          fallback when no schedule is configured).
- * Cards:   one per match, coloured by category, labeled with court.
- *          The admin drags a card onto another (day, time) cell to
- *          change its slot. When the destination already has a match
- *          on the SAME court, the two matches swap atomically; when
- *          the court is free in the destination, the dragged match
- *          moves and keeps its court.
+ * Layout per the 2026-05-11 redesign:
+ *   · Top filter: day picker chips (one per tournament day).
+ *   · Columns: each court declared on the tournament.
+ *   · Rows: time slots stepped by (matchDuration + matchBreak) from
+ *           the day's window (with the historic 08:00–18:00 fallback).
+ *   · Each cell shows AT MOST one match (the match at that court+time
+ *     on the selected day) or stays empty as a drop target.
+ *   · Drag a card onto an occupied cell → atomic swap.
+ *   · Drag a card onto an empty cell → simple move; the dragged
+ *     match's court changes to the destination column.
  *
- * The grid generation is data-driven from the tournament config so the
- * dead-time blocks / per-day windows the admin set in Ajustes show up
- * as gaps and short days respectively.
+ * Cross-day reschedules are intentional: the admin changes the day
+ * picker first, then drags. Keeps the visual structure honest about
+ * what's possible in a single tap-and-drop.
  */
 export function CronogramaTab({ tournament, matches, onMatchesPatched }: CronogramaTabProps) {
   return (
@@ -72,20 +72,17 @@ export function CronogramaTab({ tournament, matches, onMatchesPatched }: Cronogr
 
 function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTabProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedDay, setSelectedDay] = useState<string>('');
   const [busy, setBusy] = useState(false);
 
-  // YYYY-MM-DD for a Date or string. Anchors all comparisons + map
-  // keys so timezone shifts in the JS Date round-trip can't perturb
-  // the grouping.
   const toIso = (d: Date | string): string => {
     if (d instanceof Date) return d.toISOString().slice(0, 10);
     if (typeof d === 'string') return d.slice(0, 10);
     return '';
   };
 
-  // Days array — one cell per calendar day between the tournament's
-  // start and end dates (inclusive). Falls back to "today" if the
-  // tournament dates are missing.
+  // Tournament day range — one entry per calendar day between start
+  // and end (inclusive). Falls back to "today" if dates missing.
   const days = useMemo<string[]>(() => {
     const start = toIso(tournament.startDate) || new Date().toISOString().slice(0, 10);
     const end = toIso(tournament.endDate) || start;
@@ -101,12 +98,39 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
     return out;
   }, [tournament.startDate, tournament.endDate]);
 
-  // Time-slot generator. Walks each day's window stepping by
-  // (matchDuration + matchBreak) and collects the union of all
-  // resulting times across days. We also UNION the times of existing
-  // matches so a match scheduled outside the configured window still
-  // shows up in the grid (otherwise the admin couldn't grab it to
-  // move it back into a legal slot).
+  // Pick a default day on first render — prefer "today" if it falls
+  // inside the range, otherwise the first day with matches scheduled,
+  // otherwise the first day of the tournament. Only fires when the
+  // current selection isn't a valid day in `days`.
+  useEffect(() => {
+    if (selectedDay && days.includes(selectedDay)) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const matchDays = new Set(matches.map((m) => toIso(m.date)));
+    const fallback =
+      (days.includes(today) ? today : null) ??
+      days.find((d) => matchDays.has(d)) ??
+      days[0] ??
+      '';
+    if (fallback) setSelectedDay(fallback);
+  }, [days, matches, selectedDay]);
+
+  // Courts — sourced from the tournament metadata so the column set is
+  // stable even on days with no matches yet. Fallback to "Cancha 1"
+  // for tournaments that never declared courts (legacy / brand-new).
+  const courts = useMemo<string[]>(() => {
+    const list = tournament.courts && tournament.courts.length > 0
+      ? tournament.courts
+      : ['Cancha 1'];
+    // Also surface any court that shows up in matches but isn't in the
+    // declared list (e.g. an admin manually moved a match to a renamed
+    // court). Otherwise those matches would have no column to land in.
+    const set = new Set(list);
+    for (const m of matches) {
+      if (m.court && !set.has(m.court)) set.add(m.court);
+    }
+    return [...set];
+  }, [tournament.courts, matches]);
+
   const matchDuration = tournament.matchDurationMinutes ?? 60;
   const matchBreak = tournament.matchBreakMinutes ?? 15;
   const slotStride = Math.max(15, matchDuration + matchBreak);
@@ -124,28 +148,29 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
   };
 
   const dailySchedules = tournament.dailySchedules ?? {};
+
+  // Time slots are generated FOR THE SELECTED DAY using its specific
+  // window (per-day override or global default). We also union the
+  // times of matches scheduled on that day so a match in an
+  // off-cadence slot (e.g. admin manually moved it to a non-standard
+  // time) still has a row to land in.
   const times = useMemo<string[]>(() => {
     const set = new Set<string>();
-    for (const day of days) {
-      const override = dailySchedules[day];
+    if (selectedDay) {
+      const override = dailySchedules[selectedDay];
       const startMin = parseHHMM(override?.start, DEFAULT_DAY_START_MIN);
       const endMin = parseHHMM(override?.end, DEFAULT_DAY_END_MIN);
       for (let m = startMin; m + matchDuration <= endMin; m += slotStride) {
         set.add(formatHHMM(m));
       }
-    }
-    // Add any existing match times so out-of-window matches still
-    // appear (the admin must be able to grab them to move them in).
-    for (const m of matches) {
-      if (m.time) set.add(m.time);
+      for (const m of matches) {
+        if (toIso(m.date) === selectedDay && m.time) set.add(m.time);
+      }
     }
     const sorted = [...set].sort();
     return sorted.length > 0 ? sorted : ['08:00'];
-  }, [days, dailySchedules, matchDuration, slotStride, matches]);
+  }, [selectedDay, dailySchedules, matchDuration, slotStride, matches]);
 
-  // Category extraction — same convention used everywhere else
-  // ("Category|group" or "Category|round"). Empty group/phase falls
-  // back to "General" so an unphased match still gets a colour.
   const getMatchCategory = (m: Match): string => {
     if (m.group) {
       return m.group.includes('|') ? m.group.split('|')[0] : 'General';
@@ -167,75 +192,85 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
     return map;
   }, [categories]);
 
-  // Group matches into a (day, time) → matches[] structure for O(1)
-  // lookup when rendering each cell. We also keep an "out of grid"
-  // bucket for matches whose date isn't in the tournament's day
-  // range — those render in a separate banner above the grid so the
-  // admin can grab them and drop them back inside.
-  const cellMap = useMemo(() => {
-    const map = new Map<string, Match[]>();
-    const outOfGrid: Match[] = [];
-    const daySet = new Set(days);
+  // Build a (court, time) → match index for the selected day. Each
+  // cell holds AT MOST one match — the latest one wins if data is
+  // malformed (two matches on the same court+time would only happen
+  // if the repair tool hasn't caught up; we render the most-recently-
+  // updated one so the admin can grab it and move it manually).
+  const matchesByCell = useMemo(() => {
+    const map = new Map<string, Match>();
     for (const m of matches) {
+      if (toIso(m.date) !== selectedDay) continue;
       if (selectedCategory !== 'all' && getMatchCategory(m) !== selectedCategory) continue;
-      const date = toIso(m.date);
-      if (!daySet.has(date)) {
-        outOfGrid.push(m);
-        continue;
+      const key = `${m.court}|${m.time}`;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, m);
       }
-      const key = `${date}|${m.time}`;
-      const list = map.get(key) ?? [];
-      list.push(m);
-      map.set(key, list);
     }
-    return { map, outOfGrid };
-  }, [days, matches, selectedCategory]);
+    return map;
+  }, [matches, selectedDay, selectedCategory]);
+
+  // Matches on the selected day that don't fit in the current grid
+  // (court not in the columns, or time not in the rows). Currently
+  // both are unioned into the column/row sets above so this stays
+  // empty in practice — kept here as a safety banner in case future
+  // edge cases (renames, etc.) leak a match outside.
+  const orphans = useMemo<Match[]>(() => {
+    const out: Match[] = [];
+    const courtSet = new Set(courts);
+    const timeSet = new Set(times);
+    for (const m of matches) {
+      if (toIso(m.date) !== selectedDay) continue;
+      if (selectedCategory !== 'all' && getMatchCategory(m) !== selectedCategory) continue;
+      if (!courtSet.has(m.court) || !timeSet.has(m.time)) {
+        out.push(m);
+      }
+    }
+    return out;
+  }, [matches, selectedDay, selectedCategory, courts, times]);
 
   /**
-   * Handle a drop. `dragged` is the match being moved; `destDate` and
-   * `destTime` come from the cell. The dragged match keeps its OWN
-   * court — the only court the drop can swap with is one already
-   * occupying the destination cell with the same court name.
+   * Drop handler. The destination cell lives at (court, time) on the
+   * currently selected day — the cross-day move requires the admin to
+   * change the day picker first.
    *
-   * Cases:
-   *   1. dest is the same slot as the dragged match → no-op.
-   *   2. dest has another match on the same court → atomic swap via
-   *      the backend's /matches/swap endpoint.
-   *   3. dest cell has no match on the dragged match's court → plain
-   *      update (the backend's per-row validation kicks in for team
-   *      / court conflicts against OTHER cells, surfacing a friendly
-   *      error to the toast).
+   *   1. Same court + same time → no-op.
+   *   2. Destination occupied → atomic swap via /matches/swap.
+   *   3. Destination empty → update the dragged match's slot to the
+   *      new (court, time). Date stays as selectedDay.
+   *
+   * Backend-side conflict validation still kicks in for case 3: if
+   * the move would put one of the teams in two matches at the same
+   * time on another court, the PUT throws and we toast the friendly
+   * error.
    */
-  const handleDrop = async (dragged: Match, destDate: string, destTime: string) => {
+  const handleDrop = async (dragged: Match, destCourt: string, destTime: string) => {
     if (busy) return;
-    const draggedDate = toIso(dragged.date);
-    if (draggedDate === destDate && dragged.time === destTime) return;
+    if (dragged.court === destCourt && dragged.time === destTime) return;
     setBusy(true);
     try {
-      const destMatches = cellMap.map.get(`${destDate}|${destTime}`) ?? [];
-      const sameCourt = destMatches.find(
-        (m) => m.id !== dragged.id && m.court === dragged.court,
-      );
-      if (sameCourt) {
-        const { matchA, matchB } = await api.swapMatches(dragged.id, sameCourt.id);
+      const destMatch = matchesByCell.get(`${destCourt}|${destTime}`);
+      if (destMatch && destMatch.id !== dragged.id) {
+        const { matchA, matchB } = await api.swapMatches(dragged.id, destMatch.id);
         onMatchesPatched?.([matchA, matchB]);
         toast.success(
-          `Cambio: ${dragged.team1.name} y ${sameCourt.team1.name} intercambiaron horario.`,
+          `Cambio: ${shortLabel(dragged)} y ${shortLabel(destMatch)} intercambiaron horario.`,
         );
       } else {
         const updated = await api.updateMatch(dragged.id, {
           tournamentId: dragged.tournamentId,
           team1Id: dragged.team1.id,
           team2Id: dragged.team2.id,
-          date: destDate,
+          date: selectedDay,
           time: destTime,
-          court: dragged.court,
+          court: destCourt,
           phase: dragged.phase,
           groupName: dragged.group,
           status: dragged.status,
         });
         onMatchesPatched?.([updated]);
-        toast.success(`Movido a ${formatDateLabel(destDate)} · ${destTime}.`);
+        toast.success(`Movido a ${destCourt} · ${destTime}.`);
       }
     } catch (err) {
       toast.error(getErrorMessage(err, 'No se pudo mover el partido'));
@@ -244,9 +279,16 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
     }
   };
 
-  const formatDateLabel = (iso: string): string => {
+  const shortLabel = (m: Match): string =>
+    `${m.team1.initials || m.team1.name} vs ${m.team2.initials || m.team2.name}`;
+
+  const formatDayLabel = (iso: string): string => {
     const d = new Date(iso + 'T12:00:00');
-    return d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
+    return d.toLocaleDateString('es-CO', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    });
   };
 
   return (
@@ -260,101 +302,129 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
           </h2>
         </div>
         <span className="text-xs text-black/50">
-          Arrastrá los partidos para reagendarlos. Mismo cancha en el destino → intercambio.
+          Arrastrá un partido a otra celda para reagendarlo. Misma cancha+hora ocupada → intercambio.
         </span>
       </div>
 
-      {/* Category legend / filter — same UI as the read-only version
-          before this refactor. Filter affects the grid AND the
-          out-of-grid banner so the admin always sees the same scope. */}
-      <div className="bg-white border border-black/10 rounded-lg p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter className="w-4 h-4 text-black/50" />
-          <span className="text-sm font-bold text-black/70" style={FONT}>
-            CATEGORÍAS
-          </span>
+      {/* Filters: day + category. The day picker is the primary axis
+          of this redesign — only one day is visible at a time so the
+          court-per-column layout reads cleanly. */}
+      <div className="bg-white border border-black/10 rounded-lg p-4 space-y-3">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Calendar className="w-4 h-4 text-black/50" />
+            <span className="text-sm font-bold text-black/70" style={FONT}>
+              DÍA
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {days.map((d) => {
+              const active = d === selectedDay;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setSelectedDay(d)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                    active
+                      ? 'bg-black text-white border-black'
+                      : 'bg-white border-black/10 text-black/60 hover:bg-black/5'
+                  }`}
+                  style={FONT}
+                >
+                  {formatDayLabel(d)}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setSelectedCategory('all')}
-            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-              selectedCategory === 'all'
-                ? 'bg-black text-white'
-                : 'bg-black/5 text-black/60 hover:bg-black/10'
-            }`}
-            style={FONT}
-          >
-            Todas
-          </button>
-          {categories.map((cat) => {
-            const color = categoryColorMap.get(cat)!;
-            const isActive = selectedCategory === cat;
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
-                  isActive
-                    ? `${color.bg} ${color.border} ${color.text}`
-                    : 'bg-white border-black/10 text-black/60 hover:bg-black/5'
-                }`}
-                style={FONT}
-              >
-                <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${color.dot}`} />
-                {cat}
-              </button>
-            );
-          })}
+
+        <div className="pt-3 border-t border-black/10">
+          <div className="flex items-center gap-2 mb-2">
+            <Filter className="w-4 h-4 text-black/50" />
+            <span className="text-sm font-bold text-black/70" style={FONT}>
+              CATEGORÍAS
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('all')}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                selectedCategory === 'all'
+                  ? 'bg-black text-white'
+                  : 'bg-black/5 text-black/60 hover:bg-black/10'
+              }`}
+              style={FONT}
+            >
+              Todas
+            </button>
+            {categories.map((cat) => {
+              const color = categoryColorMap.get(cat)!;
+              const isActive = selectedCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all border ${
+                    isActive
+                      ? `${color.bg} ${color.border} ${color.text}`
+                      : 'bg-white border-black/10 text-black/60 hover:bg-black/5'
+                  }`}
+                  style={FONT}
+                >
+                  <span className={`inline-block w-2 h-2 rounded-full mr-1.5 ${color.dot}`} />
+                  {cat}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Out-of-grid banner — matches whose date falls outside the
-          tournament's range stay grabbable here so the admin can drag
-          them back into a real slot. */}
-      {cellMap.outOfGrid.length > 0 && (
+      {/* Orphans banner — only renders when a match has a court/time
+          not in the current grid (rare; future-proofing). */}
+      {orphans.length > 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
           <p className="text-xs font-bold text-yellow-900 mb-2" style={FONT}>
-            Partidos fuera del rango del torneo — arrastralos a un día/hora arriba
+            Partidos fuera del calendario configurado — arrastralos a una celda válida
           </p>
           <div className="flex flex-wrap gap-2">
-            {cellMap.outOfGrid.map((m) => (
+            {orphans.map((m) => (
               <MatchCard
                 key={m.id}
                 match={m}
                 color={categoryColorMap.get(getMatchCategory(m)) ?? CATEGORY_COLORS[0]}
-                compact
               />
             ))}
           </div>
         </div>
       )}
 
-      {/* The grid itself — sticky day header on top, sticky time
-          column on the left. Overflow-x scroll handles tournaments
-          with many days; the inner content sizes itself so cells stay
-          legible on mobile (~140px per day column). */}
+      {/* The grid — sticky time column on the left, court columns on
+          top, single match per cell. min-width-per-column keeps cards
+          legible on narrow screens; overflow-x scroll handles
+          tournaments with many courts. */}
       <div className="bg-white border border-black/10 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <div
             className="inline-grid"
             style={{
-              gridTemplateColumns: `60px repeat(${days.length}, minmax(180px, 1fr))`,
+              gridTemplateColumns: `60px repeat(${courts.length}, minmax(180px, 1fr))`,
             }}
           >
             {/* Top-left empty corner */}
             <div className="sticky top-0 left-0 z-20 bg-white border-b border-r border-black/10" />
-            {/* Day headers */}
-            {days.map((day) => (
+            {/* Court headers */}
+            {courts.map((court) => (
               <div
-                key={day}
+                key={court}
                 className="sticky top-0 z-10 bg-black text-white px-3 py-2 border-b border-black/10"
               >
-                <div className="text-xs font-bold uppercase tracking-wide" style={FONT}>
-                  {formatDateLabel(day)}
+                <div className="text-xs font-bold uppercase tracking-wide truncate" style={FONT}>
+                  {court}
                 </div>
-                <div className="text-[10px] text-white/60 tabular-nums">{day}</div>
               </div>
             ))}
 
@@ -363,8 +433,8 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
               <RowFragment
                 key={time}
                 time={time}
-                days={days}
-                cellMap={cellMap.map}
+                courts={courts}
+                matchesByCell={matchesByCell}
                 categoryColorMap={categoryColorMap}
                 getMatchCategory={getMatchCategory}
                 onDrop={handleDrop}
@@ -384,23 +454,23 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
 
 interface RowFragmentProps {
   time: string;
-  days: string[];
-  cellMap: Map<string, Match[]>;
+  courts: string[];
+  matchesByCell: Map<string, Match>;
   categoryColorMap: Map<string, typeof CATEGORY_COLORS[0]>;
   getMatchCategory: (m: Match) => string;
-  onDrop: (dragged: Match, destDate: string, destTime: string) => void;
+  onDrop: (dragged: Match, destCourt: string, destTime: string) => void;
   busy: boolean;
 }
 
 /**
- * One row of the grid. Renders the time label on the left + a drop-cell
- * per day on the right. Lives in its own component so each cell can own
- * its useDrop without redefining the hook per render of the outer grid.
+ * A single time row. The leftmost cell shows the HH:MM label; one
+ * Cell per court follows. Each Cell owns its own `useDrop` so a hover
+ * highlight reflects only that cell, not the whole row.
  */
 function RowFragment({
   time,
-  days,
-  cellMap,
+  courts,
+  matchesByCell,
   categoryColorMap,
   getMatchCategory,
   onDrop,
@@ -408,15 +478,18 @@ function RowFragment({
 }: RowFragmentProps) {
   return (
     <>
-      <div className="sticky left-0 z-10 bg-white border-b border-r border-black/10 px-2 py-2 text-xs font-bold text-black/70 tabular-nums" style={FONT}>
+      <div
+        className="sticky left-0 z-10 bg-white border-b border-r border-black/10 px-2 py-2 text-xs font-bold text-black/70 tabular-nums"
+        style={FONT}
+      >
         {time}
       </div>
-      {days.map((day) => (
+      {courts.map((court) => (
         <Cell
-          key={`${day}|${time}`}
-          date={day}
+          key={`${court}|${time}`}
+          court={court}
           time={time}
-          matches={cellMap.get(`${day}|${time}`) ?? []}
+          match={matchesByCell.get(`${court}|${time}`) ?? null}
           categoryColorMap={categoryColorMap}
           getMatchCategory={getMatchCategory}
           onDrop={onDrop}
@@ -428,24 +501,19 @@ function RowFragment({
 }
 
 interface CellProps {
-  date: string;
+  court: string;
   time: string;
-  matches: Match[];
+  match: Match | null;
   categoryColorMap: Map<string, typeof CATEGORY_COLORS[0]>;
   getMatchCategory: (m: Match) => string;
-  onDrop: (dragged: Match, destDate: string, destTime: string) => void;
+  onDrop: (dragged: Match, destCourt: string, destTime: string) => void;
   busy: boolean;
 }
 
-/**
- * Drop target for one (date, time) intersection. Holds zero or more
- * match cards stacked vertically. Highlights on hover (canDrop +
- * isOver) so the admin gets clear feedback while dragging.
- */
 function Cell({
-  date,
+  court,
   time,
-  matches,
+  match,
   categoryColorMap,
   getMatchCategory,
   onDrop,
@@ -457,28 +525,27 @@ function Cell({
     { isOver: boolean; canDrop: boolean }
   >(() => ({
     accept: MATCH_DND_TYPE,
-    drop: (item) => onDrop(item.match, date, time),
+    drop: (item) => onDrop(item.match, court, time),
     canDrop: () => !busy,
     collect: (monitor) => ({
       isOver: monitor.isOver(),
       canDrop: monitor.canDrop(),
     }),
-  }), [date, time, onDrop, busy]);
+  }), [court, time, onDrop, busy]);
 
   const dropTint = isOver && canDrop ? 'bg-spk-red/5 ring-2 ring-spk-red/40 ring-inset' : '';
 
   return (
     <div
       ref={drop as unknown as React.Ref<HTMLDivElement>}
-      className={`min-h-[64px] border-b border-r border-black/10 p-1.5 space-y-1.5 transition-colors ${dropTint}`}
+      className={`min-h-[72px] border-b border-r border-black/10 p-1.5 transition-colors ${dropTint}`}
     >
-      {matches.map((m) => (
+      {match && (
         <MatchCard
-          key={m.id}
-          match={m}
-          color={categoryColorMap.get(getMatchCategory(m)) ?? CATEGORY_COLORS[0]}
+          match={match}
+          color={categoryColorMap.get(getMatchCategory(match)) ?? CATEGORY_COLORS[0]}
         />
-      ))}
+      )}
     </div>
   );
 }
@@ -486,16 +553,9 @@ function Cell({
 interface MatchCardProps {
   match: Match;
   color: typeof CATEGORY_COLORS[0];
-  /** Compact rendering used by the out-of-grid banner. */
-  compact?: boolean;
 }
 
-/**
- * One draggable match. Compact mode skips the team-avatar row and
- * shrinks the padding so the out-of-grid banner doesn't dwarf the
- * grid below it.
- */
-function MatchCard({ match, color, compact = false }: MatchCardProps) {
+function MatchCard({ match, color }: MatchCardProps) {
   const [{ isDragging }, drag, preview] = useDrag<
     { match: Match },
     void,
@@ -524,14 +584,6 @@ function MatchCard({ match, color, compact = false }: MatchCardProps) {
         >
           <GripVertical className="w-3 h-3" />
         </span>
-        {match.court && (
-          <span
-            className="text-[9px] font-bold uppercase tracking-wider bg-white/70 text-black/70 px-1.5 py-0.5 rounded"
-            style={FONT}
-          >
-            {match.court}
-          </span>
-        )}
         {groupLabel && (
           <span className={`text-[9px] font-bold ${color.text}`} style={FONT}>
             {groupLabel}
@@ -543,27 +595,18 @@ function MatchCard({ match, color, compact = false }: MatchCardProps) {
           </span>
         )}
       </div>
-      {!compact && (
-        <div className="flex items-center gap-1.5">
-          <TeamAvatar team={match.team1} size="xs" />
-          <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
-            {match.team1.name}
-          </span>
-        </div>
-      )}
-      {!compact && (
-        <div className="flex items-center gap-1.5 mt-1">
-          <TeamAvatar team={match.team2} size="xs" />
-          <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
-            {match.team2.name}
-          </span>
-        </div>
-      )}
-      {compact && (
-        <div className="text-[10px] text-black/70">
-          {match.team1.initials} vs {match.team2.initials}
-        </div>
-      )}
+      <div className="flex items-center gap-1.5">
+        <TeamAvatar team={match.team1} size="xs" />
+        <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
+          {match.team1.name}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5 mt-1">
+        <TeamAvatar team={match.team2} size="xs" />
+        <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
+          {match.team2.name}
+        </span>
+      </div>
     </div>
   );
 }
