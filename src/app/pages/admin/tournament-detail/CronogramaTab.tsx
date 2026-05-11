@@ -199,21 +199,28 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
     return map;
   }, [categories]);
 
-  // Build a (court, time) → match index for the selected day. Each
-  // cell holds AT MOST one match — the latest one wins if data is
-  // malformed (two matches on the same court+time would only happen
-  // if the repair tool hasn't caught up; we render the most-recently-
-  // updated one so the admin can grab it and move it manually).
+  // Build a (court, time) → matches[] index for the selected day.
+  //
+  // History: this map originally kept only ONE match per cell, which
+  // hid duplicates when the data ended up with two matches sharing
+  // (court, time, date) — a court double-booking that the repair tool
+  // is supposed to clean up but might not have run yet. The hidden
+  // duplicate then made the team-conflict pre-check below fire on a
+  // match that wasn't visible in the grid, leaving the admin
+  // confused about WHY the drop was blocked.
+  //
+  // Now we render every match in its cell (stacked vertically) so the
+  // admin sees the actual mess. The drop logic still picks the FIRST
+  // match in a cell as the swap target.
   const matchesByCell = useMemo(() => {
-    const map = new Map<string, Match>();
+    const map = new Map<string, Match[]>();
     for (const m of matches) {
       if (toIso(m.date) !== selectedDay) continue;
       if (selectedCategory !== 'all' && getMatchCategory(m) !== selectedCategory) continue;
       const key = `${m.court}|${m.time}`;
-      const existing = map.get(key);
-      if (!existing) {
-        map.set(key, m);
-      }
+      const list = map.get(key) ?? [];
+      list.push(m);
+      map.set(key, list);
     }
     return map;
   }, [matches, selectedDay, selectedCategory]);
@@ -256,60 +263,81 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
     if (busy) return;
     if (dragged.court === destCourt && dragged.time === destTime) return;
 
-    // Pre-check against the FULL match list (NOT matchesByCell, which
-    // is filtered by the active category). The grid can show an empty
-    // cell while a match in another category — invisible to the
-    // current view — sits at the same (date, time) on a different
-    // court with one of the dragged match's teams. The backend would
-    // (correctly) reject the move with a generic "Uno de los equipos
-    // ya tiene un partido programado el …" message, but the admin
-    // doesn't see WHICH match because the filter hides it.
-    //
-    // Catching the conflict here lets us name the offender ("X vs Y
-    // en Cancha N") so the admin understands and either changes the
-    // category filter or picks a different slot.
-    const teamConflict = matches.find((m) => {
-      if (m.id === dragged.id) return false;
-      if (toIso(m.date) !== selectedDay) return false;
-      if (m.time !== destTime) return false;
-      const t1 = m.team1.id;
-      const t2 = m.team2.id;
-      const d1 = dragged.team1.id;
-      const d2 = dragged.team2.id;
-      return t1 === d1 || t1 === d2 || t2 === d1 || t2 === d2;
-    });
-    if (teamConflict) {
-      // Find which team(s) clash so the message names them. Useful
-      // when both teams appear elsewhere — admin sees the exact
-      // overlap instead of a generic warning.
-      const t1 = teamConflict.team1.id;
-      const t2 = teamConflict.team2.id;
-      const sharedTeam =
-        dragged.team1.id === t1 || dragged.team1.id === t2
-          ? dragged.team1.name
-          : dragged.team2.name;
-      const hidden =
-        selectedCategory !== 'all' &&
-        getMatchCategory(teamConflict) !== selectedCategory;
-      toast.error(
-        `${sharedTeam} ya juega ${shortLabel(teamConflict)} a las ${destTime} en ${teamConflict.court}.` +
-          (hidden
-            ? ' (Está oculto por el filtro de categoría — quitalo para verlo.)'
-            : ''),
-      );
-      return;
-    }
-
     setBusy(true);
     try {
-      const destMatch = matchesByCell.get(`${destCourt}|${destTime}`);
-      if (destMatch && destMatch.id !== dragged.id) {
+      // 1) Destination cell occupied → straight swap with whichever
+      // match is sitting on it (first wins if it's a stacked cell).
+      const destStack = matchesByCell.get(`${destCourt}|${destTime}`) ?? [];
+      const destMatch = destStack.find((m) => m.id !== dragged.id) ?? null;
+
+      if (destMatch) {
         const { matchA, matchB } = await api.swapMatches(dragged.id, destMatch.id);
         onMatchesPatched?.([matchA, matchB]);
         toast.success(
           `Cambio: ${shortLabel(dragged)} y ${shortLabel(destMatch)} intercambiaron horario.`,
         );
-      } else {
+        return;
+      }
+
+      // 2) Destination empty in the active view — but a match in
+      // another category (hidden by the filter) or another court at
+      // the same time may share a team with the dragged match. The
+      // backend would reject the plain update with the generic "Uno
+      // de los equipos ya tiene un partido programado el …" message.
+      //
+      // To keep the drop succeeding, we auto-swap with that hidden
+      // team-conflict match so the dragged match takes the conflict's
+      // slot and the conflict's match moves to the dragged's original
+      // slot. Both teams keep their commitments without forcing the
+      // admin to chase the hidden partido.
+      const teamConflict = matches.find((m) => {
+        if (m.id === dragged.id) return false;
+        if (toIso(m.date) !== selectedDay) return false;
+        if (m.time !== destTime) return false;
+        const t1 = m.team1.id;
+        const t2 = m.team2.id;
+        const d1 = dragged.team1.id;
+        const d2 = dragged.team2.id;
+        return t1 === d1 || t1 === d2 || t2 === d1 || t2 === d2;
+      });
+
+      if (teamConflict) {
+        const { matchA, matchB } = await api.swapMatches(dragged.id, teamConflict.id);
+        onMatchesPatched?.([matchA, matchB]);
+        const hidden =
+          selectedCategory !== 'all' &&
+          getMatchCategory(teamConflict) !== selectedCategory;
+        toast.success(
+          `Movido a ${destCourt} · ${destTime} e intercambiado con ${shortLabel(teamConflict)}` +
+            (hidden ? ' (estaba oculto por el filtro).' : '.'),
+        );
+        return;
+      }
+
+      // 3) Clean move — destination empty and no team conflict.
+      {
+        // Diagnostic snapshot — the BE has rejected drops with a "conflict
+        // on another day" message in the past and the only way to tell
+        // whether the FE or the BE drifted is to log what we're sending.
+        // Safe to leave in production: a console.info entry per drag has
+        // negligible cost and stays invisible unless the admin opens
+        // devtools.
+        // eslint-disable-next-line no-console
+        console.info('[cronograma] move match', {
+          matchId: dragged.id,
+          draggedFrom: {
+            date: toIso(dragged.date),
+            time: dragged.time,
+            court: dragged.court,
+          },
+          movingTo: {
+            date: selectedDay,
+            time: destTime,
+            court: destCourt,
+          },
+          teams: { team1Id: dragged.team1.id, team2Id: dragged.team2.id },
+          selectedDay,
+        });
         const updated = await api.updateMatch(dragged.id, {
           tournamentId: dragged.tournamentId,
           team1Id: dragged.team1.id,
@@ -325,6 +353,8 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
         toast.success(`Movido a ${destCourt} · ${destTime}.`);
       }
     } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[cronograma] move failed', err);
       toast.error(getErrorMessage(err, 'No se pudo mover el partido'));
     } finally {
       setBusy(false);
@@ -481,7 +511,7 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
 interface RowFragmentProps {
   time: string;
   courts: string[];
-  matchesByCell: Map<string, Match>;
+  matchesByCell: Map<string, Match[]>;
   categoryColorMap: Map<string, typeof CATEGORY_COLORS[0]>;
   getMatchCategory: (m: Match) => string;
   onDrop: (dragged: Match, destCourt: string, destTime: string) => void;
@@ -515,7 +545,7 @@ function RowFragment({
           key={`${court}|${time}`}
           court={court}
           time={time}
-          match={matchesByCell.get(`${court}|${time}`) ?? null}
+          matches={matchesByCell.get(`${court}|${time}`) ?? []}
           categoryColorMap={categoryColorMap}
           getMatchCategory={getMatchCategory}
           onDrop={onDrop}
@@ -529,7 +559,14 @@ function RowFragment({
 interface CellProps {
   court: string;
   time: string;
-  match: Match | null;
+  /**
+   * All matches scheduled at this (court, time) on the selected day.
+   * Usually 0 or 1; if it's >1 we render them stacked so the admin
+   * sees the double-booking and can fix it (rather than silently
+   * hiding the duplicate, which used to break drag-and-drop with
+   * "phantom" team conflicts the user couldn't see).
+   */
+  matches: Match[];
   categoryColorMap: Map<string, typeof CATEGORY_COLORS[0]>;
   getMatchCategory: (m: Match) => string;
   onDrop: (dragged: Match, destCourt: string, destTime: string) => void;
@@ -539,7 +576,7 @@ interface CellProps {
 function Cell({
   court,
   time,
-  match,
+  matches,
   categoryColorMap,
   getMatchCategory,
   onDrop,
@@ -560,18 +597,31 @@ function Cell({
   }), [court, time, onDrop, busy]);
 
   const dropTint = isOver && canDrop ? 'bg-spk-red/5 ring-2 ring-spk-red/40 ring-inset' : '';
+  const isStacked = matches.length > 1;
 
   return (
     <div
       ref={drop as unknown as React.Ref<HTMLDivElement>}
       className={`min-h-[72px] border-b border-r border-black/10 p-1.5 transition-colors ${dropTint}`}
     >
-      {match && (
-        <MatchCard
-          match={match}
-          color={categoryColorMap.get(getMatchCategory(match)) ?? CATEGORY_COLORS[0]}
-        />
+      {isStacked && (
+        <div
+          className="mb-1 text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-sm px-1.5 py-0.5"
+          style={FONT}
+          title="Hay más de un partido en esta cancha y hora — arrastrá uno a otra celda para resolver."
+        >
+          ⚠ {matches.length} partidos en este slot
+        </div>
       )}
+      <div className="space-y-1">
+        {matches.map((m) => (
+          <MatchCard
+            key={m.id}
+            match={m}
+            color={categoryColorMap.get(getMatchCategory(m)) ?? CATEGORY_COLORS[0]}
+          />
+        ))}
+      </div>
     </div>
   );
 }
