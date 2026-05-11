@@ -1,5 +1,10 @@
 import { useState, useMemo } from 'react';
 import { Trophy, Filter, Edit, MapPin, Pencil, Search, X, Wrench, Loader2 } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '../../../components/ui/popover';
 import { toast } from 'sonner';
 import { Match } from '../../../types';
 import { Badge } from '../../../components/ui/badge';
@@ -249,94 +254,149 @@ export function MatchesTab({
 
   return (
     <>
-      {/* Search bar — kept on its own row so it gets full width on
-          mobile and doesn't get squeezed between the filter selects. */}
-      <div className="relative mb-3">
-        <Search
-          className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none"
-          aria-hidden="true"
-        />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por equipo, sigla o cancha…"
-          aria-label="Buscar partido"
-          className="w-full pl-9 pr-9 py-2 text-sm rounded-sm border border-spk-hairline focus:border-spk-red focus:ring-2 focus:ring-spk-red/20 outline-none bg-white"
-        />
-        {search && (
-          <button
-            type="button"
-            onClick={() => setSearch('')}
-            aria-label="Limpiar búsqueda"
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-black/40 hover:text-black rounded-sm"
-          >
-            <X className="w-3.5 h-3.5" aria-hidden="true" />
-          </button>
-        )}
-      </div>
+      {/* Toolbar — single row: search input takes most of the width,
+          two icon buttons sit next to it.
+            · Filtros popover  — opens the three Select dropdowns
+              (fase, grupo, estado). The trigger shows a small dot when
+              any filter is active so the admin can tell at a glance
+              that something is filtering even with the popover closed.
+            · Reparar (icon-only) — same action as before, just an
+              icon now to save horizontal space. Tooltip preserves the
+              affordance copy. Both buttons keep the same `mb-6` gap
+              below so the matches list breathes the same as before. */}
+      <div className="flex items-center gap-2 mb-6">
+        <div className="relative flex-1 min-w-0">
+          <Search
+            className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none"
+            aria-hidden="true"
+          />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar partido…"
+            aria-label="Buscar partido"
+            className="w-full pl-9 pr-9 py-2 text-sm rounded-sm border border-spk-hairline focus:border-spk-red focus:ring-2 focus:ring-spk-red/20 outline-none bg-white"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="Limpiar búsqueda"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-black/40 hover:text-black rounded-sm"
+            >
+              <X className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          )}
+        </div>
 
-      {/* Filters + repair button.
-          The "Reparar horarios" button lives at the right end of this
-          row so it doesn't fight with the more frequently-used filters
-          for visual prominence. It's an admin escape-hatch for the
-          team-double-booking class of bugs (e.g. SAN JOSE A scheduled
-          14:00 on Cancha 3 AND 14:00 on Cancha 1 — physically
-          impossible). The dialog walks the admin through the consequence
-          before any rows move. */}
-      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 mb-6">
-        <Filter className="w-4 h-4 text-black/40" />
-        <Select value={phaseFilter} onValueChange={setPhaseFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Fase" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las fases</SelectItem>
-            {phases.map((p) => (
-              <SelectItem key={p} value={p}>
-                {p}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={groupFilter} onValueChange={setGroupFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Grupo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los grupos</SelectItem>
-            {groups.map((g) => (
-              <SelectItem key={g} value={g}>
-                {g}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Estado" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos los estados</SelectItem>
-            <SelectItem value="upcoming">{matchStatusLabel('upcoming')}</SelectItem>
-            <SelectItem value="live">{matchStatusLabel('live')}</SelectItem>
-            <SelectItem value="completed">{matchStatusLabel('completed')}</SelectItem>
-          </SelectContent>
-        </Select>
+        {/* Filtros popover — collapses three Selects into one trigger.
+            The red dot on the icon hints at "filtros aplicados" without
+            popping the popover open. */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label="Filtros"
+              title="Filtros"
+              className="relative flex-shrink-0 inline-flex items-center justify-center w-10 h-10 border border-spk-hairline hover:border-black/20 hover:bg-black/[0.02] rounded-sm transition-colors"
+            >
+              <Filter className="w-4 h-4 text-black/70" aria-hidden="true" />
+              {isFiltering && (
+                <span
+                  className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-spk-red"
+                  aria-hidden="true"
+                />
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72 p-3 space-y-3">
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-black/55 mb-1.5">
+                Fase
+              </label>
+              <Select value={phaseFilter} onValueChange={setPhaseFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Fase" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las fases</SelectItem>
+                  {phases.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-black/55 mb-1.5">
+                Grupo
+              </label>
+              <Select value={groupFilter} onValueChange={setGroupFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Grupo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los grupos</SelectItem>
+                  {groups.map((g) => (
+                    <SelectItem key={g} value={g}>
+                      {g}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-black/55 mb-1.5">
+                Estado
+              </label>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los estados</SelectItem>
+                  <SelectItem value="upcoming">{matchStatusLabel('upcoming')}</SelectItem>
+                  <SelectItem value="live">{matchStatusLabel('live')}</SelectItem>
+                  <SelectItem value="completed">{matchStatusLabel('completed')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {isFiltering && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPhaseFilter('all');
+                  setGroupFilter('all');
+                  setStatusFilter('all');
+                }}
+                className="w-full text-[11px] font-bold uppercase tracking-wider text-spk-red hover:underline"
+                style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </PopoverContent>
+        </Popover>
+
+        {/* Reparar — icon-only so it costs the same as the filtros
+            button on mobile. The wrench icon (or spinner while in
+            flight) carries the meaning; the title attribute keeps the
+            label discoverable on hover/long-press. */}
         <button
           type="button"
           onClick={() => setRepairConfirmOpen(true)}
           disabled={repairing || !effectiveTournamentId}
-          title="Detecta y reagenda partidos con conflicto de horario (mismo equipo en dos partidos a la misma hora)"
-          className="sm:ml-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-spk-blue/40 text-spk-blue hover:bg-spk-blue/10 rounded-sm text-xs sm:text-sm font-bold uppercase disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.05em' }}
+          aria-label="Reparar horarios"
+          title="Reparar horarios — detecta y reagenda partidos con conflicto (mismo equipo en dos partidos a la misma hora)"
+          className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 border border-spk-blue/40 text-spk-blue hover:bg-spk-blue/10 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {repairing ? (
             <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
           ) : (
             <Wrench className="w-4 h-4" aria-hidden="true" />
           )}
-          Reparar horarios
         </button>
       </div>
 
