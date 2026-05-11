@@ -251,7 +251,11 @@ export function AdminTournaments() {
               }
             }}
             aria-label={`Abrir ${tournament.name}`}
-            className="group relative bg-white border-2 border-black/10 hover:border-black/30 rounded-sm overflow-hidden hover:shadow-lg transition-all cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-spk-red/50"
+            // `shadow-md` rest / `shadow-xl` hover gives a soft drop on
+            // the sides so cards lift off the white background even
+            // before the cursor hits them. The previous `hover:shadow-lg`
+            // alone left the cards visually flat at rest.
+            className="group relative bg-white border-2 border-black/10 hover:border-black/30 rounded-sm overflow-hidden shadow-md hover:shadow-xl transition-all cursor-pointer text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-spk-red/50"
           >
             {/* Tournament Image */}
             <div className="h-40 bg-gradient-to-br from-[#003087] to-[#E31E24] relative">
