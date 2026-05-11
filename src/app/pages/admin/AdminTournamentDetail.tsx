@@ -165,12 +165,23 @@ export function AdminTournamentDetail() {
 
   const handleTournamentEditSubmit = async (updated: Tournament) => {
     if (!tournament) return;
+    const newStartDate = updated.startDate.toISOString().split('T')[0];
+    const newEndDate = updated.endDate.toISOString().split('T')[0];
+    // Snapshot old dates BEFORE the update so we can detect a date
+    // change and decide whether to trigger the auto-repair below.
+    // Both fields are compared as YYYY-MM-DD strings so the comparison
+    // is timezone-safe.
+    const oldStartDate = tournament.startDate.toISOString().split('T')[0];
+    const oldEndDate = tournament.endDate.toISOString().split('T')[0];
+    const datesChanged =
+      newStartDate !== oldStartDate || newEndDate !== oldEndDate;
+
     const dto: UpdateTournamentDto = {
       name: updated.name,
       sport: updated.sport,
       club: updated.club,
-      startDate: updated.startDate.toISOString().split('T')[0],
-      endDate: updated.endDate.toISOString().split('T')[0],
+      startDate: newStartDate,
+      endDate: newEndDate,
       description: updated.description,
       coverImage: updated.coverImage,
       logo: updated.logo,
@@ -189,6 +200,49 @@ export function AdminTournamentDetail() {
     const fresh = await updateTournament(tournament.id, dto);
     setTournament(fresh);
     toast.success('Torneo actualizado');
+
+    // Auto-repair: when the admin shifts the tournament window, run the
+    // schedule reparator so any matches that fell outside the new
+    // [start, end] range get pulled into a valid slot. Only fires on
+    // a real date change so editing the name or club doesn't trigger
+    // an extra round-trip. Failures are surfaced via toast but the
+    // tournament update itself already succeeded — admin can re-run
+    // "Reparar horarios" manually if this auto-pass fails.
+    if (datesChanged && id) {
+      try {
+        const result = await api.repairTournamentConflicts(id);
+        if (result.matchesMoved > 0) {
+          // Refetch matches so the Partidos tab reflects the new slots
+          // without waiting for the user to navigate away and back.
+          const freshMatches = await api.getTournamentMatches(id);
+          setMatches(freshMatches);
+          // Compose the same kind of detailed message the manual
+          // button shows so the admin knows exactly what changed.
+          const parts: string[] = [];
+          if (result.outOfRange > 0) {
+            parts.push(`${result.outOfRange} fuera del rango nuevo`);
+          }
+          if (result.teamConflicts > 0) {
+            parts.push(`${result.teamConflicts} con equipo en dos partidos a la vez`);
+          }
+          if (result.courtConflicts > 0) {
+            parts.push(`${result.courtConflicts} con cancha doble`);
+          }
+          const detail = parts.length > 0 ? ` (${parts.join(', ')})` : '';
+          toast.info(
+            `Reagendé ${result.matchesMoved} partido${
+              result.matchesMoved === 1 ? '' : 's'
+            }${detail}.`,
+          );
+        }
+      } catch (err) {
+        toast.warning(
+          'Cambié las fechas pero la reparación automática falló. Tocá ' +
+            '"Reparar horarios" en la pestaña Partidos para reintentarla.',
+        );
+        console.warn('[auto-repair] tournament-date repair failed', err);
+      }
+    }
   };
 
   const finalizeTournament = async (t: Tournament) => updateTournament(t.id, { status: 'completed' });
