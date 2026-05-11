@@ -26,6 +26,11 @@ interface ManualGroupsModalProps {
   /** Court names declared on the tournament. Forwarded to ScheduleFields
    *  so the admin can see which courts the fixtures will land on. */
   availableCourts?: string[];
+  /** Persisted schedule defaults from the tournament (migration 024).
+   *  When provided, the initial form state pre-fills from these instead
+   *  of the global DEFAULT_SCHEDULE so the modal shows the admin's saved
+   *  Programación de partidos values. */
+  tournamentDefaults?: Partial<ScheduleConfig>;
 }
 
 const MIN_GROUPS = 2;

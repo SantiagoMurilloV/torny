@@ -66,6 +66,33 @@ export function useTournamentForm({
             location: tournament.courtLocations?.[name] ?? '',
           }))
         : [...DEFAULT_COURTS];
+    // Hydrate the daily-schedule rows from the tournament. We
+    // materialise an entry for EVERY date in the [start, end] range so
+    // the form renders one row per day; entries for dates not present
+    // in `tournament.dailySchedules` show empty start/end (= "use the
+    // global default"). This keeps the per-day grid stable as the
+    // admin edits — no rows shifting around when they save.
+    const hydrateDailySchedules = (): TournamentFormState['dailySchedules'] => {
+      const start = tournament.startDate.toISOString().split('T')[0];
+      const end = tournament.endDate.toISOString().split('T')[0];
+      const map = tournament.dailySchedules ?? {};
+      const rows: TournamentFormState['dailySchedules'] = [];
+      const cursor = new Date(start + 'T00:00:00');
+      const endCursor = new Date(end + 'T00:00:00');
+      let safety = 0;
+      while (cursor.getTime() <= endCursor.getTime() && safety < 366) {
+        const dateStr = cursor.toISOString().split('T')[0];
+        const override = map[dateStr];
+        rows.push({
+          date: dateStr,
+          start: override?.start ?? '',
+          end: override?.end ?? '',
+        });
+        cursor.setDate(cursor.getDate() + 1);
+        safety++;
+      }
+      return rows;
+    };
     setFormData({
       name: tournament.name,
       club: tournament.club,
@@ -85,6 +112,9 @@ export function useTournamentForm({
       silverClassifiersPerGroup: tournament.silverClassifiersPerGroup ?? 2,
       regulationText: tournament.regulationText ?? '',
       regulationPdfUrl: tournament.regulationPdf ?? '',
+      matchDurationMinutes: tournament.matchDurationMinutes ?? 60,
+      matchBreakMinutes: tournament.matchBreakMinutes ?? 15,
+      dailySchedules: hydrateDailySchedules(),
     });
     setCoverFile(null);
     setCoverPreview(tournament.coverImage ?? null);
@@ -104,6 +134,44 @@ export function useTournamentForm({
       setRegulationPdfFileName('');
     }
   }, [isOpen, tournament]);
+
+  // Keep the per-day schedule grid in sync with the tournament's date
+  // range. When the admin changes startDate / endDate the array of rows
+  // gets re-derived: existing entries (date keyed) are preserved so any
+  // hand-typed overrides survive, new days get blank rows (= use global
+  // default), and days outside the new range drop off. Without this the
+  // form would either show stale rows or skip days entirely after a
+  // date edit.
+  useEffect(() => {
+    setFormData((prev) => {
+      if (!prev.startDate || !prev.endDate) return prev;
+      const cursor = new Date(prev.startDate + 'T00:00:00');
+      const endCursor = new Date(prev.endDate + 'T00:00:00');
+      if (Number.isNaN(cursor.getTime()) || Number.isNaN(endCursor.getTime())) {
+        return prev;
+      }
+      const previousByDate = new Map(prev.dailySchedules.map((d) => [d.date, d]));
+      const next: TournamentFormState['dailySchedules'] = [];
+      let safety = 0;
+      while (cursor.getTime() <= endCursor.getTime() && safety < 366) {
+        const dateStr = cursor.toISOString().slice(0, 10);
+        next.push(
+          previousByDate.get(dateStr) ?? { date: dateStr, start: '', end: '' },
+        );
+        cursor.setDate(cursor.getDate() + 1);
+        safety++;
+      }
+      // Skip the state update if nothing actually changed (same length,
+      // same dates) to avoid infinite re-render loops.
+      if (
+        next.length === prev.dailySchedules.length &&
+        next.every((row, idx) => row.date === prev.dailySchedules[idx]?.date)
+      ) {
+        return prev;
+      }
+      return { ...prev, dailySchedules: next };
+    });
+  }, [formData.startDate, formData.endDate]);
 
   const patch = useCallback(
     (next: Partial<TournamentFormState>, clearFields?: (keyof FieldErrors)[]) => {
@@ -230,6 +298,20 @@ export function useTournamentForm({
         }
       }
 
+      // Collapse the per-day rows back to the API map shape. Only rows
+      // with BOTH start AND end set become overrides — empty strings
+      // mean "fall back to the global window" so we deliberately drop
+      // them. The backend `daily_schedules` JSONB carries only the
+      // explicit overrides; missing dates use the default.
+      const dailySchedulesMap: Record<string, { start: string; end: string }> = {};
+      for (const row of formData.dailySchedules) {
+        const start = row.start.trim();
+        const end = row.end.trim();
+        if (start && end) {
+          dailySchedulesMap[row.date] = { start, end };
+        }
+      }
+
       const newTournament: Tournament = {
         id: tournament?.id || `tournament-${Date.now()}`,
         name: formData.name,
@@ -261,6 +343,9 @@ export function useTournamentForm({
             : undefined,
         regulationText: formData.regulationText.trim() || undefined,
         regulationPdf: regulationPdfUrl,
+        matchDurationMinutes: formData.matchDurationMinutes,
+        matchBreakMinutes: formData.matchBreakMinutes,
+        dailySchedules: dailySchedulesMap,
       };
 
       try {
@@ -280,6 +365,25 @@ export function useTournamentForm({
       }
     },
     [formData, tournament, coverFile, coverPreview, regulationPdfFile, inline, onSubmit, onClose],
+  );
+
+  // Patch a single per-day schedule row by index. Used by the
+  // ScheduleField rows so the form can edit "Saturday's hours" without
+  // touching Sunday's. Empty strings collapse to "no override" at
+  // submit time (see dailySchedulesMap collection above).
+  const setDailyScheduleRow = useCallback(
+    (
+      index: number,
+      patch: Partial<TournamentFormState['dailySchedules'][number]>,
+    ) => {
+      setFormData((prev) => {
+        if (index < 0 || index >= prev.dailySchedules.length) return prev;
+        const next = prev.dailySchedules.slice();
+        next[index] = { ...next[index], ...patch };
+        return { ...prev, dailySchedules: next };
+      });
+    },
+    [],
   );
 
   return {
@@ -303,5 +407,6 @@ export function useTournamentForm({
     handleCoverSelect,
     clearCover,
     handleSubmit,
+    setDailyScheduleRow,
   };
 }
