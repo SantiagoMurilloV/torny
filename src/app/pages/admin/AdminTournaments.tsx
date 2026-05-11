@@ -1,4 +1,4 @@
-import { Plus, Search, Filter, Trash2, Users, Calendar, Loader2, Lock } from 'lucide-react';
+import { Plus, Search, Trash2, Users, Calendar, Loader2, Lock } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -55,6 +55,27 @@ export function AdminTournaments() {
     setEditingTournament(undefined);
     setIsModalOpen(true);
   };
+
+  /**
+   * Click handler shared by the desktop "+ Crear Torneo" button and the
+   * mobile "+" icon button. Centralises the quota check so the toast
+   * copy stays in sync between the two surfaces.
+   */
+  const handleCreateClick = () => {
+    if (atCap) {
+      toast.error(
+        `Alcanzaste el límite de ${quota!.cap} torneo${
+          quota!.cap === 1 ? '' : 's'
+        } de tu plan. Contactá al super administrador para ampliarlo.`,
+      );
+      return;
+    }
+    handleCreate();
+  };
+
+  const capTooltip = atCap
+    ? 'Plan al tope — no podés crear más torneos'
+    : undefined;
 
   const handleDelete = (id: string) => {
     setPendingDeleteId(id);
@@ -169,29 +190,26 @@ export function AdminTournaments() {
             )}
           </p>
         </div>
+        {/* Desktop / tablet create button — hidden on mobile because the
+            mobile layout collapses it into a "+" square right next to the
+            search input below (see "Search & quick create" row). */}
         <button
-          onClick={() => {
-            if (atCap) {
-              toast.error(
-                `Alcanzaste el límite de ${quota!.cap} torneo${
-                  quota!.cap === 1 ? '' : 's'
-                } de tu plan. Contactá al super administrador para ampliarlo.`,
-              );
-              return;
-            }
-            handleCreate();
-          }}
+          onClick={handleCreateClick}
           disabled={atCap}
-          className="flex items-center gap-2 px-4 py-2 bg-spk-red text-white hover:bg-spk-red-dark rounded-sm transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          title={atCap ? 'Plan al tope — no podés crear más torneos' : undefined}
+          className="hidden md:flex items-center gap-2 px-4 py-2 bg-spk-red text-white hover:bg-spk-red-dark rounded-sm transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          title={capTooltip}
         >
           {atCap ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
           <span style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.05em' }} className="uppercase font-bold">Crear Torneo</span>
         </button>
       </div>
 
-      {/* Search & Filters */}
-      <div className="flex flex-col md:flex-row gap-4">
+      {/* Search & quick create — `Filtros` was removed because it was a
+          dead button (no onClick) cluttering the mobile layout. The "+"
+          square only renders on mobile (md:hidden) since the desktop
+          version already has the full "Crear Torneo" button up in the
+          header row. */}
+      <div className="flex items-center gap-2">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-black/40" />
           <input
@@ -202,9 +220,15 @@ export function AdminTournaments() {
             className="w-full pl-10 pr-4 py-2 bg-white border-2 border-black/10 rounded-sm focus:outline-none focus:ring-2 focus:ring-[#E31E24]/50"
           />
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 bg-black/5 hover:bg-black/10 rounded-sm transition-colors font-medium">
-          <Filter className="w-4 h-4" />
-          <span style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.05em' }} className="uppercase font-bold">Filtros</span>
+        <button
+          type="button"
+          onClick={handleCreateClick}
+          disabled={atCap}
+          aria-label={atCap ? 'Plan al tope — no podés crear más torneos' : 'Crear torneo'}
+          title={capTooltip ?? 'Crear torneo'}
+          className="md:hidden flex-shrink-0 inline-flex items-center justify-center w-10 h-10 bg-spk-red text-white hover:bg-spk-red-dark rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {atCap ? <Lock className="w-5 h-5" aria-hidden="true" /> : <Plus className="w-5 h-5" aria-hidden="true" />}
         </button>
       </div>
 
