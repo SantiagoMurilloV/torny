@@ -75,11 +75,36 @@ export class AuthService {
       team = teamResult.rows[0];
     }
 
+    // Third tier — clubs (mig 028). Same lazy lookup pattern: only
+    // hit the table when the previous two tiers missed. Username is
+    // case-insensitive thanks to the UNIQUE LOWER(username) index.
+    let club:
+      | {
+          id: string;
+          username: string;
+          password_hash: string;
+          owner_id: string;
+          name: string;
+        }
+      | undefined;
+    if (!user && !team) {
+      const clubResult = await pool.query(
+        `SELECT id, username, password_hash, owner_id, name
+           FROM clubs
+          WHERE LOWER(username) = LOWER($1)`,
+        [credentials.username],
+      );
+      club = clubResult.rows[0];
+    }
+
     const hashToCheck =
-      user?.password_hash ?? team?.password_hash ?? DUMMY_BCRYPT_HASH;
+      user?.password_hash ??
+      team?.password_hash ??
+      club?.password_hash ??
+      DUMMY_BCRYPT_HASH;
     const validPassword = await bcrypt.compare(credentials.password, hashToCheck);
 
-    if (!validPassword || (!user && !team)) {
+    if (!validPassword || (!user && !team && !club)) {
       throw new UnauthorizedError('Credenciales incorrectas');
     }
 
@@ -102,19 +127,45 @@ export class AuthService {
     // middleware that reads req.user.userId still works; a dedicated
     // `teamId` field is also embedded for ownership checks on roster
     // endpoints (POST /teams/:teamId/players must match this).
+    if (team) {
+      const payload = {
+        userId: team.id,
+        role: 'team_captain' as const,
+        teamId: team.id,
+      };
+      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRATION });
+      return {
+        token,
+        user: {
+          id: team.id,
+          username: team.username,
+          role: 'team_captain',
+          teamId: team.id,
+        },
+      };
+    }
+
+    // Club login (mig 028). Mirrors captain pattern but the userId is
+    // the club id; downstream `requireTeamAccess` is extended to allow
+    // a club_captain on every team whose `club_id = req.user.clubId`.
+    // Embedding `createdBy` = ownerId keeps audit-style queries
+    // ("which admin owns this account") consistent with the user
+    // payload shape upstream.
     const payload = {
-      userId: team!.id,
-      role: 'team_captain' as const,
-      teamId: team!.id,
+      userId: club!.id,
+      role: 'club_captain' as const,
+      clubId: club!.id,
+      createdBy: club!.owner_id,
     };
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRATION });
     return {
       token,
       user: {
-        id: team!.id,
-        username: team!.username,
-        role: 'team_captain',
-        teamId: team!.id,
+        id: club!.id,
+        username: club!.username,
+        role: 'club_captain',
+        clubId: club!.id,
+        clubName: club!.name,
       },
     };
   }

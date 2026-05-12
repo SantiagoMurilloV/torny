@@ -373,7 +373,7 @@ export interface ScoreUpdate {
 
 // === Auth ===
 
-export type AppRole = 'super_admin' | 'admin' | 'judge' | 'team_captain';
+export type AppRole = 'super_admin' | 'admin' | 'judge' | 'team_captain' | 'club_captain';
 
 export interface JwtPayload {
   /**
@@ -381,12 +381,15 @@ export interface JwtPayload {
    * For team_captain: teams.id (we don't create a users row for captains —
    * the team itself is the account). Consumers decide what to do with it
    * using the `role` field.
+   * For club_captain (mig 028): clubs.id (club is its own account).
    */
   userId: string;
   role: AppRole | string;
   /**
    * For judges: the admin (userId) that created this account — used to
    * scope their match feed. Null for admins / super_admins.
+   * For club_captain: the admin (users.id) that owns the club row, so
+   * downstream queries can scope to the same admin's tenant.
    */
   createdBy?: string | null;
   /**
@@ -395,6 +398,12 @@ export interface JwtPayload {
    * compare against `req.user.teamId` unambiguously).
    */
   teamId?: string | null;
+  /**
+   * For club_captain: the club's id (same as userId for clubs).
+   * Routes scoped to a club use this for ownership checks and
+   * `requireTeamAccess` will accept any team whose `club_id` equals it.
+   */
+  clubId?: string | null;
   iat: number;
   exp: number;
 }
@@ -412,6 +421,11 @@ export interface LoginResponse {
     role: string;
     /** Team id when role is team_captain; absent for app-side users. */
     teamId?: string;
+    /** Club id when role is club_captain (mig 028). */
+    clubId?: string;
+    /** Club display name — surfaced so the UI can title the panel
+     *  with the club name without an extra round-trip. */
+    clubName?: string;
   };
 }
 

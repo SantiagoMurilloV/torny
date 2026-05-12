@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, Link } from 'react-router';
 import {
   Loader2,
   Plus,
@@ -11,9 +12,10 @@ import {
   Info,
   Upload,
   Camera,
+  ArrowLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Player, Tournament } from '../../types';
+import type { Player, Team, Tournament } from '../../types';
 import { api, ApiError } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { PlayerFormModal } from '../../components/admin/PlayerFormModal';
@@ -35,6 +37,12 @@ import { compressLogoImage } from '../../lib/compressImage';
  */
 export function TeamPanel() {
   const { logout } = useAuth();
+  // Optional URL param. When present (route /team-panel/:teamId) we
+  // resolve the team via the public /teams/:id endpoint — used by the
+  // club_captain flow where one club login lands you at /club-panel
+  // and clicking a card takes you here. When absent, we fall back to
+  // the original captain flow that reads `me.team` from /auth/me.
+  const { teamId: teamIdFromUrl } = useParams<{ teamId?: string }>();
   const [teamInfo, setTeamInfo] = useState<{
     id: string;
     name: string;
@@ -79,28 +87,48 @@ export function TeamPanel() {
     setLoading(true);
     setError(null);
     try {
-      // /auth/me returns the team payload for captains; use it as the
-      // source of truth so a stale teamId in localStorage gets corrected.
-      const me = await api.getMe();
-      if (me.role !== 'team_captain' || !me.team) {
-        throw new Error('Sesión no válida para panel de equipo');
+      // Two paths:
+      //   · No URL param → captain flow. /auth/me carries the team.
+      //   · URL param present → club_captain flow (or admin opens a
+      //     team's panel directly). Fetch the team via /teams/:id.
+      //     The backend's requireTeamAccess permits a club_captain
+      //     when teams.club_id matches their JWT clubId.
+      let resolvedTeam: Team;
+      if (teamIdFromUrl) {
+        resolvedTeam = await api.getTeam(teamIdFromUrl);
+      } else {
+        const me = await api.getMe();
+        if (me.role !== 'team_captain' || !me.team) {
+          throw new Error('Sesión no válida para panel de equipo');
+        }
+        // Coerce me.team into a Team-shaped object so the rest of the
+        // component reads the same fields regardless of source.
+        resolvedTeam = {
+          id: me.team.id,
+          name: me.team.name,
+          initials: me.team.initials,
+          logo: me.team.logo,
+          primaryColor: me.team.primaryColor,
+          secondaryColor: me.team.secondaryColor,
+          category: me.team.category,
+        } as Team;
       }
       setTeamInfo({
-        id: me.team.id,
-        name: me.team.name,
-        initials: me.team.initials,
-        logo: me.team.logo,
-        primaryColor: me.team.primaryColor,
-        secondaryColor: me.team.secondaryColor,
-        category: me.team.category,
+        id: resolvedTeam.id,
+        name: resolvedTeam.name,
+        initials: resolvedTeam.initials,
+        logo: resolvedTeam.logo,
+        primaryColor: resolvedTeam.primaryColor,
+        secondaryColor: resolvedTeam.secondaryColor,
+        category: resolvedTeam.category,
       });
       // Fire roster + enrolled tournaments in parallel — they don't depend
       // on each other and the panel only renders when both have responded.
       // The tournaments call is wrapped so a transient failure (network /
       // 5xx) just hides the cap badge instead of blowing up the whole load.
       const [roster, enrolledTournaments] = await Promise.all([
-        api.listTeamPlayers(me.team.id),
-        api.getTeamTournaments(me.team.id).catch(() => [] as Tournament[]),
+        api.listTeamPlayers(resolvedTeam.id),
+        api.getTeamTournaments(resolvedTeam.id).catch(() => [] as Tournament[]),
       ]);
       setPlayers(roster);
       setTournaments(enrolledTournaments);
@@ -112,9 +140,12 @@ export function TeamPanel() {
       }
       setError(getErrorMessage(err, 'Error al cargar el panel'));
     } finally {
+      // teamIdFromUrl is part of the dep array so a club_captain
+      // navigating between teams (different :teamId) re-runs load()
+      // and refreshes the panel for the freshly-picked team.
       setLoading(false);
     }
-  }, [logout]);
+  }, [logout, teamIdFromUrl]);
 
   useEffect(() => {
     load();
@@ -266,6 +297,19 @@ export function TeamPanel() {
 
   return (
     <div className="max-w-[1200px] mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+      {/* Back link — only when a club_captain navigated in via
+          /team-panel/:teamId. They land here from /club-panel; the
+          link returns them to the team picker. Hidden for the regular
+          team_captain flow which has only one team. */}
+      {teamIdFromUrl && (
+        <Link
+          to="/club-panel"
+          className="inline-flex items-center gap-2 text-sm text-black/55 hover:text-black"
+        >
+          <ArrowLeft className="w-4 h-4" aria-hidden="true" />
+          Volver al panel del club
+        </Link>
+      )}
       {/* Team identity banner — the avatar doubles as a logo uploader so the
           captain can drop their crest in without bothering the admin. The
           hint copy below it keeps the affordance discoverable on touch

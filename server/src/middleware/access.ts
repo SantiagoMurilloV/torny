@@ -151,6 +151,36 @@ export async function requireTeamOwnership(
     return;
   }
 
+  // Club captain bypass — allowed on any team whose `club_id` matches
+  // their JWT clubId. Mirrors the team_captain path but the membership
+  // check needs a DB hit since the JWT only carries the club id.
+  if (user.role === 'club_captain') {
+    if (!user.clubId) {
+      res.status(403).json({ error: 'Token inválido para usuario de club' });
+      return;
+    }
+    try {
+      const pool = getPool();
+      const result = await pool.query<{ club_id: string | null }>(
+        'SELECT club_id FROM teams WHERE id = $1',
+        [teamId],
+      );
+      if (result.rows.length === 0) {
+        res.status(404).json({ error: 'Equipo no encontrado' });
+        return;
+      }
+      if (result.rows[0].club_id !== user.clubId) {
+        res.status(403).json({ error: 'Este equipo no pertenece a tu club' });
+        return;
+      }
+      next();
+      return;
+    } catch (err) {
+      next(err);
+      return;
+    }
+  }
+
   const adminId = effectiveAdminId(user);
   if (adminId === null) {
     res.status(403).json({ error: 'No tenés permiso para realizar esta acción' });

@@ -27,6 +27,7 @@ import { bracketApi } from './api/bracket';
 import { judgesApi } from './api/judges';
 import { settingsApi } from './api/settings';
 import { platformApi } from './api/platform';
+import { clubsApi } from './api/clubs';
 
 export const api = {
   ...authApi,
@@ -41,6 +42,12 @@ export const api = {
   ...judgesApi,
   ...settingsApi,
   ...platformApi,
+  ...clubsApi,
+  // Re-export the clubs namespace explicitly so `api.clubs.detect()` and
+  // `api.clubs.downloadExcel()` can be called without naming collisions
+  // with the spread above (which mainly merges flat method names from
+  // each domain).
+  clubs: clubsApi,
 };
 
 // Re-exports — consumers import from 'api' rather than the sub-modules.

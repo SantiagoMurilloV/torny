@@ -14,6 +14,7 @@ import {
   Shuffle,
   Swords,
   Calendar,
+  Building2,
 } from 'lucide-react';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -143,6 +144,8 @@ export function AdminLayout() {
   const flatItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
     { icon: UserCog, label: 'Jueces', path: '/admin/judges' },
+    // Clubs (mig 028) — un user/pass por club que ve TODOS sus equipos.
+    { icon: Building2, label: 'Clubs', path: '/admin/clubs' },
     { icon: Settings, label: 'Configuración', path: '/admin/settings' },
   ];
 

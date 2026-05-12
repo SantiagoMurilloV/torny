@@ -7,7 +7,14 @@
  * list — adding a new role means touching ONE line and the union + the
  * home-route map + ProtectedRoute's permit list stay honest.
  */
-export const ROLES = ['super_admin', 'admin', 'judge', 'team_captain'] as const;
+export const ROLES = [
+  'super_admin',
+  'admin',
+  'judge',
+  'team_captain',
+  // mig 028 — one user/pass per club covers every team in the cluster.
+  'club_captain',
+] as const;
 
 export type AppRole = (typeof ROLES)[number];
 
@@ -25,6 +32,7 @@ export const ROLE_HOME: Record<AppRole, string> = {
   admin: '/admin',
   judge: '/judge',
   team_captain: '/team-panel',
+  club_captain: '/club-panel',
 };
 
 /**
@@ -45,6 +53,7 @@ export const ROLE_LABEL: Record<AppRole, string> = {
   admin: 'Admin',
   judge: 'Juez',
   team_captain: 'Capitán',
+  club_captain: 'Club',
 };
 
 export function roleLabel(role: string | undefined | null): string {
@@ -66,3 +75,4 @@ export const isSuperAdmin = (role: unknown): boolean => isRole(role, 'super_admi
 export const isAdmin = (role: unknown): boolean => isRole(role, 'admin');
 export const isJudge = (role: unknown): boolean => isRole(role, 'judge');
 export const isTeamCaptain = (role: unknown): boolean => isRole(role, 'team_captain');
+export const isClubCaptain = (role: unknown): boolean => isRole(role, 'club_captain');

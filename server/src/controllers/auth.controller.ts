@@ -77,6 +77,33 @@ export async function me(req: Request, res: Response, next: NextFunction): Promi
       return;
     }
 
+    // Club captain (mig 028) — no users row; resolve from clubs table.
+    if (req.user.role === 'club_captain') {
+      const clubResult = await pool.query(
+        `SELECT id, name, username,
+                (SELECT COUNT(*)::int FROM teams t WHERE t.club_id = clubs.id) AS teams_count
+           FROM clubs WHERE id = $1`,
+        [req.user.userId],
+      );
+      if (clubResult.rows.length === 0) {
+        res.status(404).json({ error: 'Club no encontrado' });
+        return;
+      }
+      const c = clubResult.rows[0];
+      res.json({
+        id: c.id,
+        username: c.username,
+        role: 'club_captain',
+        clubId: c.id,
+        club: {
+          id: c.id,
+          name: c.name,
+          teamsCount: c.teams_count,
+        },
+      });
+      return;
+    }
+
     const result = await pool.query(
       `SELECT u.id, u.username, u.role, u.display_name, u.tournament_quota,
               u.created_by,

@@ -57,3 +57,20 @@ export function generateCaptainUsername(initials: string): string {
     .slice(0, 8) || 'team';
   return `${slug}-${fourDigits()}`;
 }
+
+/**
+ * Username for a club account (mig 028). Same shape as captain
+ * usernames so the login form / DB index treat them uniformly:
+ * lowercased ascii slug + 4-digit suffix. Caller normalises the
+ * club name first (strips diacritics + extra spaces) and passes the
+ * leading word; we slice to 12 chars to leave room for the suffix.
+ */
+export function generateClubUsername(clubName: string): string {
+  const slug = (clubName || 'club')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 12) || 'club';
+  return `${slug}-${fourDigits()}`;
+}
