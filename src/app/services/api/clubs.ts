@@ -121,7 +121,26 @@ export const clubsApi = {
       secondaryColor: string;
       category: string | null;
       rosterCount: number;
+      matchesPlayed: number;
+      matchesUpcoming: number;
+      matchesLive: number;
+      wins: number;
+      losses: number;
+      currentPhase: string | null;
     }>;
+    /**
+     * Club-wide rollup (sum of per-team values). Drives the
+     * dashboard header on the club panel.
+     */
+    stats: {
+      teams: number;
+      players: number;
+      matchesPlayed: number;
+      matchesUpcoming: number;
+      matchesLive: number;
+      wins: number;
+      losses: number;
+    };
   }> {
     return request('/clubs/me/teams');
   },

@@ -215,15 +215,30 @@ export async function meTeams(req: Request, res: Response, next: NextFunction) {
       throw new UnauthorizedError('Solo accesible para usuarios de club');
     }
     // Rich team summary list (one query) instead of just ids — the
-    // club panel needs the roster count per team and we don't want
-    // an N+1 fetch fan-out. `teamIds` stays in the response so any
-    // legacy caller (a deployed but cached FE bundle) keeps working
-    // while users transition.
+    // club panel needs the roster count + match stats per team and
+    // we don't want an N+1 fetch fan-out. `teamIds` stays in the
+    // response so any legacy caller (a deployed but cached FE bundle)
+    // keeps working while users transition.
+    //
+    // `stats` rolls up the team list into club-wide cifras for the
+    // dashboard header (total teams, total jugadoras, total partidos
+    // pendientes / jugados, wins). Computed in JS over the same row
+    // set we just queried so there's no extra DB hit.
     const teams = await clubService.listTeamsForClub(req.user.clubId);
+    const stats = {
+      teams: teams.length,
+      players: teams.reduce((acc, t) => acc + t.rosterCount, 0),
+      matchesPlayed: teams.reduce((acc, t) => acc + t.matchesPlayed, 0),
+      matchesUpcoming: teams.reduce((acc, t) => acc + t.matchesUpcoming, 0),
+      matchesLive: teams.reduce((acc, t) => acc + t.matchesLive, 0),
+      wins: teams.reduce((acc, t) => acc + t.wins, 0),
+      losses: teams.reduce((acc, t) => acc + t.losses, 0),
+    };
     res.json({
       clubId: req.user.clubId,
       teamIds: teams.map((t) => t.id),
       teams,
+      stats,
     });
   } catch (err) {
     next(err);
