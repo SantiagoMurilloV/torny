@@ -6,6 +6,23 @@ import { playerService, Player } from './player.service';
 import { pushService } from './push.service';
 
 /**
+ * Postgres DATE columns can come back as a real `Date` object (pg
+ * driver default) or as a 'YYYY-MM-DD' string depending on the driver
+ * version — `tournament.service.mapRow` doesn't normalise startDate /
+ * endDate so by the time they reach this layer the runtime type is a
+ * coin flip. Comparing a Date against a `'YYYY-MM-DD'` string via the
+ * `<` operator silently coerces the Date to its ms timestamp and the
+ * string to NaN → every comparison is false, which means
+ * `isOpen` would always read "cerrado". Force both sides to the same
+ * 'YYYY-MM-DD' shape before any comparison.
+ */
+function toIsoDate(value: unknown): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === 'string') return value.slice(0, 10);
+  return '';
+}
+
+/**
  * Server-side surface for the public parent-registration flow
  * (`/torneo/:slug/inscripcion`). Wraps:
  *
@@ -145,14 +162,17 @@ export async function getPublicView(slug: string): Promise<PublicTournamentView>
   }
 
   // ── Cutoff ───────────────────────────────────────────────────────
-  // `tournament.startDate` is a 'YYYY-MM-DD' string (normalised by
-  // tournament.service.normalizeDate). The link closes at the
-  // midnight that opens the start day (so the day-of registration
-  // window is OFF — confirmed by the product owner). Compare as ISO
-  // date strings to dodge any timezone math; both sides are
-  // calendar days.
+  // The link closes at the midnight that opens the start day (so the
+  // day-of registration window is OFF — confirmed by the product
+  // owner). Compare as ISO date strings to dodge any timezone math;
+  // both sides are calendar days. `toIsoDate` is critical: without it
+  // `tournament.startDate` is a Date object at runtime and the `<`
+  // coerces it to ms while NaN'ing the left side, making every
+  // tournament look already-closed.
+  const startIso = toIsoDate(tournament.startDate);
+  const endIso = toIsoDate(tournament.endDate);
   const todayIso = new Date().toISOString().slice(0, 10);
-  const isOpen = todayIso < (tournament.startDate as string);
+  const isOpen = todayIso < startIso;
 
   return {
     tournament: {
@@ -162,13 +182,13 @@ export async function getPublicView(slug: string): Promise<PublicTournamentView>
       club: tournament.club,
       logo: tournament.logo,
       coverImage: tournament.coverImage,
-      startDate: tournament.startDate as string,
-      endDate: tournament.endDate as string,
+      startDate: startIso,
+      endDate: endIso,
       status: tournament.status,
       playersPerTeam,
     },
     isOpen,
-    closedAt: tournament.startDate as string,
+    closedAt: startIso,
     clubs: Array.from(clubsMap.values()),
   };
 }
@@ -197,10 +217,12 @@ export async function registerPlayer(
   slug: string,
   data: RegisterPlayerInput,
 ): Promise<Player> {
-  // Hydrate the tournament + sanity-check the cutoff.
+  // Hydrate the tournament + sanity-check the cutoff. Same Date-vs-
+  // string coercion gotcha as `getPublicView` (see toIsoDate's docs).
   const tournament = await tournamentService.getBySlug(slug);
   const todayIso = new Date().toISOString().slice(0, 10);
-  if (todayIso >= (tournament.startDate as string)) {
+  const startIso = toIsoDate(tournament.startDate);
+  if (todayIso >= startIso) {
     throw new ValidationError(
       'Las inscripciones para este torneo cerraron el día antes del inicio',
     );
