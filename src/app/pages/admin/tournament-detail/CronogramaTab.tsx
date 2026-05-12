@@ -519,17 +519,28 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
             swapPartner.id,
           );
           onMatchesPatched?.([matchA, matchB]);
+          // Resolve the dragged + partner's NEW slots from the
+          // server's response so the toast announces actual landing
+          // positions. Previously we just said "intercambiaron" and
+          // the admin couldn't verify where each card ended up — if
+          // the post-swap render had any glitch they'd think the drag
+          // landed wrong. Spelling out "X → cancha/hora · Y →
+          // cancha/hora" removes the ambiguity.
+          const draggedFinal = matchA.id === dragged.id ? matchA : matchB;
+          const partnerFinal = matchA.id === swapPartner.id ? matchA : matchB;
           if (destMatch) {
             toast.success(
-              `Cambio: ${shortLabel(dragged)} y ${shortLabel(destMatch)} intercambiaron horario.`,
+              `Intercambio · ${shortLabel(dragged)} → ${draggedFinal.court} ${draggedFinal.time} · ` +
+                `${shortLabel(destMatch)} → ${partnerFinal.court} ${partnerFinal.time}`,
             );
           } else {
             const hidden =
               selectedCategory !== 'all' &&
               getMatchCategory(swapPartner) !== selectedCategory;
             toast.success(
-              `Movido a ${destCourt} · ${destTime} e intercambiado con ${shortLabel(swapPartner)}` +
-                (hidden ? ' (estaba oculto por el filtro).' : '.'),
+              `${shortLabel(dragged)} → ${draggedFinal.court} ${draggedFinal.time} · ` +
+                `${shortLabel(swapPartner)} → ${partnerFinal.court} ${partnerFinal.time}` +
+                (hidden ? ' (oculto por filtro).' : ''),
             );
           }
           return;
@@ -548,7 +559,13 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
           status: dragged.status,
         });
         onMatchesPatched?.([updated]);
-        toast.success(`Movido a ${destCourt} · ${destTime}.`);
+        // Show the SERVER-confirmed landing slot rather than what we
+        // requested. Defends against the rare path where the backend
+        // sanitizes (rounds time, validates court) and lands the
+        // match somewhere different from the drop target.
+        toast.success(
+          `${shortLabel(dragged)} → ${updated.court} ${updated.time}`,
+        );
       } catch (err) {
         // Loud, unmissable failure dialog instead of a small toast.
         // The admin must dismiss the alert before continuing — which

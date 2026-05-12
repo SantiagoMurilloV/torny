@@ -476,7 +476,18 @@ export class FixtureGenerator {
         );
       } else if (totalCount > 0) {
         // Legacy non-division rows present — drop them so we can lay
-        // the proper Oro/Plata structure on top.
+        // the proper Oro/Plata structure on top. Also drop any
+        // materialized `matches` row that pointed at those bracket
+        // rows; the FK is ON DELETE SET NULL so they'd otherwise
+        // survive as orphan matches with `bracket_match_id = NULL`,
+        // showing up as "Semifinal|Cat" cards alongside the new
+        // "Semifinal · Oro|Cat" cards in the cronograma.
+        await pool.query(
+          `DELETE FROM matches WHERE bracket_match_id IN (
+             SELECT id FROM bracket_matches WHERE tournament_id = $1 AND round LIKE $2
+           )`,
+          [tournamentId, roundPrefix],
+        );
         await pool.query(
           'DELETE FROM bracket_matches WHERE tournament_id = $1 AND round LIKE $2',
           [tournamentId, roundPrefix],
