@@ -367,16 +367,21 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
               className="sticky top-0 left-0 z-20 bg-white border-b border-r border-black/10"
               style={{ gridRow: 1, gridColumn: 1 }}
             />
-            {/* Court headers */}
+            {/* Court headers — bigger + centered + thin white divider
+                between adjacent columns so each cancha reads as its own
+                lane. */}
             {courts.map((court, colIdx) => (
               <div
                 key={court}
-                className="sticky top-0 z-10 bg-black text-white px-3 py-2 border-b border-black/10"
+                className={`sticky top-0 z-10 bg-black text-white px-4 py-3 border-b border-black/10 flex items-center justify-center text-center ${
+                  colIdx > 0 ? 'border-l border-white/10' : ''
+                }`}
                 style={{ gridRow: 1, gridColumn: colIdx + 2 }}
               >
                 <div
-                  className="text-xs font-bold uppercase tracking-wide truncate"
+                  className="text-sm sm:text-base font-bold uppercase tracking-wide truncate"
                   style={FONT}
+                  title={court}
                 >
                   {court}
                 </div>

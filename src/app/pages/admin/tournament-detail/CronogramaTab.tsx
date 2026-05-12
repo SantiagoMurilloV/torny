@@ -833,14 +833,26 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
               className="sticky top-0 left-0 z-20 bg-white border-b border-r border-black/10"
               style={{ gridRow: 1, gridColumn: 1 }}
             />
-            {/* Court headers — row 1, cols 2..N+1 */}
+            {/* Court headers — row 1, cols 2..N+1.
+                Bumped from text-xs + left-aligned to text-base + centered
+                so the column owner reads at-a-glance ("INEM CANCHA 1" no
+                longer hugs the left edge of an 180px+ column). Vertical
+                divider between adjacent court headers makes the grid
+                read as a stadium scoreboard rather than a continuous
+                black bar. */}
             {courts.map((court, colIdx) => (
               <div
                 key={court}
-                className="sticky top-0 z-10 bg-black text-white px-3 py-2 border-b border-black/10"
+                className={`sticky top-0 z-10 bg-black text-white px-4 py-3 border-b border-black/10 flex items-center justify-center text-center ${
+                  colIdx > 0 ? 'border-l border-white/10' : ''
+                }`}
                 style={{ gridRow: 1, gridColumn: colIdx + 2 }}
               >
-                <div className="text-xs font-bold uppercase tracking-wide truncate" style={FONT}>
+                <div
+                  className="text-sm sm:text-base font-bold uppercase tracking-wide truncate"
+                  style={FONT}
+                  title={court}
+                >
                   {court}
                 </div>
               </div>
