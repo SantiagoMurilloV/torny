@@ -33,6 +33,7 @@ function mapRow(row: Record<string, unknown>): Team {
     department: row.department as string | undefined,
     category: row.category as string | undefined,
     ownerId: (row.owner_id as string | null) ?? undefined,
+    clubId: (row.club_id as string | null) ?? undefined,
     captainUsername: (row.captain_username as string | null) ?? undefined,
     credentialsGeneratedAt: normalizeIsoDate(row.credentials_generated_at),
     createdAt: row.created_at as string | undefined,
@@ -99,7 +100,7 @@ function mapMatchRow(row: Record<string, unknown>): Match {
 //   short TTL and gzipped on the wire.
 const TEAM_LIST_COLUMNS = `
   id, name, initials, logo, primary_color, secondary_color, city, department,
-  category, owner_id, captain_username, credentials_generated_at,
+  category, owner_id, club_id, captain_username, credentials_generated_at,
   created_at, updated_at
 `;
 
@@ -174,9 +175,18 @@ export class TeamService {
   async create(data: CreateTeamDto, ownerId: string | null = null): Promise<Team> {
     this.validateData(data);
     const pool = getPool();
+    // Honour club assignment at create time when provided. Cross-tenant
+    // club ids are rejected by the same defence-in-depth check the
+    // update path uses — `assertClubOwnership` raises NotFoundError
+    // (leak-safe) when the club belongs to a different admin.
+    let clubId: string | null = null;
+    if (data.clubId) {
+      await this.assertClubOwnership(data.clubId, ownerId);
+      clubId = data.clubId;
+    }
     const result = await pool.query(
-      `INSERT INTO teams (name, initials, logo, primary_color, secondary_color, city, department, category, owner_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO teams (name, initials, logo, primary_color, secondary_color, city, department, category, owner_id, club_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
         data.name,
@@ -188,9 +198,40 @@ export class TeamService {
         data.department || null,
         data.category || null,
         ownerId,
+        clubId,
       ]
     );
     return mapRow(result.rows[0]);
+  }
+
+  /**
+   * Defence-in-depth: when an admin assigns a team to a club through the
+   * team form, make sure the club lives in their own tenant. Without
+   * this an attacker could craft a PUT with an arbitrary `clubId` from
+   * another admin and link their team into the wrong club's roster.
+   *
+   * Convention is 404 (NotFoundError) — same leak-safe pattern as the
+   * access middleware. We don't reveal whether the id "exists but
+   * belongs to someone else" vs "doesn't exist at all".
+   */
+  async assertClubOwnership(
+    clubId: string,
+    ownerId: string | null,
+  ): Promise<void> {
+    const pool = getPool();
+    const res = await pool.query(
+      'SELECT owner_id FROM clubs WHERE id = $1',
+      [clubId],
+    );
+    if (res.rows.length === 0) {
+      throw new NotFoundError('Club');
+    }
+    // super_admin path (ownerId === null) is allowed to touch any club —
+    // they already have god-mode access. Otherwise the row's owner must
+    // match the caller's userId exactly.
+    if (ownerId !== null && (res.rows[0].owner_id as string) !== ownerId) {
+      throw new NotFoundError('Club');
+    }
   }
 
   async update(id: string, data: UpdateTeamDto): Promise<Team> {
@@ -218,6 +259,12 @@ export class TeamService {
       city: 'city',
       department: 'department',
       category: 'category',
+      // Club re-assignment from the team form (mig 028). The route is
+      // already gated by `requireTeamOwnership` so the caller is the
+      // team's owner-admin, super_admin, or its captain. Cross-tenant
+      // protection on the club_id value itself is enforced by the
+      // controller via `assertClubOwnership` before this UPDATE fires.
+      clubId: 'club_id',
     };
 
     for (const [key, column] of Object.entries(columnMap)) {

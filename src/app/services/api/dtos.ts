@@ -84,6 +84,13 @@ export interface CreateTeamDto {
   city?: string;
   department?: string;
   category?: string;
+  /**
+   * Optional club assignment (mig 028).
+   *   · `undefined` → leave unchanged
+   *   · `null`      → clear the club link
+   *   · `<uuid>`    → assign to that club (must be in the caller's tenant)
+   */
+  clubId?: string | null;
 }
 
 export type UpdateTeamDto = Partial<CreateTeamDto>;

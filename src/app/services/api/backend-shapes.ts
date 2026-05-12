@@ -16,6 +16,8 @@ export interface BackendTeam {
   city?: string;
   department?: string;
   category?: string;
+  /** Club assignment (mig 028). Null when the team has no club. */
+  clubId?: string | null;
   captainUsername?: string | null;
   credentialsGeneratedAt?: string | null;
 }
