@@ -1,5 +1,5 @@
 import { Outlet, useNavigate } from 'react-router';
-import { LogOut, Users } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 /**
@@ -24,15 +24,26 @@ export function TeamPanelLayout() {
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-black/10">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 md:px-10 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-sm bg-spk-red flex items-center justify-center flex-shrink-0">
-              <Users className="w-4 h-4 text-white" aria-hidden="true" />
-            </div>
+            {/*
+              Brand mark — usa el icon-source.svg (versión cuadrada del
+              logo Torny, gradiente azul oscuro + acento rojo + balón).
+              Reemplaza el placeholder Users-icon que se veía como un
+              avatar genérico y no decía nada de la marca. El alt vacío
+              + aria-hidden delega el branding al título de al lado para
+              no duplicar la lectura del screen-reader.
+            */}
+            <img
+              src="/icon-source.svg"
+              alt=""
+              aria-hidden="true"
+              className="w-9 h-9 rounded-sm object-cover flex-shrink-0"
+            />
             <div className="leading-tight min-w-0">
               <div
                 className="text-base sm:text-lg font-bold uppercase tracking-tighter truncate"
                 style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
               >
-                Torn<span className="text-spk-red">y</span> · Panel de Equipo
+                Panel de Equipos
               </div>
               <div className="text-[11px] text-black/55 uppercase tracking-[0.16em] truncate">
                 {user?.username ?? 'Capitán'}

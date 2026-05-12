@@ -476,9 +476,21 @@ export class ClubService {
   /**
    * Rich team summary list for the club panel. Returns each team with
    * the metadata the cards need (name, initials, logo, colors,
-   * category) PLUS the current roster size — so the panel renders
-   * "Plantel: N" without an N+1 fetch per team. Same ORDER BY name
-   * convention as `getTeamIdsForClub` so the two lists stay in sync.
+   * category), roster size, AND a small match-level dashboard:
+   * matches played / upcoming / live + wins + the most recent phase
+   * the team appeared in.
+   *
+   * All of it ships in a single query with correlated subselects so
+   * the panel renders the per-team dashboard without an N+1 fanout.
+   * Subselects hit indexed columns (matches.team{1,2}_id, players.
+   * team_id) so even a club with 14 teams stays under one DB roundtrip.
+   *
+   * `currentPhase` strategy: the phase string of the team's most
+   * recent match (by date DESC, time DESC) regardless of status. If
+   * the team has no matches yet → null → FE shows "Sin partidos".
+   * Phase strings on this app encode category info as `Phase|Cat`
+   * (mig 023 era); we strip that here so the FE doesn't have to
+   * touch the phase helpers.
    */
   async listTeamsForClub(clubId: string): Promise<Array<{
     id: string;
@@ -489,6 +501,12 @@ export class ClubService {
     secondaryColor: string;
     category: string | null;
     rosterCount: number;
+    matchesPlayed: number;
+    matchesUpcoming: number;
+    matchesLive: number;
+    wins: number;
+    losses: number;
+    currentPhase: string | null;
   }>> {
     const pool = getPool();
     const res = await pool.query(
@@ -500,7 +518,30 @@ export class ClubService {
          t.primary_color,
          t.secondary_color,
          t.category,
-         (SELECT COUNT(*)::int FROM players p WHERE p.team_id = t.id) AS roster_count
+         (SELECT COUNT(*)::int FROM players p WHERE p.team_id = t.id) AS roster_count,
+         (SELECT COUNT(*)::int FROM matches m
+            WHERE (m.team1_id = t.id OR m.team2_id = t.id)
+              AND m.status = 'completed') AS played,
+         (SELECT COUNT(*)::int FROM matches m
+            WHERE (m.team1_id = t.id OR m.team2_id = t.id)
+              AND m.status = 'upcoming') AS upcoming,
+         (SELECT COUNT(*)::int FROM matches m
+            WHERE (m.team1_id = t.id OR m.team2_id = t.id)
+              AND m.status = 'live') AS live,
+         (SELECT COUNT(*)::int FROM matches m
+            WHERE m.status = 'completed' AND (
+              (m.team1_id = t.id AND m.score_team1 > m.score_team2) OR
+              (m.team2_id = t.id AND m.score_team2 > m.score_team1)
+            )) AS wins,
+         (SELECT COUNT(*)::int FROM matches m
+            WHERE m.status = 'completed' AND (
+              (m.team1_id = t.id AND m.score_team1 < m.score_team2) OR
+              (m.team2_id = t.id AND m.score_team2 < m.score_team1)
+            )) AS losses,
+         (SELECT m.phase FROM matches m
+            WHERE (m.team1_id = t.id OR m.team2_id = t.id)
+            ORDER BY m.date DESC, m.time DESC
+            LIMIT 1) AS current_phase
        FROM teams t
        WHERE t.club_id = $1
        ORDER BY t.name ASC`,
@@ -515,6 +556,19 @@ export class ClubService {
       secondaryColor: r.secondary_color as string,
       category: (r.category as string | null) ?? null,
       rosterCount: (r.roster_count as number) ?? 0,
+      matchesPlayed: (r.played as number) ?? 0,
+      matchesUpcoming: (r.upcoming as number) ?? 0,
+      matchesLive: (r.live as number) ?? 0,
+      wins: (r.wins as number) ?? 0,
+      losses: (r.losses as number) ?? 0,
+      // Strip the `Phase|Category` pipe encoding the matches table
+      // uses (see lib/phase.ts) so the FE shows a clean label.
+      currentPhase: (() => {
+        const raw = r.current_phase as string | null;
+        if (!raw) return null;
+        const pipe = raw.indexOf('|');
+        return pipe > -1 ? raw.substring(0, pipe) : raw;
+      })(),
     }));
   }
 
