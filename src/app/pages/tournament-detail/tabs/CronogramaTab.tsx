@@ -395,24 +395,39 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
             ))}
 
             {/* Cells — one per (court, time) including empty drop targets
-                so the visual matrix is complete. Covered cells are
-                skipped because the spanning card paints over them. */}
+                so the visual matrix is complete. Covered cells whose
+                area is filled by a spanning card from above are
+                skipped UNLESS they have their own match starting there
+                (data overlap — two matches scheduled at the same
+                court+time). The overlap case must render so the data
+                stays visible to spectators; otherwise their team's
+                match would be invisible in the grid. */}
             {courts.flatMap((court, colIdx) =>
               times.map((time, rowIdx) => {
                 const key = `${court}|${time}`;
-                if (coveredCells.has(key)) return null;
                 const cellMatches = matchesByCell.get(key) ?? [];
+                if (coveredCells.has(key) && cellMatches.length === 0) {
+                  return null;
+                }
                 let span = 1;
                 for (const m of cellMatches) {
                   const s = spanFor(m);
                   if (s > span) span = s;
                 }
+                // Overlap-cell stays span=1 to avoid extending the
+                // already-covered gap further.
+                if (coveredCells.has(key)) span = 1;
                 const maxAvailable = times.length - rowIdx;
                 const renderSpan = Math.min(span, maxAvailable);
+                const isOverlap = coveredCells.has(key);
                 return (
                   <div
                     key={key}
-                    className="border-b border-r border-black/10 p-1.5"
+                    className={`border-b border-r border-black/10 p-1.5 ${
+                      isOverlap
+                        ? 'ring-2 ring-red-500 ring-inset bg-white relative z-10 shadow-md'
+                        : ''
+                    }`}
                     // Inline minHeight beats the Tailwind arbitrary
                     // class for grid items — turns out CSS Grid doesn't
                     // always honour `min-h-[72px]` when the row track

@@ -858,13 +858,23 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
             ))}
 
             {/* Cells — one per (court, time), with multi-row spans for
-                long-duration matches. Skip cells that are covered by a
-                span from above so the grid doesn't shift columns. */}
+                long-duration matches. Skip ONLY empty cells that are
+                covered by a span from above (their area is visually
+                filled by the spanning card). When a covered cell has
+                its OWN matches starting there (data overlap — two
+                rounds picked the same court+time), we MUST render
+                those matches; otherwise the data exists in the API
+                but the admin can't see it in the grid. The render
+                shows them as a stacked Cell with a conflict indicator
+                so the admin notices and can fix via drag-drop. */}
             {courts.flatMap((court, colIdx) =>
               times.map((time, rowIdx) => {
                 const key = `${court}|${time}`;
-                if (coveredCells.has(key)) return null;
                 const cellMatches = matchesByCell.get(key) ?? [];
+                // Empty AND covered → the spanning card paints it; skip.
+                if (coveredCells.has(key) && cellMatches.length === 0) {
+                  return null;
+                }
                 // Span = max of placed cards' spans (so a 90-min
                 // Senior in a 30-min stride takes 3 rows even when
                 // sitting next to a 30-min Sub-13).
@@ -873,10 +883,17 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
                   const s = spanFor(m);
                   if (s > span) span = s;
                 }
+                // Covered cell with matches: clamp to span 1 so the
+                // overlap-card doesn't extend FURTHER into already-
+                // covered rows. Visually it still overlaps with the
+                // spanning card from above (revealing the conflict)
+                // but doesn't cascade the gap.
+                if (coveredCells.has(key)) span = 1;
                 // Don't let a span overshoot the day's last row — the
                 // card just clamps to whatever's left on the grid.
                 const maxAvailable = times.length - rowIdx;
                 const renderSpan = Math.min(span, maxAvailable);
+                const isOverlap = coveredCells.has(key);
                 return (
                   <Cell
                     key={key}
@@ -895,6 +912,7 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
                     gridRow={rowIdx + 2}
                     gridColumn={colIdx + 2}
                     rowSpan={renderSpan}
+                    isOverlap={isOverlap}
                   />
                 );
               }),
@@ -974,6 +992,14 @@ interface CellProps {
   gridColumn: number;
   /** How many rows this cell occupies. 1 = the previous behaviour. */
   rowSpan: number;
+  /**
+   * True when this cell sits in a row-range covered by a longer
+   * spanning card from above AND has its own match(es) starting here
+   * (a data overlap — two matches on the same court+time). The cell
+   * gets a red dashed outline + warning badge so the admin sees the
+   * conflict instead of having the matches silently hidden.
+   */
+  isOverlap?: boolean;
 }
 
 function Cell({
@@ -992,6 +1018,7 @@ function Cell({
   gridRow,
   gridColumn,
   rowSpan,
+  isOverlap,
 }: CellProps) {
   const [{ isOver, canDrop }, drop] = useDrop<
     { match: Match },
@@ -1012,11 +1039,19 @@ function Cell({
 
   const dropTint = isOver && canDrop ? 'bg-spk-red/5 ring-2 ring-spk-red/40 ring-inset' : '';
   const isStacked = matches.length > 1;
+  // Overlap = cell sits on top of a spanning card from above and has
+  // its own match(es). Use a red dashed outline + raised z-index so
+  // the overlapping card is visually distinct and on top of the
+  // spanning card's painted area (grid items at the same area stack
+  // by source order; we want the overlap-card visible).
+  const overlapStyles = isOverlap
+    ? 'ring-2 ring-red-500 ring-inset bg-white relative z-10 shadow-md'
+    : '';
 
   return (
     <div
       ref={drop as unknown as React.Ref<HTMLDivElement>}
-      className={`border-b border-r border-black/10 p-1.5 transition-colors ${dropTint}`}
+      className={`border-b border-r border-black/10 p-1.5 transition-colors ${dropTint} ${overlapStyles}`}
       // Inline minHeight beats the Tailwind arbitrary class — turns out
       // `min-h-[72px]` isn't always honoured by CSS Grid items in the
       // browser. Inline style on the grid item enforces the row-track
@@ -1027,7 +1062,16 @@ function Cell({
         minHeight: 72,
       }}
     >
-      {isStacked && (
+      {isOverlap && (
+        <div
+          className="mb-1 text-[9px] font-bold uppercase tracking-wider text-red-700 bg-red-50 border border-red-300 rounded-sm px-1.5 py-0.5"
+          style={FONT}
+          title="Este partido se superpone con otro que ocupa el mismo bloque horario. Arrastralo a otra hora libre."
+        >
+          ⚠ Conflicto · arrastrá a otra hora
+        </div>
+      )}
+      {isStacked && !isOverlap && (
         <div
           className="mb-1 text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 rounded-sm px-1.5 py-0.5"
           style={FONT}
