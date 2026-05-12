@@ -305,17 +305,17 @@ export function Login() {
               {[
                 {
                   n: '01',
-                  title: 'Creá tu torneo',
+                  title: 'Crea tu torneo',
                   desc: 'Categorías, formato, canchas. En 5 minutos.',
                 },
                 {
                   n: '02',
-                  title: 'Inscribí equipos',
+                  title: 'Inscribe tus equipos',
                   desc: 'Capitanes y jueces con credenciales propias.',
                 },
                 {
                   n: '03',
-                  title: 'Jugá en vivo',
+                  title: 'Juega en vivo',
                   desc: 'Marcador, brackets y push notifications en tiempo real.',
                 },
               ].map((s) => (

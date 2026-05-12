@@ -68,6 +68,38 @@ export const clubsApi = {
   },
 
   /**
+   * List teams currently linked to a club. Drives the "Dividir club"
+   * modal so the admin picks which teams move to the new club.
+   */
+  async getClubTeams(id: string): Promise<Array<{
+    id: string;
+    name: string;
+    initials: string;
+    category: string | null;
+    logo: string | null;
+    primaryColor: string | null;
+    secondaryColor: string | null;
+  }>> {
+    return request(`/clubs/${id}/teams`);
+  },
+
+  /**
+   * Split: move the selected teams to a NEW club. Returns the new
+   * club so the FE can show the credentials immediately. The original
+   * club survives with its remaining teams + credentials intact.
+   */
+  async splitClub(
+    sourceClubId: string,
+    name: string,
+    teamIds: string[],
+  ): Promise<Club> {
+    return request<Club>(`/clubs/${sourceClubId}/split`, {
+      method: 'POST',
+      body: JSON.stringify({ name, teamIds }),
+    });
+  },
+
+  /**
    * Returns `{ clubId, teamIds }` for the authenticated club_captain.
    * The club panel then fetches each team via the existing /teams/:id
    * endpoint (no new team-side endpoint needed).

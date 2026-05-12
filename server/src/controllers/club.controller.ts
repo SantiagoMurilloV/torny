@@ -142,6 +142,66 @@ export async function exportExcel(req: Request, res: Response, next: NextFunctio
 }
 
 /**
+ * Admin-scoped: list of teams currently linked to the club. Drives
+ * the "Dividir club" modal so the admin can pick which teams should
+ * move to a new club. Owner-scoped via service.
+ */
+export async function listTeamsByClub(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const ownerId = ownerIdFromReq(req);
+    const teams = await clubService.getTeamsForClub(
+      req.params.id as string,
+      ownerId,
+    );
+    res.json(teams);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Split a club: create a NEW club with auto-generated credentials and
+ * re-point the selected teams' `club_id` at it. The original club
+ * keeps the unselected teams; its credentials don't rotate.
+ *
+ * Used to fix "auto-detect grouped two real clubs together" — admin
+ * picks the teams that belong to a different club and types the new
+ * club's name. Returns the NEW club row (with plaintext password) so
+ * the show-once modal can display the credential immediately.
+ */
+export async function split(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const ownerId = ownerIdFromReq(req);
+    const body = req.body as { name?: string; teamIds?: string[] };
+    const name = (body.name ?? '').trim();
+    const teamIds = Array.isArray(body.teamIds) ? body.teamIds : [];
+    if (!name) {
+      throw new ValidationError('El nombre del nuevo club es obligatorio');
+    }
+    if (teamIds.length === 0) {
+      throw new ValidationError('Seleccioná al menos un equipo para mover');
+    }
+    const newClub = await clubService.splitClub(
+      req.params.id as string,
+      ownerId,
+      name,
+      teamIds,
+    );
+    res.status(201).json(newClub);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Returns the team ids that belong to the authenticated club_captain.
  * Used by the public-facing club panel after login to render the
  * team picker. The frontend then hits the existing per-team endpoints

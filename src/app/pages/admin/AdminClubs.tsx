@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Building2, Download, RefreshCw, KeyRound, Trash2, Pencil } from 'lucide-react';
+import {
+  Building2,
+  Download,
+  RefreshCw,
+  KeyRound,
+  Trash2,
+  Pencil,
+  Split,
+} from 'lucide-react';
 import { api } from '../../services/api';
 import type { Club, DetectedCluster } from '../../services/api/clubs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -35,6 +43,11 @@ export function AdminClubs() {
   const [renamingClub, setRenamingClub] = useState<Club | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Club | null>(null);
   const [exporting, setExporting] = useState(false);
+  // Split modal — when the auto-detect bucketed two real clubs into
+  // one (e.g. "San José Armenia" + "San José Circasia" both bucketed
+  // as "San José"), the admin opens this to move the wrong-bucket
+  // teams into a NEW club.
+  const [splittingClub, setSplittingClub] = useState<Club | null>(null);
 
   const reload = async () => {
     setLoading(true);
@@ -182,6 +195,15 @@ export function AdminClubs() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setSplittingClub(club)}
+                  title="Dividir club (mover equipos a un club nuevo)"
+                  disabled={(club.teamsCount ?? 0) < 2}
+                  className="p-2 text-black/55 hover:text-spk-red hover:bg-spk-red/10 rounded-sm transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <Split className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
                   onClick={async () => {
                     try {
                       const fresh = await api.clubs.regenerateCredentials(club.id);
@@ -227,6 +249,17 @@ export function AdminClubs() {
           onSaved={(updated) => {
             setClubs((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
             setRenamingClub(null);
+          }}
+        />
+      )}
+
+      {splittingClub && (
+        <SplitClubModal
+          club={splittingClub}
+          onClose={() => setSplittingClub(null)}
+          onDone={async () => {
+            setSplittingClub(null);
+            await reload();
           }}
         />
       )}
@@ -482,6 +515,211 @@ function RenameClubModal({ club, onClose, onSaved }: RenameClubModalProps) {
             {saving && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
             Guardar
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface SplitClubModalProps {
+  club: Club;
+  onClose: () => void;
+  onDone: () => void;
+}
+
+interface ClubTeamLite {
+  id: string;
+  name: string;
+  initials: string;
+  category: string | null;
+}
+
+/**
+ * Split modal — fixes the case where the auto-detect bucketed two
+ * different real clubs into one (e.g. "San José Armenia" + "San José
+ * Circasia" both got bucketed as "San José"). Lists the club's teams
+ * with checkboxes; admin checks the ones that should MOVE to a new
+ * club, types the new club's name, confirms. The original keeps the
+ * unchecked teams.
+ *
+ * After success a second show-once modal would be ideal to reveal
+ * the new credentials, but for the MVP we just toast them — the
+ * admin can re-export the Excel anytime to get the same plaintext
+ * back from `passwordRecovery`.
+ */
+function SplitClubModal({ club, onClose, onDone }: SplitClubModalProps) {
+  const [teams, setTeams] = useState<ClubTeamLite[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await api.clubs.getClubTeams(club.id);
+        setTeams(
+          list.map((t) => ({
+            id: t.id,
+            name: t.name,
+            initials: t.initials,
+            category: t.category,
+          })),
+        );
+      } catch (err) {
+        toast.error(getErrorMessage(err, 'No se pudieron cargar los equipos'));
+        onClose();
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [club.id]);
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const submit = async () => {
+    if (!name.trim() || selected.size === 0) return;
+    setSubmitting(true);
+    try {
+      const created = await api.clubs.splitClub(
+        club.id,
+        name.trim(),
+        Array.from(selected),
+      );
+      toast.success(
+        `Club "${created.name}" creado con ${selected.size} equipo(s) · usuario ${created.username} · contraseña ${created.passwordRecovery ?? '(ver listado)'}`,
+        { duration: 12000 },
+      );
+      onDone();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'No se pudo dividir el club'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const remaining = teams.length - selected.size;
+  const canSubmit =
+    !submitting &&
+    !loading &&
+    selected.size > 0 &&
+    remaining > 0 &&
+    name.trim().length > 0;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-0"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-sm shadow-xl w-full max-w-2xl max-h-[92vh] sm:max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-4 sm:px-6 py-4 border-b border-black/10">
+          <h2 className="text-xl font-bold" style={FONT}>
+            DIVIDIR CLUB · {club.name}
+          </h2>
+          <p className="text-xs text-black/55 mt-1">
+            Marcá los equipos que pertenecen a OTRO club. Esos equipos se
+            van a mover a un club nuevo (con usuario + contraseña
+            generados automáticamente). Los equipos que NO marques se
+            quedan en &ldquo;{club.name}&rdquo; con su credencial actual
+            intacta.
+          </p>
+        </div>
+
+        <div className="px-4 sm:px-6 pt-4">
+          <label className="block text-xs font-bold text-black/60 mb-1" style={FONT}>
+            Nombre del nuevo club
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="ej: San José Circasia"
+            className="w-full px-3 py-2 text-sm bg-white border-2 border-black/15 rounded-sm focus:outline-none focus:border-spk-red"
+          />
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 mt-2">
+          {loading ? (
+            <div className="text-sm text-black/50 italic py-6 text-center">
+              Cargando equipos…
+            </div>
+          ) : teams.length === 0 ? (
+            <div className="text-sm text-black/50 italic py-6 text-center">
+              Este club no tiene equipos.
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {teams.map((t) => {
+                const checked = selected.has(t.id);
+                return (
+                  <label
+                    key={t.id}
+                    className={`flex items-center gap-3 px-3 py-2 border rounded-sm cursor-pointer transition-colors ${
+                      checked
+                        ? 'border-spk-red bg-spk-red/5'
+                        : 'border-black/10 hover:bg-black/[0.02]'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(t.id)}
+                      className="w-4 h-4 accent-spk-red"
+                    />
+                    <span className="flex-1 text-sm font-medium truncate">{t.name}</span>
+                    {t.category && (
+                      <span className="text-[11px] text-black/55 truncate">
+                        {t.category}
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 sm:px-6 py-3 border-t border-black/10 flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-xs text-black/55">
+            {selected.size} se mueve(n) · {remaining} se queda(n)
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="px-3 py-2 text-sm font-bold text-black/70 hover:bg-black/5 rounded-sm"
+              style={FONT}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={!canSubmit}
+              className="px-3 py-2 text-sm font-bold bg-spk-red text-white rounded-sm hover:bg-spk-red-dark disabled:opacity-40 inline-flex items-center gap-1"
+              style={FONT}
+              title={
+                remaining === 0
+                  ? 'Tenés que dejar al menos un equipo en el club original'
+                  : undefined
+              }
+            >
+              {submitting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+              Crear nuevo club
+            </button>
+          </div>
         </div>
       </div>
     </div>

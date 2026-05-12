@@ -74,6 +74,47 @@ function normalizeFirstWord(name: string): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+/**
+ * Normalize the WHOLE team name into an array of comparable words.
+ * "San José Armenia A" → ["san", "jose", "armenia", "a"]. Used by
+ * the recursive cluster algorithm to compare nth words across teams.
+ */
+function normalizeWords(name: string): string[] {
+  return (name ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) =>
+      w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''),
+    );
+}
+
+/**
+ * Longest word-level common prefix across a list of word lists.
+ *   [["spike","rubi"], ["spike","esmeralda"]] → ["spike"]
+ *   [["san","jose","armenia"], ["san","jose","circasia"]] → ["san","jose"]
+ *   [[]]                                                  → []
+ *
+ * Used to propose a friendly cluster name (joins with spaces) instead
+ * of just the first word.
+ */
+function longestCommonWordPrefix(lists: string[][]): string[] {
+  if (lists.length === 0) return [];
+  const first = lists[0];
+  let i = 0;
+  while (i < first.length) {
+    const word = first[i];
+    if (lists.some((l) => normalizeWord(l[i]) !== normalizeWord(word))) break;
+    i++;
+  }
+  return first.slice(0, i);
+}
+
+function normalizeWord(w: string | undefined): string {
+  if (!w) return '';
+  return w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 function mapRow(row: Record<string, unknown>, teamsCount?: number): Club {
   return {
     id: row.id as string,
@@ -90,11 +131,23 @@ function mapRow(row: Record<string, unknown>, teamsCount?: number): Club {
 
 export class ClubService {
   /**
-   * Inspect the admin's teams and propose clusters keyed by the
-   * normalized first word of each team's name. Skips teams already
-   * assigned to a club (those have `club_id != NULL`) so re-running
-   * the detector is idempotent — admin clicks the button as many
-   * times as they want, only NEW unclustered teams show up.
+   * Inspect the admin's teams and propose clusters using a recursive
+   * word-prefix grouping. Why recursive instead of "first word only":
+   *
+   *   · "San José Armenia A", "San José Armenia B", "San José Circasia"
+   *     all share "san" as the first word. With single-word grouping
+   *     they'd land in ONE bucket, mixing two real clubs.
+   *   · The recursive version groups by the FIRST word, then for each
+   *     bucket looks at the SECOND word — if that splits into two
+   *     sub-buckets where each has ≥2 teams, we keep the split (so
+   *     "San José Armenia" and "San José Circasia" become two
+   *     distinct clusters). If the deeper split fails (e.g. "Spike
+   *     Rubi" + "Spike Esmeralda" split by 2nd word gives 1+1 →
+   *     nothing useful), we keep the parent cluster.
+   *
+   * Skips teams already assigned to a club so re-running is idempotent.
+   *
+   * @returns clusters with at least 2 teams, sorted by size desc.
    */
   async detectClusters(ownerId: string): Promise<DetectedCluster[]> {
     const pool = getPool();
@@ -104,30 +157,67 @@ export class ClubService {
         ORDER BY name`,
       [ownerId],
     );
-    const buckets = new Map<string, { proposed: string; ids: string[]; samples: string[] }>();
-    for (const row of res.rows) {
-      const name = row.name as string;
-      const key = normalizeFirstWord(name);
-      if (!key) continue;
-      const proposed = name.trim().split(/\s+/)[0];
-      const bucket = buckets.get(key) ?? { proposed, ids: [], samples: [] };
-      bucket.ids.push(row.id as string);
-      if (bucket.samples.length < 5) bucket.samples.push(name);
-      buckets.set(key, bucket);
+    const all = res.rows.map((r) => ({
+      id: r.id as string,
+      name: r.name as string,
+      // Pre-tokenize once so the recursive grouping doesn't re-split
+      // per depth (cheap perf bonus on big libraries).
+      words: (r.name as string).trim().split(/\s+/).filter(Boolean),
+      normalizedWords: normalizeWords(r.name as string),
+    }));
+
+    type Team = (typeof all)[number];
+
+    /**
+     * Recursive grouping. At each depth, partition `teams` by their
+     * `normalizedWords[depth]`. For buckets with 2+ teams, attempt to
+     * sub-cluster at depth+1 — KEEP the sub-clustering only if it
+     * produces ≥2 sub-buckets each with ≥2 teams. Otherwise return
+     * the bucket as-is (the parent name is the natural club name).
+     */
+    function group(teams: Team[], depth: number): DetectedCluster[] {
+      const buckets = new Map<string, Team[]>();
+      for (const t of teams) {
+        const word = t.normalizedWords[depth];
+        if (!word) continue;
+        const arr = buckets.get(word) ?? [];
+        arr.push(t);
+        buckets.set(word, arr);
+      }
+      const result: DetectedCluster[] = [];
+      for (const [, teamsInBucket] of buckets) {
+        if (teamsInBucket.length < 2) continue;
+        // Try a deeper split. We only ACCEPT it when the next layer
+        // produces ≥2 viable sub-clusters — otherwise we'd over-split
+        // a club like "Spike" into 1-team buckets per second word.
+        if (depth + 1 < 5) {
+          const sub = group(teamsInBucket, depth + 1);
+          const accountedFor = sub.reduce((n, c) => n + c.teamIds.length, 0);
+          if (sub.length >= 2 && accountedFor >= teamsInBucket.length - 0) {
+            result.push(...sub);
+            continue;
+          }
+        }
+        // Use the longest common word-prefix as the proposed name so
+        // "San José Armenia" appears nicely in the modal instead of
+        // just "San". Compute LCP across all teams in this bucket.
+        const lcp = longestCommonWordPrefix(teamsInBucket.map((t) => t.words));
+        const proposedName =
+          lcp.length > 0 ? lcp.join(' ') : teamsInBucket[0].words[0] ?? '';
+        const key = teamsInBucket
+          .map((t) => t.normalizedWords.slice(0, lcp.length || 1).join('-'))
+          .reduce((acc, k) => acc || k, '');
+        result.push({
+          key,
+          proposedName,
+          teamIds: teamsInBucket.map((t) => t.id),
+          sampleTeamNames: teamsInBucket.slice(0, 5).map((t) => t.name),
+        });
+      }
+      return result;
     }
-    // Only surface clusters with 2+ teams — single-team "clubs"
-    // would be redundant with the captain credentials they already
-    // have. Admin can manually create a 1-team club later if needed.
-    const out: DetectedCluster[] = [];
-    for (const [key, b] of buckets) {
-      if (b.ids.length < 2) continue;
-      out.push({
-        key,
-        proposedName: b.proposed,
-        teamIds: b.ids,
-        sampleTeamNames: b.samples,
-      });
-    }
+
+    const out = group(all, 0);
     out.sort((a, b) => b.teamIds.length - a.teamIds.length);
     return out;
   }
@@ -236,6 +326,136 @@ export class ClubService {
       throw new NotFoundError('Club');
     }
     return mapRow(row, (row.teams_count as number | null) ?? undefined);
+  }
+
+  /**
+   * Owner-scoped list of teams currently linked to a club. Used by
+   * the admin's "Dividir club" modal so the user can pick which
+   * teams should move out to a new club. Returns minimal fields
+   * (id + name + initials + category + logo + colors) to keep the
+   * payload small — no roster, no tournaments.
+   */
+  async getTeamsForClub(
+    clubId: string,
+    ownerId: string,
+  ): Promise<Array<{
+    id: string;
+    name: string;
+    initials: string;
+    category: string | null;
+    logo: string | null;
+    primaryColor: string | null;
+    secondaryColor: string | null;
+  }>> {
+    await this.getById(clubId, ownerId); // 404 on cross-tenant
+    const pool = getPool();
+    const res = await pool.query(
+      `SELECT id, name, initials, category, logo,
+              primary_color, secondary_color
+         FROM teams
+        WHERE club_id = $1 AND owner_id = $2
+        ORDER BY name`,
+      [clubId, ownerId],
+    );
+    return res.rows.map((r) => ({
+      id: r.id as string,
+      name: r.name as string,
+      initials: r.initials as string,
+      category: (r.category as string | null) ?? null,
+      logo: (r.logo as string | null) ?? null,
+      primaryColor: (r.primary_color as string | null) ?? null,
+      secondaryColor: (r.secondary_color as string | null) ?? null,
+    }));
+  }
+
+  /**
+   * Move a subset of one club's teams into a NEW club. Used to fix
+   * the "auto-detect grouped two real clubs together" scenario:
+   * admin clicks "Dividir club", picks the teams that belong to a
+   * different club, types a name → this method creates the new club
+   * row with auto-generated credentials and re-points the picked
+   * teams' `club_id`.
+   *
+   * The original club survives with the unchecked teams intact (its
+   * username/password don't rotate). Atomic — partial failures roll
+   * back so we never leave teams pointing at a non-existent club.
+   */
+  async splitClub(
+    sourceClubId: string,
+    ownerId: string,
+    newClubName: string,
+    teamIdsToMove: string[],
+  ): Promise<Club> {
+    const trimmedName = (newClubName ?? '').trim();
+    if (!trimmedName) {
+      throw new ValidationError('El nombre del nuevo club es obligatorio');
+    }
+    if (!Array.isArray(teamIdsToMove) || teamIdsToMove.length === 0) {
+      throw new ValidationError('Seleccioná al menos un equipo para mover');
+    }
+    await this.getById(sourceClubId, ownerId); // 404 on cross-tenant
+
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Tamper-check: every teamId must currently belong to the
+      // source club AND be owned by the same admin. Otherwise an
+      // attacker could smuggle teamIds from another tenant or from
+      // an unrelated club into the move.
+      const verifyRes = await client.query<{ n: number }>(
+        `SELECT COUNT(*)::int AS n FROM teams
+          WHERE id = ANY($1) AND club_id = $2 AND owner_id = $3`,
+        [teamIdsToMove, sourceClubId, ownerId],
+      );
+      const matched = verifyRes.rows[0]?.n ?? 0;
+      if (matched !== teamIdsToMove.length) {
+        throw new ValidationError(
+          'Algún equipo seleccionado no pertenece a este club o no es tuyo',
+        );
+      }
+
+      // Insert new club with retry on UNIQUE LOWER(username) collision.
+      const password = generatePassword();
+      const passwordHash = await bcrypt.hash(password, 10);
+      let row: Record<string, unknown> | null = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const username = generateClubUsername(trimmedName);
+        try {
+          const res = await client.query(
+            `INSERT INTO clubs (owner_id, name, username, password_hash, password_recovery)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING *`,
+            [ownerId, trimmedName, username, passwordHash, password],
+          );
+          row = res.rows[0];
+          break;
+        } catch (err) {
+          if ((err as { code?: string }).code === '23505' && attempt < 4) continue;
+          throw err;
+        }
+      }
+      if (!row) {
+        throw new ValidationError('No se pudo generar usuario único');
+      }
+      const newClubId = row.id as string;
+
+      // Move the selected teams to the new club.
+      await client.query(
+        `UPDATE teams SET club_id = $1, updated_at = NOW()
+          WHERE id = ANY($2) AND club_id = $3 AND owner_id = $4`,
+        [newClubId, teamIdsToMove, sourceClubId, ownerId],
+      );
+
+      await client.query('COMMIT');
+      return mapRow(row, teamIdsToMove.length);
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   /**

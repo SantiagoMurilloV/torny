@@ -9,6 +9,8 @@ import {
   remove,
   exportExcel,
   meTeams,
+  listTeamsByClub,
+  split,
 } from '../controllers/club.controller';
 import { requireRole } from '../middleware/auth';
 
@@ -43,12 +45,20 @@ router.post('/detect', requireRole('admin', 'super_admin'), detect);
 router.post('/bulk', requireRole('admin', 'super_admin'), bulkCreate);
 router.get('/', requireRole('admin', 'super_admin'), list);
 router.get('/:id', requireRole('admin', 'super_admin'), getById);
+router.get(
+  '/:id/teams',
+  requireRole('admin', 'super_admin'),
+  listTeamsByClub,
+);
 router.put('/:id', requireRole('admin', 'super_admin'), rename);
 router.post(
   '/:id/credentials',
   requireRole('admin', 'super_admin'),
   regenerateCredentials,
 );
+// Split: move N teams to a new club, keep the original. Returns the
+// NEW club row so the show-once modal can display its credentials.
+router.post('/:id/split', requireRole('admin', 'super_admin'), split);
 router.delete('/:id', requireRole('admin', 'super_admin'), remove);
 
 export default router;
