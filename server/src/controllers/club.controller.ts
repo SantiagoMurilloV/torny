@@ -74,7 +74,7 @@ export async function list(req: Request, res: Response, next: NextFunction) {
 export async function getById(req: Request, res: Response, next: NextFunction) {
   try {
     const ownerId = ownerIdFromReq(req);
-    const club = await clubService.getById(req.params.id, ownerId);
+    const club = await clubService.getById(req.params.id as string, ownerId);
     res.json(club);
   } catch (err) {
     next(err);
@@ -85,7 +85,7 @@ export async function rename(req: Request, res: Response, next: NextFunction) {
   try {
     const ownerId = ownerIdFromReq(req);
     const club = await clubService.rename(
-      req.params.id,
+      req.params.id as string,
       ownerId,
       (req.body?.name ?? '') as string,
     );
@@ -102,7 +102,10 @@ export async function regenerateCredentials(
 ) {
   try {
     const ownerId = ownerIdFromReq(req);
-    const club = await clubService.regenerateCredentials(req.params.id, ownerId);
+    const club = await clubService.regenerateCredentials(
+      req.params.id as string,
+      ownerId,
+    );
     res.json(club);
   } catch (err) {
     next(err);
@@ -112,7 +115,7 @@ export async function regenerateCredentials(
 export async function remove(req: Request, res: Response, next: NextFunction) {
   try {
     const ownerId = ownerIdFromReq(req);
-    await clubService.deleteClub(req.params.id, ownerId);
+    await clubService.deleteClub(req.params.id as string, ownerId);
     res.status(204).end();
   } catch (err) {
     next(err);

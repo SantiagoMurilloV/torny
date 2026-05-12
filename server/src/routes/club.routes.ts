@@ -10,28 +10,28 @@ import {
   exportExcel,
   meTeams,
 } from '../controllers/club.controller';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireRole } from '../middleware/auth';
 
 const router = Router();
 
-// `/me/teams` is for the club_captain's own panel.
-router.get('/me/teams', requireAuth, meTeams);
+// Auth runs globally via `authMiddleware` mounted in index.ts; we
+// only need the per-route role guards here. `meTeams` accepts any
+// authenticated user — the controller filters to `club_captain` —
+// so it has no role middleware. Everything else is admin-or-super.
 
-// Everything else is admin-only (super_admin also passes through
-// requireRole). The service does owner-scoping so super_admin only
-// sees their own clubs unless we extend listForOwner later.
-router.get('/export', requireAuth, requireRole('admin', 'super_admin'), exportExcel);
-router.post('/detect', requireAuth, requireRole('admin', 'super_admin'), detect);
-router.post('/bulk', requireAuth, requireRole('admin', 'super_admin'), bulkCreate);
-router.get('/', requireAuth, requireRole('admin', 'super_admin'), list);
-router.get('/:id', requireAuth, requireRole('admin', 'super_admin'), getById);
-router.put('/:id', requireAuth, requireRole('admin', 'super_admin'), rename);
+router.get('/me/teams', meTeams);
+
+router.get('/export', requireRole('admin', 'super_admin'), exportExcel);
+router.post('/detect', requireRole('admin', 'super_admin'), detect);
+router.post('/bulk', requireRole('admin', 'super_admin'), bulkCreate);
+router.get('/', requireRole('admin', 'super_admin'), list);
+router.get('/:id', requireRole('admin', 'super_admin'), getById);
+router.put('/:id', requireRole('admin', 'super_admin'), rename);
 router.post(
   '/:id/credentials',
-  requireAuth,
   requireRole('admin', 'super_admin'),
   regenerateCredentials,
 );
-router.delete('/:id', requireAuth, requireRole('admin', 'super_admin'), remove);
+router.delete('/:id', requireRole('admin', 'super_admin'), remove);
 
 export default router;
