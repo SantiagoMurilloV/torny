@@ -20,9 +20,10 @@ interface PlayerFormModalProps {
 interface FieldErrors {
   firstName?: string;
   lastName?: string;
-  birthYear?: string;
+  birthDate?: string;
   documentNumber?: string;
   shirtNumber?: string;
+  emergencyContactPhone?: string;
   server?: string;
 }
 
@@ -44,29 +45,46 @@ const POSITIONS: string[] = [
   'Líbero',
 ];
 
-const CURRENT_YEAR = new Date().getFullYear();
+const TODAY_ISO = () => new Date().toISOString().slice(0, 10);
+
+const RELATIONSHIP_OPTIONS = [
+  '',
+  'Mamá',
+  'Papá',
+  'Abuelo/a',
+  'Tío/a',
+  'Hermano/a',
+  'Tutor/a legal',
+  'Otro',
+];
 
 type FormState = {
   firstName: string;
   lastName: string;
-  birthYear: string;
+  birthDate: string;
   documentType: string;
   documentNumber: string;
   category: string;
   position: string;
   shirtNumber: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
+  emergencyContactRelationship: string;
 };
 
 function emptyState(): FormState {
   return {
     firstName: '',
     lastName: '',
-    birthYear: '',
+    birthDate: '',
     documentType: '',
     documentNumber: '',
     category: '',
     position: '',
     shirtNumber: '',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    emergencyContactRelationship: '',
   };
 }
 
@@ -74,17 +92,20 @@ function validate(form: FormState): FieldErrors {
   const errors: FieldErrors = {};
   if (!form.firstName.trim()) errors.firstName = 'El nombre es obligatorio';
   if (!form.lastName.trim()) errors.lastName = 'El apellido es obligatorio';
-  if (form.birthYear.trim()) {
-    const n = Number(form.birthYear);
-    if (!Number.isInteger(n) || n < 1900 || n > CURRENT_YEAR) {
-      errors.birthYear = `Año entre 1900 y ${CURRENT_YEAR}`;
-    }
+  if (form.birthDate.trim()) {
+    const iso = form.birthDate;
+    const today = TODAY_ISO();
+    if (iso > today) errors.birthDate = 'No puede ser futura';
+    else if (iso < '1900-01-01') errors.birthDate = 'Fecha inválida';
   }
   if (form.shirtNumber.trim()) {
     const n = Number(form.shirtNumber);
     if (!Number.isInteger(n) || n < 0 || n > 99) {
       errors.shirtNumber = 'Número entre 0 y 99';
     }
+  }
+  if (form.emergencyContactPhone && form.emergencyContactPhone.length > 40) {
+    errors.emergencyContactPhone = 'Demasiado largo';
   }
   return errors;
 }
@@ -117,12 +138,15 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, teamId, player }: Pl
       setForm({
         firstName: player.firstName,
         lastName: player.lastName,
-        birthYear: player.birthYear ? String(player.birthYear) : '',
+        birthDate: player.birthDate ?? '',
         documentType: player.documentType ?? '',
         documentNumber: player.documentNumber ?? '',
         category: player.category ?? '',
         position: player.position ?? '',
         shirtNumber: player.shirtNumber != null ? String(player.shirtNumber) : '',
+        emergencyContactName: player.emergencyContactName ?? '',
+        emergencyContactPhone: player.emergencyContactPhone ?? '',
+        emergencyContactRelationship: player.emergencyContactRelationship ?? '',
       });
       setPhotoPreview(player.photo ?? null);
       setHasExistingDocument(Boolean(player.documentFile));
@@ -203,7 +227,7 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, teamId, player }: Pl
       const basePayload: CreatePlayerDto = {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
-        birthYear: form.birthYear.trim() ? Number(form.birthYear) : undefined,
+        birthDate: form.birthDate.trim() || undefined,
         documentType: form.documentType || undefined,
         documentNumber: form.documentNumber.trim() || undefined,
         category: form.category || undefined,
@@ -211,6 +235,10 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, teamId, player }: Pl
         shirtNumber: form.shirtNumber.trim() ? Number(form.shirtNumber) : undefined,
         photo: photoUrl,
         documentFile: documentUrl,
+        emergencyContactName: form.emergencyContactName.trim() || undefined,
+        emergencyContactPhone: form.emergencyContactPhone.trim() || undefined,
+        emergencyContactRelationship:
+          form.emergencyContactRelationship.trim() || undefined,
       };
 
       const saved = player
@@ -335,22 +363,20 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, teamId, player }: Pl
             </div>
           </div>
 
-          {/* Birth year + shirt number */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Birth date + shirt number */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-2" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
-                Año de nacimiento
+                Fecha de nacimiento
               </label>
               <input
-                type="number"
-                value={form.birthYear}
-                onChange={(e) => { setForm({ ...form, birthYear: e.target.value }); setErrors((prev) => ({ ...prev, birthYear: undefined, server: undefined })); }}
-                className={inputClass('birthYear')}
-                placeholder="Ej: 2009"
-                min={1900}
-                max={CURRENT_YEAR}
+                type="date"
+                value={form.birthDate}
+                max={TODAY_ISO()}
+                onChange={(e) => { setForm({ ...form, birthDate: e.target.value }); setErrors((prev) => ({ ...prev, birthDate: undefined, server: undefined })); }}
+                className={inputClass('birthDate')}
               />
-              {errors.birthYear && <p className="mt-1 text-sm text-red-500">{errors.birthYear}</p>}
+              {errors.birthDate && <p className="mt-1 text-sm text-red-500">{errors.birthDate}</p>}
             </div>
             <div>
               <label className="block text-sm font-bold mb-2" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
@@ -430,6 +456,62 @@ export function PlayerFormModal({ isOpen, onClose, onSaved, teamId, player }: Pl
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
+            </div>
+          </div>
+
+          {/* Emergency contact — single contact (mig 029). Same fields the
+              public parent form captures, surfaced here so the admin /
+              captain can back-fill old rosters by hand. */}
+          <div className="space-y-3 pt-2 border-t border-black/10">
+            <h3
+              className="text-xs font-bold uppercase text-black/55"
+              style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.08em' }}
+            >
+              Contacto de emergencia
+            </h3>
+            <div>
+              <label className="block text-sm font-bold mb-2" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
+                Nombre completo
+              </label>
+              <input
+                type="text"
+                value={form.emergencyContactName}
+                onChange={(e) => setForm({ ...form, emergencyContactName: e.target.value })}
+                className="w-full px-4 py-2 border-2 border-black/10 rounded-sm focus:outline-none focus:border-spk-red"
+                placeholder="Ej: María Pérez"
+              />
+            </div>
+            <div className="grid grid-cols-[2fr_1fr] gap-3">
+              <div>
+                <label className="block text-sm font-bold mb-2" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
+                  Teléfono
+                </label>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={form.emergencyContactPhone}
+                  onChange={(e) => { setForm({ ...form, emergencyContactPhone: e.target.value }); setErrors((prev) => ({ ...prev, emergencyContactPhone: undefined, server: undefined })); }}
+                  className={inputClass('emergencyContactPhone')}
+                  placeholder="+57 300 000 0000"
+                />
+                {errors.emergencyContactPhone && <p className="mt-1 text-sm text-red-500">{errors.emergencyContactPhone}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-bold mb-2" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
+                  Relación
+                </label>
+                <select
+                  value={form.emergencyContactRelationship}
+                  onChange={(e) => setForm({ ...form, emergencyContactRelationship: e.target.value })}
+                  className="w-full px-4 py-2 border-2 border-black/10 rounded-sm focus:outline-none focus:border-spk-red bg-white"
+                >
+                  {RELATIONSHIP_OPTIONS.map((r) => (
+                    <option key={r || 'none'} value={r}>
+                      {r || '—'}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 

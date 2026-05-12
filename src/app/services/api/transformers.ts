@@ -123,6 +123,7 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
   return {
     id: t.id,
     name: t.name,
+    slug: t.slug,
     sport: t.sport,
     club: t.club,
     // Anchor at noon UTC via parseWireDate so tournament dates show

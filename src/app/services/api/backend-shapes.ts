@@ -23,6 +23,8 @@ export interface BackendTeam {
 export interface BackendTournament {
   id: string;
   name: string;
+  /** Public URL slug (mig 029). */
+  slug?: string;
   sport: string;
   club: string;
   startDate: string;

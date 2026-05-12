@@ -3,6 +3,14 @@
 export interface Tournament {
   id: string;           // UUID
   name: string;         // 3-100 chars
+  /**
+   * URL-safe public slug (migration 029). Auto-generated from `name`
+   * on insert and unique across the system. Drives the public parent-
+   * registration link `/torneo/:slug/inscripcion`. Optional in the
+   * type only because legacy SELECTs may not include the column —
+   * every row in the DB has a value.
+   */
+  slug?: string;
   sport: string;
   club: string;
   startDate: string;    // ISO date

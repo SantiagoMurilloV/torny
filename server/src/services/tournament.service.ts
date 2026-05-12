@@ -11,6 +11,7 @@ import {
 import { NotFoundError, ValidationError } from '../middleware/errorHandler';
 import { validate, validateDateRange } from '../middleware/validation';
 import { matchService } from './match.service';
+import { buildTournamentSlug, nextSlugCandidate } from '../lib/slugify';
 
 /**
  * Context for listing tournaments. Matches caller roles:
@@ -68,6 +69,11 @@ function mapRow(row: Record<string, unknown>): Tournament {
   return {
     id: row.id as string,
     name: row.name as string,
+    // Migration 029 — public registration URL fragment. Auto-generated
+    // on insert + backfilled for legacy rows so it's NOT NULL in DB;
+    // the optional in the type just protects against transitional
+    // SELECTs that don't include the column (defensive).
+    slug: (row.slug as string | null) ?? undefined,
     sport: row.sport as string,
     club: row.club as string,
     startDate: row.start_date as string,
@@ -414,44 +420,123 @@ export class TournamentService {
         }
       }
     }
+    // Public-URL slug. Try the clean kebab(name) first; on UNIQUE
+    // collision (rare across multi-admin tenants, ~impossible for one
+    // tenant) ask nextSlugCandidate() for a suffixed variant and retry
+    // up to 5 times. The retry budget mirrors what generateClubUsername
+    // does — UNIQUE collisions are bounded by `36^5` so 5 tries is
+    // plenty.
+    let row: Record<string, unknown> | null = null;
+    let slugCandidate = buildTournamentSlug(data.name);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const result = await pool.query(
+          `INSERT INTO tournaments (name, slug, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority, finals_court, match_durations_by_category)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+           RETURNING *`,
+          [
+            data.name,
+            slugCandidate,
+            data.sport,
+            data.club,
+            data.startDate,
+            data.endDate,
+            data.description || null,
+            data.coverImage || null,
+            data.logo || null,
+            data.status,
+            data.teamsCount,
+            data.format,
+            data.courts || [],
+            JSON.stringify(data.courtLocations || {}),
+            data.categories ?? [],
+            ownerId,
+            data.enrollmentDeadline || null,
+            data.playersPerTeam ?? 12,
+            bracketMode,
+            goldClassifiers,
+            silverClassifiers,
+            data.regulationText || null,
+            data.regulationPdf || null,
+            matchDuration,
+            matchBreak,
+            JSON.stringify(dailySchedules),
+            maxMatchesPerDay,
+            JSON.stringify(deadTimeBlocks),
+            categoryPriority,
+            finalsCourt,
+            JSON.stringify(matchDurationsByCategory),
+          ],
+        );
+        row = result.rows[0];
+        break;
+      } catch (err) {
+        // 23505 = UNIQUE violation. The slug index is the only unique
+        // index this INSERT can hit, so we re-roll the slug and retry.
+        // Any other error (FK, NOT NULL, CHECK) bubbles up immediately.
+        if ((err as { code?: string }).code === '23505' && attempt < 4) {
+          slugCandidate = nextSlugCandidate(data.name);
+          continue;
+        }
+        throw err;
+      }
+    }
+    if (!row) {
+      throw new ValidationError('No se pudo generar un slug único para el torneo');
+    }
+    return mapRow(row);
+  }
+
+  /**
+   * Fetch a tournament by its public URL slug. Used by the parent-
+   * registration flow (`/api/public/tournaments/:slug`). 404s when no
+   * row matches so the public form can show a friendly "torneo no
+   * encontrado" copy without leaking the existence of resources.
+   */
+  async getBySlug(slug: string): Promise<Tournament> {
+    const pool = getPool();
     const result = await pool.query(
-      `INSERT INTO tournaments (name, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority, finals_court, match_durations_by_category)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
-       RETURNING *`,
-      [
-        data.name,
-        data.sport,
-        data.club,
-        data.startDate,
-        data.endDate,
-        data.description || null,
-        data.coverImage || null,
-        data.logo || null,
-        data.status,
-        data.teamsCount,
-        data.format,
-        data.courts || [],
-        JSON.stringify(data.courtLocations || {}),
-        data.categories ?? [],
-        ownerId,
-        data.enrollmentDeadline || null,
-        data.playersPerTeam ?? 12,
-        bracketMode,
-        goldClassifiers,
-        silverClassifiers,
-        data.regulationText || null,
-        data.regulationPdf || null,
-        matchDuration,
-        matchBreak,
-        JSON.stringify(dailySchedules),
-        maxMatchesPerDay,
-        JSON.stringify(deadTimeBlocks),
-        categoryPriority,
-        finalsCourt,
-        JSON.stringify(matchDurationsByCategory),
-      ],
+      `${TournamentService.LIST_SELECT} WHERE t.slug = $1`,
+      [slug],
     );
+    if (result.rows.length === 0) {
+      throw new NotFoundError('Torneo');
+    }
     return mapRow(result.rows[0]);
+  }
+
+  /**
+   * List tournaments where ANY team of the given club is enrolled.
+   * Drives the club captain panel's "Generar link" tile — they see one
+   * card per torneo abierto + the link to share with parents. Same
+   * shape as the standard list so the FE transformer takes it as-is.
+   *
+   * Ordered like getByTeamId: active first (upcoming/ongoing), then
+   * completed, each chunk by start_date DESC so the most recent /
+   * imminent tournament lands on top.
+   */
+  async getByClubId(clubId: string): Promise<Tournament[]> {
+    const pool = getPool();
+    const result = await pool.query(
+      `${TournamentService.LIST_SELECT}
+       WHERE EXISTS (
+         SELECT 1
+           FROM tournament_teams tt
+           JOIN teams te ON te.id = tt.team_id
+          WHERE tt.tournament_id = t.id
+            AND te.club_id = $1
+       )
+       ORDER BY
+         CASE t.status
+           WHEN 'ongoing' THEN 0
+           WHEN 'upcoming' THEN 1
+           WHEN 'completed' THEN 2
+           ELSE 3
+         END,
+         t.start_date DESC`,
+      [clubId],
+    );
+    return result.rows.map(mapRow);
   }
 
   async update(id: string, data: UpdateTournamentDto): Promise<Tournament> {

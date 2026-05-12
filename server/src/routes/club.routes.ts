@@ -9,6 +9,7 @@ import {
   remove,
   exportExcel,
   meTeams,
+  meTournaments,
   listTeamsByClub,
   split,
 } from '../controllers/club.controller';
@@ -39,6 +40,9 @@ router.use((_req: Request, res: Response, next: NextFunction) => {
 // controller runs.
 
 router.get('/me/teams', requireRole('club_captain'), meTeams);
+// Tournaments where the captain's club has at least one enrolled team
+// (mig 029). Drives the "Generar link" cards on the club panel.
+router.get('/me/tournaments', requireRole('club_captain'), meTournaments);
 
 router.get('/export', requireRole('admin', 'super_admin'), exportExcel);
 router.post('/detect', requireRole('admin', 'super_admin'), detect);

@@ -6,14 +6,21 @@ export interface Player {
   teamId: string;
   firstName: string;
   lastName: string;
-  birthYear?: number;
-  documentType?: string;   // TI, CC, CE
+  /** ISO 'YYYY-MM-DD'. Replaces the legacy birthYear column (mig 029). */
+  birthDate?: string;
+  documentType?: string;   // TI, CC, CE, RC, PA
   documentNumber?: string;
   category?: string;
   position?: string;
   photo?: string;          // data URL
   documentFile?: string;   // data URL (PDF)
   shirtNumber?: number;
+  /** Single emergency contact captured in the public parent form. */
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  /** Audit flag — TRUE when the row landed via the public /inscripcion form. */
+  registeredViaPublic?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -22,7 +29,7 @@ export interface CreatePlayerDto {
   teamId: string;
   firstName: string;
   lastName: string;
-  birthYear?: number;
+  birthDate?: string;       // ISO 'YYYY-MM-DD'
   documentType?: string;
   documentNumber?: string;
   category?: string;
@@ -30,9 +37,28 @@ export interface CreatePlayerDto {
   photo?: string;
   documentFile?: string;
   shirtNumber?: number;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  /** Internal flag — only the public registration controller sets this. */
+  registeredViaPublic?: boolean;
 }
 
-export type UpdatePlayerDto = Partial<Omit<CreatePlayerDto, 'teamId'>>;
+export type UpdatePlayerDto = Partial<Omit<CreatePlayerDto, 'teamId' | 'registeredViaPublic'>>;
+
+/**
+ * Postgres DATE columns come back as a Date instance (driver-default) or
+ * a 'YYYY-MM-DD' string depending on the version. Normalise to a plain
+ * ISO date so the frontend can bind it into <input type="date"> without
+ * a Date roundtrip that risks timezone shifts (see the equivalent
+ * normalizeDate in tournament.service).
+ */
+function normalizeDate(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === 'string') return value.slice(0, 10);
+  return undefined;
+}
 
 function mapRow(row: Record<string, unknown>): Player {
   return {
@@ -40,7 +66,7 @@ function mapRow(row: Record<string, unknown>): Player {
     teamId: row.team_id as string,
     firstName: row.first_name as string,
     lastName: row.last_name as string,
-    birthYear: (row.birth_year as number | null) ?? undefined,
+    birthDate: normalizeDate(row.birth_date),
     documentType: (row.document_type as string | null) ?? undefined,
     documentNumber: (row.document_number as string | null) ?? undefined,
     category: (row.category as string | null) ?? undefined,
@@ -48,10 +74,17 @@ function mapRow(row: Record<string, unknown>): Player {
     photo: (row.photo as string | null) ?? undefined,
     documentFile: (row.document_file as string | null) ?? undefined,
     shirtNumber: (row.shirt_number as number | null) ?? undefined,
+    emergencyContactName: (row.emergency_contact_name as string | null) ?? undefined,
+    emergencyContactPhone: (row.emergency_contact_phone as string | null) ?? undefined,
+    emergencyContactRelationship:
+      (row.emergency_contact_relationship as string | null) ?? undefined,
+    registeredViaPublic: (row.registered_via_public as boolean | null) ?? false,
     createdAt: row.created_at as string | undefined,
     updatedAt: row.updated_at as string | undefined,
   };
 }
+
+const TODAY_ISO = () => new Date().toISOString().slice(0, 10);
 
 function validateCommon(data: CreatePlayerDto | UpdatePlayerDto): void {
   if ('firstName' in data && !data.firstName?.trim()) {
@@ -60,10 +93,18 @@ function validateCommon(data: CreatePlayerDto | UpdatePlayerDto): void {
   if ('lastName' in data && !data.lastName?.trim()) {
     throw new ValidationError('El apellido es obligatorio');
   }
-  if (data.birthYear !== undefined && data.birthYear !== null) {
-    const y = Number(data.birthYear);
-    if (!Number.isInteger(y) || y < 1900 || y > new Date().getFullYear()) {
-      throw new ValidationError('Año de nacimiento inválido');
+  if (data.birthDate !== undefined && data.birthDate !== null && data.birthDate !== '') {
+    // 'YYYY-MM-DD' lexicographic check is enough: pg's DATE column does
+    // the real parsing on insert. We just want to reject obvious junk
+    // ("2026-13-40") and dates outside 1900..today so the form can't
+    // accept "2099-05-09" as a jugadora's birthday.
+    const iso = String(data.birthDate);
+    const isShape = /^\d{4}-\d{2}-\d{2}$/.test(iso);
+    if (!isShape) {
+      throw new ValidationError('Fecha de nacimiento inválida');
+    }
+    if (iso < '1900-01-01' || iso > TODAY_ISO()) {
+      throw new ValidationError('Fecha de nacimiento fuera de rango');
     }
   }
   if (data.documentType && !['TI', 'CC', 'CE', 'RC', 'PA'].includes(data.documentType)) {
@@ -74,6 +115,12 @@ function validateCommon(data: CreatePlayerDto | UpdatePlayerDto): void {
     if (!Number.isInteger(n) || n < 0 || n > 99) {
       throw new ValidationError('Número de camiseta inválido (0–99)');
     }
+  }
+  // Soft cap on emergency contact phone — Colombia mobile is 10 digits;
+  // we accept any non-empty string up to the column width (40) so the
+  // parent can type "+57 316 627 5710" with spaces if they want.
+  if (data.emergencyContactPhone && data.emergencyContactPhone.length > 40) {
+    throw new ValidationError('Teléfono de contacto demasiado largo');
   }
 }
 
@@ -132,15 +179,17 @@ export class PlayerService {
     if (check.rows.length === 0) throw new NotFoundError('Equipo');
     const result = await pool.query(
       `INSERT INTO players
-        (team_id, first_name, last_name, birth_year, document_type, document_number,
-         category, position, photo, document_file, shirt_number)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        (team_id, first_name, last_name, birth_date, document_type, document_number,
+         category, position, photo, document_file, shirt_number,
+         emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
+         registered_via_public)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [
         data.teamId,
         data.firstName.trim(),
         data.lastName.trim(),
-        data.birthYear ?? null,
+        data.birthDate || null,
         data.documentType ?? null,
         data.documentNumber?.trim() ?? null,
         data.category?.trim() ?? null,
@@ -148,6 +197,10 @@ export class PlayerService {
         data.photo ?? null,
         data.documentFile ?? null,
         data.shirtNumber ?? null,
+        data.emergencyContactName?.trim() || null,
+        data.emergencyContactPhone?.trim() || null,
+        data.emergencyContactRelationship?.trim() || null,
+        Boolean(data.registeredViaPublic),
       ],
     );
     return mapRow(result.rows[0]);
@@ -160,7 +213,7 @@ export class PlayerService {
     const columnMap: Record<string, string> = {
       firstName: 'first_name',
       lastName: 'last_name',
-      birthYear: 'birth_year',
+      birthDate: 'birth_date',
       documentType: 'document_type',
       documentNumber: 'document_number',
       category: 'category',
@@ -168,6 +221,9 @@ export class PlayerService {
       photo: 'photo',
       documentFile: 'document_file',
       shirtNumber: 'shirt_number',
+      emergencyContactName: 'emergency_contact_name',
+      emergencyContactPhone: 'emergency_contact_phone',
+      emergencyContactRelationship: 'emergency_contact_relationship',
     };
     const fields: string[] = [];
     const values: unknown[] = [];
@@ -200,6 +256,53 @@ export class PlayerService {
     const pool = getPool();
     const result = await pool.query('DELETE FROM players WHERE id = $1 RETURNING id', [id]);
     if (result.rows.length === 0) throw new NotFoundError('Jugador@');
+  }
+
+  /**
+   * Move a player to a different team within the SAME club. Used by the
+   * club admin panel to fix "the parent picked the wrong team" without
+   * forcing a delete + re-create round-trip (which would lose the photo
+   * + PDF + emergency contact + the audit `registered_via_public` flag).
+   *
+   * Cross-club transfers are intentionally not supported here — they'd
+   * leak players across tenants and the access middleware refuses to
+   * authorize them anyway. The same-club invariant is enforced by
+   * looking up `club_id` on both teams and 404'ing on mismatch so the
+   * existence of the target team isn't disclosed.
+   */
+  async transferToTeam(playerId: string, targetTeamId: string): Promise<Player> {
+    const pool = getPool();
+    const player = await this.getById(playerId);
+    if (player.teamId === targetTeamId) {
+      // No-op — caller probably double-clicked. Return the existing
+      // record so the FE can refresh its state without a special-case.
+      return player;
+    }
+    const teamsRes = await pool.query<{ id: string; club_id: string | null }>(
+      'SELECT id, club_id FROM teams WHERE id = ANY($1)',
+      [[player.teamId, targetTeamId]],
+    );
+    const sourceTeam = teamsRes.rows.find((r) => r.id === player.teamId);
+    const targetTeam = teamsRes.rows.find((r) => r.id === targetTeamId);
+    if (!sourceTeam || !targetTeam) {
+      throw new NotFoundError('Equipo');
+    }
+    if (
+      sourceTeam.club_id == null ||
+      targetTeam.club_id == null ||
+      sourceTeam.club_id !== targetTeam.club_id
+    ) {
+      // Either team is orphaned (legacy null club_id) or they belong to
+      // different clubs. Treat both as "not found" so we don't leak the
+      // existence of teams in other clubs.
+      throw new NotFoundError('Equipo');
+    }
+    const result = await pool.query(
+      `UPDATE players SET team_id = $1, updated_at = NOW()
+         WHERE id = $2 RETURNING *`,
+      [targetTeamId, playerId],
+    );
+    return mapRow(result.rows[0]);
   }
 }
 

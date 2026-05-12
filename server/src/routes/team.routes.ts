@@ -18,6 +18,7 @@ import {
   create as createPlayer,
   update as updatePlayer,
   remove as removePlayer,
+  transfer as transferPlayer,
 } from '../controllers/player.controller';
 import { requireRole } from '../middleware/auth';
 import { requireTeamOwnership } from '../middleware/access';
@@ -86,6 +87,17 @@ router.get('/:teamId/players/:playerId', cacheGet(60), getPlayerById);
 router.post('/:teamId/players', requireTeamOwnership, createPlayer);
 router.put('/:teamId/players/:playerId', requireTeamOwnership, updatePlayer);
 router.delete('/:teamId/players/:playerId', requireTeamOwnership, removePlayer);
+
+// Transfer a player to another team within the SAME club. The URL
+// :teamId is the SOURCE team — `requireTeamOwnership` covers that.
+// The body's `targetTeamId` is validated by the service which 404s if
+// the target lives in a different club, so we don't need to repeat
+// the guard for both sides.
+router.patch(
+  '/:teamId/players/:playerId/transfer',
+  requireTeamOwnership,
+  transferPlayer,
+);
 
 // Note: the previous `requireTeamAccess` (auth.ts) is now superseded by
 // `requireTeamOwnership` which enforces admin owner_id + lets the team's

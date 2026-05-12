@@ -24,6 +24,7 @@ import pushRoutes from './routes/push.routes';
 import adminRoutes from './routes/admin.routes';
 import platformRoutes from './routes/platform.routes';
 import clubRoutes from './routes/club.routes';
+import publicRoutes from './routes/public.routes';
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
@@ -319,6 +320,10 @@ app.use('/api/push', pushRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/platform', platformRoutes);
 app.use('/api/clubs', clubRoutes);
+// Public parent-registration endpoints (mig 029). The auth middleware
+// bypasses POST /api/public/* by path prefix so this mount must stay at
+// `/api/public` (NOT `/public`, NOT `/api/parent-registration`).
+app.use('/api/public', publicRoutes);
 
 // Error handler — must be last. Registering it up here (outside startServer)
 // ensures it catches errors even if boot-time migration fails.

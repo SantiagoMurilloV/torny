@@ -28,6 +28,7 @@ import { judgesApi } from './api/judges';
 import { settingsApi } from './api/settings';
 import { platformApi } from './api/platform';
 import { clubsApi } from './api/clubs';
+import { publicRegistrationApi } from './api/publicRegistration';
 
 export const api = {
   ...authApi,
@@ -48,6 +49,13 @@ export const api = {
   // with the spread above (which mainly merges flat method names from
   // each domain).
   clubs: clubsApi,
+  /**
+   * Public parent-registration helpers (mig 029). Namespaced (not
+   * spread) so the resource-style call sites `api.publicRegistration.*`
+   * read clearly as "this is the public flow" — distinct from the
+   * authenticated team/player CRUD.
+   */
+  publicRegistration: publicRegistrationApi,
 };
 
 // Re-exports — consumers import from 'api' rather than the sub-modules.

@@ -105,6 +105,11 @@ const TeamPanel = lazyWithRetry(() =>
 const ClubPanel = lazyWithRetry(() =>
   import('./pages/club-panel/ClubPanel').then((m) => ({ default: m.ClubPanel })),
 );
+const PublicRegistration = lazyWithRetry(() =>
+  import('./pages/public-registration/PublicRegistration').then((m) => ({
+    default: m.PublicRegistration,
+  })),
+);
 const SuperAdminUsers = lazyWithRetry(() =>
   import('./pages/super-admin/SuperAdminUsers').then((m) => ({
     default: m.SuperAdminUsers,
@@ -294,5 +299,14 @@ export const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [{ index: true, element: withSuspense(<ClubPanel />) }],
+  },
+  {
+    // Public parent-registration link (mig 029). Lives outside every
+    // layout so a parent opening the link on their phone gets a
+    // clean, focused page (no app shell / nav). The slug is the
+    // tournament's `slug` column.
+    path: '/torneo/:slug/inscripcion',
+    errorElement: <RouteErrorBoundary />,
+    element: withSuspense(<PublicRegistration />),
   },
 ]);

@@ -120,6 +120,13 @@ export interface StoredSubscription {
 
 interface SubscriptionInput extends StoredSubscription {
   userId?: string | null;
+  /**
+   * Club id when the subscriber is logged in as a `club_captain`
+   * (mig 028 principals don't have a `users.id` row, so `user_id` is
+   * always null for them). Required for the public parent-registration
+   * flow which pushes back to the club admin by `club_id`.
+   */
+  clubId?: string | null;
   role?: string | null;
   userAgent?: string | null;
 }
@@ -140,10 +147,11 @@ export class PushService {
   async save(sub: SubscriptionInput): Promise<void> {
     const pool = getPool();
     await pool.query(
-      `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, role, user_agent, last_used_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      `INSERT INTO push_subscriptions (user_id, club_id, endpoint, p256dh, auth, role, user_agent, last_used_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
        ON CONFLICT (endpoint) DO UPDATE
        SET user_id = EXCLUDED.user_id,
+           club_id = EXCLUDED.club_id,
            p256dh = EXCLUDED.p256dh,
            auth = EXCLUDED.auth,
            role = EXCLUDED.role,
@@ -151,6 +159,7 @@ export class PushService {
            last_used_at = NOW()`,
       [
         sub.userId ?? null,
+        sub.clubId ?? null,
         sub.endpoint,
         sub.keys.p256dh,
         sub.keys.auth,
@@ -164,6 +173,83 @@ export class PushService {
   async remove(endpoint: string): Promise<void> {
     const pool = getPool();
     await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
+  }
+
+  /**
+   * Send a push to every subscription owned by a specific user. Used
+   * for tenant-scoped notifications (e.g. the club admin getting
+   * pinged when a parent inscribes a jugadora via the public form).
+   *
+   * Silently no-ops when:
+   *   · VAPID isn't configured (boot-time init failed) — matches the
+   *     existing sendToAll() contract, so callers don't have to guard.
+   *   · The user has no active push subscriptions yet — they haven't
+   *     opted into notifications. The caller still completes the
+   *     primary action (creating the player) so the absence of a
+   *     subscription must not surface as an error.
+   */
+  async sendToUser(userId: string, payload: PushPayload): Promise<void> {
+    const keys = await ensureReady();
+    if (!keys) return;
+    const pool = getPool();
+    const result = await pool.query<{ endpoint: string; p256dh: string; auth: string }>(
+      'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1',
+      [userId],
+    );
+    await this.dispatchToRows(result.rows, payload);
+  }
+
+  /**
+   * Send a push to every subscription tagged with a given clubId.
+   * Used by the public parent-registration endpoint to notify the
+   * club captain (mig 028) when an acudiente finishes a submission.
+   * Same silent-no-op contract as sendToUser when VAPID isn't ready
+   * or the club has no subs yet.
+   */
+  async sendToClub(clubId: string, payload: PushPayload): Promise<void> {
+    const keys = await ensureReady();
+    if (!keys) return;
+    const pool = getPool();
+    const result = await pool.query<{ endpoint: string; p256dh: string; auth: string }>(
+      'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE club_id = $1',
+      [clubId],
+    );
+    await this.dispatchToRows(result.rows, payload);
+  }
+
+  /**
+   * Internal: ship a payload to a pre-resolved set of subscriptions
+   * with the same urgency / TTL / 404-dead-sub handling that
+   * sendToAll() uses. Extracted so sendToUser can reuse the dispatch
+   * logic without duplicating the per-row try/catch.
+   */
+  private async dispatchToRows(
+    rows: Array<{ endpoint: string; p256dh: string; auth: string }>,
+    payload: PushPayload,
+  ): Promise<void> {
+    if (rows.length === 0) return;
+    const payloadJson = JSON.stringify(payload);
+    await Promise.allSettled(
+      rows.map(async (row) => {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: row.endpoint,
+              keys: { p256dh: row.p256dh, auth: row.auth },
+            },
+            payloadJson,
+            { urgency: 'high', TTL: 600 },
+          );
+        } catch (err: unknown) {
+          const status = (err as { statusCode?: number }).statusCode;
+          if (status === 404 || status === 410) {
+            await this.remove(row.endpoint).catch(() => {});
+          } else {
+            console.warn('[push] send failed', status, (err as Error).message);
+          }
+        }
+      }),
+    );
   }
 
   /** Send a push to every active subscription. */

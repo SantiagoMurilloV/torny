@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { clubService } from '../services/club.service';
 import { buildClubsExcel } from '../services/club.export';
+import { tournamentService } from '../services/tournament.service';
 import { UnauthorizedError, ValidationError } from '../middleware/errorHandler';
 
 /**
@@ -215,6 +216,27 @@ export async function meTeams(req: Request, res: Response, next: NextFunction) {
     }
     const teamIds = await clubService.getTeamIdsForClub(req.user.clubId);
     res.json({ clubId: req.user.clubId, teamIds });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Tournaments where AT LEAST ONE of the captain's teams is enrolled.
+ * Drives the "Generar link para acudientes" cards on the club panel —
+ * the captain needs the `slug` of each torneo abierto (mig 029) to
+ * build and share the inscription URL with parents.
+ *
+ * Returns the same Tournament shape the regular list endpoint emits
+ * so the frontend transformer reuses without changes.
+ */
+export async function meTournaments(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user || req.user.role !== 'club_captain' || !req.user.clubId) {
+      throw new UnauthorizedError('Solo accesible para usuarios de club');
+    }
+    const tournaments = await tournamentService.getByClubId(req.user.clubId);
+    res.json(tournaments);
   } catch (err) {
     next(err);
   }

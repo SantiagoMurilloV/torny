@@ -41,6 +41,11 @@ export async function subscribe(
       endpoint: sub.endpoint,
       keys: sub.keys,
       userId: req.user?.userId ?? null,
+      // Club captains (mig 028) don't have a users.id but their JWT
+      // carries `clubId`. Tagging the subscription with the club lets
+      // the parent-registration flow ping back the right club without
+      // a sub broadcast.
+      clubId: req.user?.clubId ?? null,
       role: body.role ?? req.user?.role ?? null,
       userAgent: (req.headers['user-agent'] as string) ?? null,
     });

@@ -185,7 +185,7 @@ export function AdminLayout() {
           </div>
           <div>
             <h1
-              className="text-2xl font-bold text-white tracking-tighter"
+              className="text-2xl font-bold text-white tracking-wide"
               style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
             >
               Torn<span className="text-spk-red">y</span>

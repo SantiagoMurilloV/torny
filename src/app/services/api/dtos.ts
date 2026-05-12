@@ -91,7 +91,8 @@ export type UpdateTeamDto = Partial<CreateTeamDto>;
 export interface CreatePlayerDto {
   firstName: string;
   lastName: string;
-  birthYear?: number;
+  /** ISO 'YYYY-MM-DD'. Replaces birthYear (mig 029). */
+  birthDate?: string;
   documentType?: string;
   documentNumber?: string;
   category?: string;
@@ -99,6 +100,10 @@ export interface CreatePlayerDto {
   photo?: string;
   documentFile?: string;
   shirtNumber?: number;
+  /** Single emergency contact (mig 029). */
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
 }
 
 export type UpdatePlayerDto = Partial<CreatePlayerDto>;

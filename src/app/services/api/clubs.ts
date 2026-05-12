@@ -1,4 +1,7 @@
 import { request, API_BASE, getAuthToken } from './client';
+import type { Tournament } from '../../types';
+import { toFrontendTournament } from './transformers';
+import type { BackendTournament } from './backend-shapes';
 
 /**
  * Club credentials API (mig 028). One row per (admin, club). Admin
@@ -106,6 +109,18 @@ export const clubsApi = {
    */
   async meTeams(): Promise<{ clubId: string; teamIds: string[] }> {
     return request<{ clubId: string; teamIds: string[] }>('/clubs/me/teams');
+  },
+
+  /**
+   * Tournaments where AT LEAST ONE of the captain's teams is enrolled
+   * (mig 029). Drives the "Generar link para acudientes" cards on the
+   * club panel. Re-uses the standard tournament transformer so the
+   * returned objects share their shape with everywhere else in the app
+   * (`startDate` is a real Date, `slug` is hydrated, etc).
+   */
+  async meTournaments(): Promise<Tournament[]> {
+    const raw = await request<BackendTournament[]>('/clubs/me/tournaments');
+    return raw.map(toFrontendTournament);
   },
 
   /**

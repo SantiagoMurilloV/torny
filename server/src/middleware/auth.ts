@@ -49,6 +49,18 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     return next();
   }
 
+  // Public parent-registration POSTs (mig 029) — the link
+  // `/torneo/:slug/inscripcion` is shared by the club admin via private
+  // channels (WhatsApp groups of parents). The endpoint enforces its
+  // own invariants (tournament not started, team belongs to a club
+  // enrolled in the tournament, roster cap not exceeded) so no JWT is
+  // required. Anyone with the URL can submit, by design — no captcha
+  // by request of the product owner; the link is treated as a private
+  // share.
+  if (req.method === 'POST' && req.path.startsWith('/api/public/')) {
+    return next();
+  }
+
   // Public push (un)subscribe — spectators without accounts still need to
   // opt into live-match notifications. The endpoints are anonymous-safe:
   // they only persist the browser's own subscription and can't disclose

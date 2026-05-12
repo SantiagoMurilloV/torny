@@ -48,7 +48,8 @@ export interface Player {
   teamId: string;
   firstName: string;
   lastName: string;
-  birthYear?: number;
+  /** ISO 'YYYY-MM-DD'. Replaces the legacy birthYear field (mig 029). */
+  birthDate?: string;
   /** Documento: 'TI' | 'CC' | 'CE' | 'RC' | 'PA'. */
   documentType?: string;
   documentNumber?: string;
@@ -59,6 +60,16 @@ export interface Player {
   /** Documento escaneado en PDF (data URL). */
   documentFile?: string;
   shirtNumber?: number;
+  /**
+   * Single contacto de emergencia captured by the public inscripción
+   * flow (mig 029). The admin / captain panel also gained these
+   * fields so existing rosters can be back-filled by hand.
+   */
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  /** True for jugadoras who came in via /torneo/:slug/inscripcion. */
+  registeredViaPublic?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -105,6 +116,14 @@ export interface StandingsRow {
 export interface Tournament {
   id: string;
   name: string;
+  /**
+   * Public URL slug (mig 029). Auto-generated from `name` on insert,
+   * unique across the system. Drives the parent-registration link
+   * `/torneo/:slug/inscripcion`. Optional in the type because legacy
+   * SELECTs may not include the column — every row in the DB has a
+   * value after the migration.
+   */
+  slug?: string;
   logo?: string;
   startDate: Date;
   endDate: Date;

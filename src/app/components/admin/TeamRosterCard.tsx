@@ -411,12 +411,19 @@ export function TeamRosterCard({
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-black/60 flex-wrap">
                           {p.position && <span>{p.position}</span>}
-                          {p.position && (p.category || p.birthYear) && (
+                          {p.position && (p.category || p.birthDate) && (
                             <span className="text-black/30">·</span>
                           )}
                           {p.category && <span>{p.category}</span>}
-                          {p.category && p.birthYear && <span className="text-black/30">·</span>}
-                          {p.birthYear && <span>{p.birthYear}</span>}
+                          {p.category && p.birthDate && <span className="text-black/30">·</span>}
+                          {p.birthDate && (
+                            <span title={p.birthDate}>
+                              {/* Just the year — fits the existing one-line
+                                  pill density; the full date lives in the
+                                  edit modal + hover tooltip. */}
+                              {p.birthDate.slice(0, 4)}
+                            </span>
+                          )}
                           {p.documentNumber && (
                             <>
                               <span className="text-black/30">·</span>

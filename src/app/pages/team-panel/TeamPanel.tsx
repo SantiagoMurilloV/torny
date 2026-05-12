@@ -13,6 +13,7 @@ import {
   Upload,
   Camera,
   ArrowLeft,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Player, Team, Tournament } from '../../types';
@@ -66,6 +67,15 @@ export function TeamPanel() {
   const [editingPlayer, setEditingPlayer] = useState<Player | undefined>();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Sibling teams = the other teams of the captain's club (mig 029).
+  // Used to populate the "Mover a otro equipo" dropdown. Empty when the
+  // user isn't a club_captain or has only one team (no transfer
+  // target). Loaded lazily inside `load()` so a single-team captain
+  // doesn't pay the extra request.
+  const [siblingTeams, setSiblingTeams] = useState<Team[]>([]);
+  const [transferringPlayer, setTransferringPlayer] = useState<Player | null>(null);
+  const [transferTargetTeamId, setTransferTargetTeamId] = useState<string>('');
+  const [transferring, setTransferring] = useState(false);
   // Free-text filter over the captain's roster — purely client-side so
   // the input stays responsive on the kind of slow networks that show
   // up at a stadium. Falls back to "no matches" copy when nothing hits.
@@ -132,6 +142,30 @@ export function TeamPanel() {
       ]);
       setPlayers(roster);
       setTournaments(enrolledTournaments);
+
+      // Club captain: also load sibling teams so we can offer the
+      // "transfer player to another team" action (mig 029). Best-
+      // effort — a 401/403 here just means the regular team_captain
+      // role and we silently skip the feature.
+      try {
+        const me = await api.getMe();
+        if ((me as { role?: string }).role === 'club_captain') {
+          const { teamIds } = await api.clubs.meTeams();
+          const others = teamIds.filter((id) => id !== resolvedTeam.id);
+          if (others.length > 0) {
+            const teamsBatch = await Promise.all(
+              others.map((id) => api.getTeam(id).catch(() => null)),
+            );
+            setSiblingTeams(teamsBatch.filter((t): t is Team => t !== null));
+          } else {
+            setSiblingTeams([]);
+          }
+        } else {
+          setSiblingTeams([]);
+        }
+      } catch {
+        setSiblingTeams([]);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         // Token rejected server-side — log out so the user sees /login.
@@ -204,6 +238,42 @@ export function TeamPanel() {
       toast.error(getErrorMessage(err, 'Error al subir el logo'));
     } finally {
       setUploadingLogo(false);
+    }
+  };
+
+  /**
+   * Open the transfer modal for the chosen player. Defaults the
+   * dropdown to the first sibling so the captain can confirm with
+   * one click in the most common case (two teams in the club).
+   */
+  const handleOpenTransfer = (player: Player) => {
+    setTransferringPlayer(player);
+    setTransferTargetTeamId(siblingTeams[0]?.id ?? '');
+  };
+
+  const handleConfirmTransfer = async () => {
+    if (!transferringPlayer || !teamId || !transferTargetTeamId) return;
+    setTransferring(true);
+    try {
+      await api.transferPlayer(
+        teamId,
+        transferringPlayer.id,
+        transferTargetTeamId,
+      );
+      const targetName =
+        siblingTeams.find((t) => t.id === transferTargetTeamId)?.name ?? 'el equipo destino';
+      toast.success(
+        `${transferringPlayer.firstName} ${transferringPlayer.lastName} pasó a ${targetName}`,
+      );
+      // Drop the player from THIS team's local state — the move is
+      // server-confirmed at this point.
+      setPlayers((prev) => prev.filter((p) => p.id !== transferringPlayer.id));
+      setTransferringPlayer(null);
+      setTransferTargetTeamId('');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'No se pudo mover la jugadora'));
+    } finally {
+      setTransferring(false);
     }
   };
 
@@ -554,12 +624,14 @@ export function TeamPanel() {
                   </div>
                   <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-black/60 flex-wrap">
                     {p.position && <span>{p.position}</span>}
-                    {p.position && (p.category || p.birthYear) && (
+                    {p.position && (p.category || p.birthDate) && (
                       <span className="text-black/30">·</span>
                     )}
                     {p.category && <span>{p.category}</span>}
-                    {p.category && p.birthYear && <span className="text-black/30">·</span>}
-                    {p.birthYear && <span>{p.birthYear}</span>}
+                    {p.category && p.birthDate && <span className="text-black/30">·</span>}
+                    {p.birthDate && (
+                      <span title={p.birthDate}>{p.birthDate.slice(0, 4)}</span>
+                    )}
                     {p.documentNumber && (
                       <>
                         <span className="text-black/30">·</span>
@@ -598,6 +670,17 @@ export function TeamPanel() {
                 </div>
 
                 <div className="flex items-center gap-1 flex-shrink-0">
+                  {siblingTeams.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenTransfer(p)}
+                      aria-label={`Mover ${p.firstName} ${p.lastName} a otro equipo`}
+                      title="Mover a otro equipo del club"
+                      className="p-2 bg-spk-gold/10 text-spk-gold rounded-sm hover:bg-spk-gold/20 transition-colors"
+                    >
+                      <ArrowRightLeft className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleEdit(p)}
@@ -655,6 +738,95 @@ export function TeamPanel() {
         title={pdfPreview?.title ?? 'Documento'}
         downloadFileName={pdfPreview?.fileName ?? 'documento.pdf'}
       />
+
+      {/* Transfer-between-teams modal (mig 029). Same-club guarantee is
+          enforced by the backend (`requireTeamOwnership` + service-level
+          club_id match); the FE only shows sibling teams that the
+          captain already owns via /api/clubs/me/teams. */}
+      {transferringPlayer && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-sm"
+          role="dialog"
+          aria-label="Mover jugadora a otro equipo"
+        >
+          <div className="bg-white rounded-sm shadow-2xl max-w-sm w-full overflow-hidden">
+            <header className="bg-spk-black text-white px-5 py-3.5">
+              <p
+                className="text-[10px] uppercase tracking-wider text-white/55 font-bold"
+                style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+              >
+                Mover a otro equipo
+              </p>
+              <h2
+                className="text-lg font-bold leading-tight truncate"
+                style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+              >
+                {transferringPlayer.firstName} {transferringPlayer.lastName}
+              </h2>
+            </header>
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-black/70 leading-relaxed">
+                Elegí el equipo destino dentro del club. La jugadora
+                deja de aparecer acá y pasa al plantel del otro
+                equipo con su foto, documento y contacto intactos.
+              </p>
+              <label className="block">
+                <span
+                  className="block text-[11px] font-bold uppercase mb-1.5 text-black/55"
+                  style={{
+                    fontFamily: 'Barlow Condensed, sans-serif',
+                    letterSpacing: '0.08em',
+                  }}
+                >
+                  Equipo destino
+                </span>
+                <select
+                  value={transferTargetTeamId}
+                  onChange={(e) => setTransferTargetTeamId(e.target.value)}
+                  className="w-full px-3 py-2.5 border-2 border-black/10 rounded-sm focus:outline-none focus:border-spk-red bg-white text-sm"
+                >
+                  {siblingTeams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                      {t.category ? ` — ${t.category}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTransferringPlayer(null);
+                    setTransferTargetTeamId('');
+                  }}
+                  disabled={transferring}
+                  className="flex-1 px-4 py-2.5 bg-black/5 hover:bg-black/10 font-bold rounded-sm transition-colors disabled:opacity-50 text-sm uppercase"
+                  style={{
+                    fontFamily: 'Barlow Condensed, sans-serif',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmTransfer}
+                  disabled={transferring || !transferTargetTeamId}
+                  className="flex-1 px-4 py-2.5 bg-spk-red hover:bg-spk-red-dark text-white font-bold rounded-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2 text-sm uppercase"
+                  style={{
+                    fontFamily: 'Barlow Condensed, sans-serif',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  {transferring && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Mover
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

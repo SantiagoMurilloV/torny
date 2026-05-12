@@ -68,3 +68,29 @@ export async function remove(req: Request, res: Response, next: NextFunction): P
     next(error);
   }
 }
+
+/**
+ * Move a player to another team in the SAME club. Mounted under
+ * `/api/teams/:teamId/players/:playerId/transfer` so the same
+ * `requireTeamOwnership` guard that protects edit/delete covers this
+ * route too — the URL :teamId is the SOURCE team, the body's
+ * `targetTeamId` is the destination. The service enforces the
+ * same-club invariant; 404 (not 403) when teams belong to different
+ * clubs to avoid leaking existence.
+ */
+export async function transfer(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const playerId = req.params.playerId as string;
+    validateUUID(playerId, 'ID de jugador@');
+    const body = (req.body as { targetTeamId?: unknown } | undefined) ?? {};
+    if (typeof body.targetTeamId !== 'string' || !body.targetTeamId) {
+      res.status(400).json({ error: 'Falta targetTeamId' });
+      return;
+    }
+    validateUUID(body.targetTeamId, 'ID del equipo destino');
+    const player = await playerService.transferToTeam(playerId, body.targetTeamId);
+    res.json(player);
+  } catch (error) {
+    next(error);
+  }
+}
