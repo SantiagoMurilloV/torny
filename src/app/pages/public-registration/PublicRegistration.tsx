@@ -20,6 +20,7 @@ import type {
   PublicTeamSummary,
 } from '../../services/api/publicRegistration';
 import { compressLogoImage } from '../../lib/compressImage';
+import { fileToDataUrl } from '../../lib/fileToDataUrl';
 import { getErrorMessage } from '../../lib/errors';
 
 /**
@@ -224,11 +225,18 @@ export function PublicRegistration() {
     setSubmitting(true);
 
     try {
-      // 1) Upload foto + PDF (parallel — independent endpoints).
+      // 1) Encode foto + PDF as data URLs CLIENT-SIDE. We deliberately
+      // bypass `/api/upload/{logo,document}` because those endpoints
+      // sit behind the JWT middleware (the public form has no token,
+      // so the upload returned 401 "Token de autenticación requerido"
+      // — the bug this branch fixes). The backend's public
+      // `register` endpoint accepts `photo`/`documentFile` as
+      // data: URLs directly, so we ship the bytes in the same body
+      // and avoid exposing the multer endpoints to anonymous callers.
       const [photoUrl, documentUrl] = await Promise.all([
-        photoFile ? api.uploadLogo(photoFile) : Promise.resolve<string | undefined>(undefined),
+        photoFile ? fileToDataUrl(photoFile) : Promise.resolve<string | undefined>(undefined),
         documentFile
-          ? api.uploadDocument(documentFile)
+          ? fileToDataUrl(documentFile)
           : Promise.resolve<string | undefined>(undefined),
       ]);
 
