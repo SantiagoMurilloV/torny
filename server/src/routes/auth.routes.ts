@@ -16,10 +16,14 @@ router.put('/password', changePassword);
 // For users (admin/judge/super_admin) it includes tournament quota — the
 // frontend uses that for the "X/Y torneos de tu plan" badge. For
 // team_captain it returns the captain's team info (id, initials, logo,
-// colors, category) so /team-panel has something to render.
+// colors, category) so /team-panel has something to render. For
+// club_captain (mig 028) it returns the club's id + name so /club-panel
+// can title itself + render the team list. The allowlist must include
+// EVERY role we issue JWTs for, otherwise the role's first request
+// after login bounces with 403 and the panel never loads.
 router.get(
   '/me',
-  requireRole('super_admin', 'admin', 'judge', 'team_captain'),
+  requireRole('super_admin', 'admin', 'judge', 'team_captain', 'club_captain'),
   me,
 );
 
