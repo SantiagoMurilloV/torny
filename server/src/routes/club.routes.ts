@@ -14,12 +14,13 @@ import { requireRole } from '../middleware/auth';
 
 const router = Router();
 
-// Auth runs globally via `authMiddleware` mounted in index.ts; we
-// only need the per-route role guards here. `meTeams` accepts any
-// authenticated user — the controller filters to `club_captain` —
-// so it has no role middleware. Everything else is admin-or-super.
+// Auth runs globally via `authMiddleware` mounted in index.ts FOR
+// non-GET requests; GETs need explicit role middleware to populate
+// `req.user` from the Bearer token. `meTeams` is GET → use
+// requireRole('club_captain') so the JWT is verified before the
+// controller runs.
 
-router.get('/me/teams', meTeams);
+router.get('/me/teams', requireRole('club_captain'), meTeams);
 
 router.get('/export', requireRole('admin', 'super_admin'), exportExcel);
 router.post('/detect', requireRole('admin', 'super_admin'), detect);
