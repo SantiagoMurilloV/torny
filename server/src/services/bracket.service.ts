@@ -637,13 +637,52 @@ export class BracketGenerator {
     const pool = getPool();
 
     const tournRes = await pool.query(
-      'SELECT id, courts, start_date, finals_court FROM tournaments WHERE id = $1',
+      `SELECT id, courts, start_date, finals_court,
+              match_duration_minutes, match_break_minutes,
+              match_durations_by_category, daily_schedules
+         FROM tournaments WHERE id = $1`,
       [tournamentId],
     );
     if (tournRes.rows.length === 0) return empty;
     const tournament = tournRes.rows[0];
     const courts: string[] = (tournament.courts as string[] | null) ?? [];
     const courtNames = courts.length > 0 ? courts : ['Cancha 1'];
+    // Pull the same scheduling knobs the group-stage scheduler honours
+    // so bracket slots inherit the tournament's actual cadence instead
+    // of the hardcoded 60+15. Also resolves per-day windows (e.g.
+    // "Saturday 08:00–22:00") so bracket matches don't bleed into a
+    // day the admin already shortened.
+    const tDuration =
+      (tournament.match_duration_minutes as number | null) ?? DEFAULT_MATCH_MIN;
+    const tBreak =
+      (tournament.match_break_minutes as number | null) ?? DEFAULT_BREAK_MIN;
+    const tDurationsByCat =
+      (tournament.match_durations_by_category as Record<string, number> | null) ?? {};
+    const tDailySchedules =
+      (tournament.daily_schedules as Record<string, { start: string; end: string }> | null) ?? {};
+    const parseHHMM = (raw: string | undefined, fallback: number): number => {
+      if (!raw) return fallback;
+      const [h, m] = raw.split(':').map((s) => parseInt(s, 10));
+      if (!Number.isFinite(h) || !Number.isFinite(m)) return fallback;
+      return h * 60 + m;
+    };
+    const windowFor = (dateStr: string) => {
+      const o = tDailySchedules[dateStr];
+      return {
+        startMin: parseHHMM(o?.start, DEFAULT_DAY_START_MIN),
+        endMin: parseHHMM(o?.end, DEFAULT_DAY_END_MIN),
+      };
+    };
+    // Per-round duration: a bracket round's category lives in the round
+    // string (parseBracketRound returns it). Falls back to the global
+    // tournament duration when no override exists for the category, then
+    // to a hardcoded 60 as last resort.
+    const durationForRound = (round: string): number => {
+      const { category } = parseBracketRound(round);
+      const override = category ? tDurationsByCat[category] : undefined;
+      if (typeof override === 'number' && override > 0) return override;
+      return tDuration;
+    };
     // Migration 026 — preferred court for "semi" / "final" rounds. NULL
     // means "no preference" → the rotation below wins. We keep it
     // optional so a misconfigured value (court no longer in the
@@ -762,18 +801,26 @@ export class BracketGenerator {
       // normalize before concatenating with a time fragment.
       cursorDate = parseDbDate(r.date) ?? new Date();
       const [h, m] = (r.time as string).split(':').map((s) => parseInt(s, 10));
-      cursorMinutes = h * 60 + m + DEFAULT_MATCH_MIN + DEFAULT_BREAK_MIN;
+      // Use the tournament's configured duration + break so the bracket
+      // continues the cadence the admin actually set. The previous
+      // hardcoded `+ DEFAULT_MATCH_MIN + DEFAULT_BREAK_MIN` (=75min)
+      // baked a phantom 15-min break on tournaments where the admin set
+      // `matchBreakMinutes: 0`, leaving awkward 15min gaps between
+      // bracket rows.
+      cursorMinutes = h * 60 + m + tDuration + tBreak;
       // Roll forward if the last slot pushed us out of the day window.
-      if (cursorMinutes + DEFAULT_MATCH_MIN > DEFAULT_DAY_END_MIN) {
+      let win = windowFor(dateToSlug(cursorDate));
+      if (cursorMinutes + tDuration > win.endMin) {
         cursorDate = new Date(cursorDate.getTime() + 86_400_000);
-        cursorMinutes = DEFAULT_DAY_START_MIN;
+        win = windowFor(dateToSlug(cursorDate));
+        cursorMinutes = win.startMin;
       }
     } else {
       // tournaments.start_date is also a DATE column → may arrive as a
       // Date instance OR as a YYYY-MM-DD string depending on the driver
       // path. parseDbDate handles both shapes.
       cursorDate = parseDbDate(tournament.start_date) ?? new Date();
-      cursorMinutes = DEFAULT_DAY_START_MIN;
+      cursorMinutes = windowFor(dateToSlug(cursorDate)).startMin;
     }
 
     let courtIdx = 0;
@@ -812,9 +859,15 @@ export class BracketGenerator {
         // Allocate a slot — same minute across courts until they're full,
         // then advance time. This mirrors the group-stage scheduler's
         // multi-court parallelism without re-running the whole sweep.
-        if (cursorMinutes + DEFAULT_MATCH_MIN > DEFAULT_DAY_END_MIN) {
+        // The per-round duration depends on the bracket round's category
+        // override (mig 027); a Senior 90' round needs 90min of room
+        // while a Sub-13 45' fits in less.
+        const matchDur = durationForRound(round);
+        const win = windowFor(dateToSlug(cursorDate));
+        if (cursorMinutes + matchDur > win.endMin) {
           cursorDate = new Date(cursorDate.getTime() + 86_400_000);
-          cursorMinutes = DEFAULT_DAY_START_MIN;
+          const next = windowFor(dateToSlug(cursorDate));
+          cursorMinutes = next.startMin;
           courtIdx = 0;
         }
         const dateStr = dateToSlug(cursorDate);
@@ -858,11 +911,14 @@ export class BracketGenerator {
         // is still free for a regular bracket match. We DO advance the
         // time cursor when every rotation court has been used at this
         // minute, which still triggers correctly because non-finals
-        // placements always increment courtIdx.
+        // placements always increment courtIdx. Use the tournament's
+        // configured stride (matchDur + tBreak) rather than the
+        // hardcoded 75min so admins on `matchBreakMinutes:0` see slots
+        // back-to-back instead of with a phantom 15min gap.
         if (!preferFinalsCourt) {
           courtIdx++;
           if (courtIdx % courtNames.length === 0) {
-            cursorMinutes += DEFAULT_MATCH_MIN + DEFAULT_BREAK_MIN;
+            cursorMinutes += matchDur + tBreak;
           }
         }
       }

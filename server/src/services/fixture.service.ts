@@ -840,8 +840,14 @@ function buildManualFixtures({
       for (const [groupLetter, teamIds] of Object.entries(options.groups)) {
         const teams = teamIds.map((id) => teamsById.get(id)!);
         const category = detectCategory(teamIds);
+        // Defensive: strip a duplicated category prefix from the key
+        // (see groups+knockout branch below for the rationale).
+        const bareLetter =
+          category && groupLetter.startsWith(`${category}|`)
+            ? groupLetter.slice(category.length + 1)
+            : groupLetter;
         const prefixedGroupName =
-          format === 'league' ? `${category}|liga` : `${category}|${groupLetter}`;
+          format === 'league' ? `${category}|liga` : `${category}|${bareLetter}`;
         matchFixtures.push(...generateRoundRobin(teams, prefixedGroupName));
       }
     }
@@ -861,8 +867,18 @@ function buildManualFixtures({
         const teams = teamIds.map((id) => teamsById.get(id)!);
         const category = detectCategory(teamIds);
         categoriesInGroups.add(category);
-        const prefixedGroupName = `${category}|${groupLetter}`;
-        groupLetterToFullName.set(groupLetter, prefixedGroupName);
+        // Defensive: when callers send a pre-prefixed key like
+        // "Femenino A|A" instead of the bare "A", strip the duplicated
+        // category to avoid baking a malformed `Cat|Cat|A` name.
+        // bracket_matches.round derives from this string later, and the
+        // duplication propagates as `Cat|Cat|gold|semifinal` which
+        // breaks parseBracketRound (it sees parts[1]=Cat, not gold).
+        const bareLetter =
+          category && groupLetter.startsWith(`${category}|`)
+            ? groupLetter.slice(category.length + 1)
+            : groupLetter;
+        const prefixedGroupName = `${category}|${bareLetter}`;
+        groupLetterToFullName.set(bareLetter, prefixedGroupName);
         matchFixtures.push(...generateRoundRobin(teams, prefixedGroupName));
       }
     }
