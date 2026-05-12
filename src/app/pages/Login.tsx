@@ -276,7 +276,7 @@ export function Login() {
               style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
             >
               <span className="w-2 h-2 rounded-full bg-spk-red animate-pulse" />
-              Tournament Platform
+              Plataforma de torneos
             </p>
             <h3
               className="font-black tracking-tighter leading-[0.95] text-5xl xl:text-6xl 2xl:text-7xl"
@@ -306,17 +306,17 @@ export function Login() {
                 {
                   n: '01',
                   title: 'Crea tu torneo',
-                  desc: 'Categorías, formato, canchas. En 5 minutos.',
+                  desc: 'Categorías, formato, y canchas en 5 minutos.',
                 },
                 {
                   n: '02',
                   title: 'Inscribe tus equipos',
-                  desc: 'Capitanes y jueces con credenciales propias.',
+                  desc: 'Entrenadores y jueces con credenciales propias.',
                 },
                 {
                   n: '03',
                   title: 'Juega en vivo',
-                  desc: 'Marcador, brackets y push notifications en tiempo real.',
+                  desc: 'Marcador, cruces y notificaciones en tiempo real.',
                 },
               ].map((s) => (
                 <div
