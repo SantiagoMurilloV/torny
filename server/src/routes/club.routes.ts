@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import {
   detect,
   bulkCreate,
@@ -13,6 +13,22 @@ import {
 import { requireRole } from '../middleware/auth';
 
 const router = Router();
+
+/**
+ * Force a per-tenant private cache on every club response. Without
+ * this, Fastly (Railway's edge) heuristically caches responses that
+ * lack a Cache-Control header — and the response keys ignore the
+ * Authorization header. The result is a cross-tenant leak: club A
+ * gets club B's cached `{teamIds: [...]}` payload (or vice-versa
+ * with a 403 baked in). Same defensive pattern the `cacheGet`
+ * middleware already applies for owner-scoped reads on the public
+ * tournament + team endpoints.
+ */
+router.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('Vary', 'Origin, Accept-Encoding, Authorization');
+  next();
+});
 
 // Auth runs globally via `authMiddleware` mounted in index.ts FOR
 // non-GET requests; GETs need explicit role middleware to populate
