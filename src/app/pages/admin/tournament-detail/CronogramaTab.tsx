@@ -849,7 +849,7 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
                 style={{ gridRow: 1, gridColumn: colIdx + 2 }}
               >
                 <div
-                  className="text-sm sm:text-base font-bold uppercase tracking-wide truncate"
+                  className="text-sm sm:text-base font-bold uppercase tracking-widest truncate"
                   style={FONT}
                   title={court}
                 >
