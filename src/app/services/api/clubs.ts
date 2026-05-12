@@ -103,12 +103,27 @@ export const clubsApi = {
   },
 
   /**
-   * Returns `{ clubId, teamIds }` for the authenticated club_captain.
-   * The club panel then fetches each team via the existing /teams/:id
-   * endpoint (no new team-side endpoint needed).
+   * Rich team summary list for the authenticated club_captain.
+   * Returns `{ clubId, teamIds, teams }` — `teams` is the new shape
+   * with roster counts baked in so the panel can render player
+   * tallies without an N+1 fetch. `teamIds` stays for any legacy
+   * caller that hasn't migrated yet.
    */
-  async meTeams(): Promise<{ clubId: string; teamIds: string[] }> {
-    return request<{ clubId: string; teamIds: string[] }>('/clubs/me/teams');
+  async meTeams(): Promise<{
+    clubId: string;
+    teamIds: string[];
+    teams: Array<{
+      id: string;
+      name: string;
+      initials: string;
+      logo: string | null;
+      primaryColor: string;
+      secondaryColor: string;
+      category: string | null;
+      rosterCount: number;
+    }>;
+  }> {
+    return request('/clubs/me/teams');
   },
 
   /**

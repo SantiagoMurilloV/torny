@@ -474,6 +474,51 @@ export class ClubService {
   }
 
   /**
+   * Rich team summary list for the club panel. Returns each team with
+   * the metadata the cards need (name, initials, logo, colors,
+   * category) PLUS the current roster size — so the panel renders
+   * "Plantel: N" without an N+1 fetch per team. Same ORDER BY name
+   * convention as `getTeamIdsForClub` so the two lists stay in sync.
+   */
+  async listTeamsForClub(clubId: string): Promise<Array<{
+    id: string;
+    name: string;
+    initials: string;
+    logo: string | null;
+    primaryColor: string;
+    secondaryColor: string;
+    category: string | null;
+    rosterCount: number;
+  }>> {
+    const pool = getPool();
+    const res = await pool.query(
+      `SELECT
+         t.id,
+         t.name,
+         t.initials,
+         t.logo,
+         t.primary_color,
+         t.secondary_color,
+         t.category,
+         (SELECT COUNT(*)::int FROM players p WHERE p.team_id = t.id) AS roster_count
+       FROM teams t
+       WHERE t.club_id = $1
+       ORDER BY t.name ASC`,
+      [clubId],
+    );
+    return res.rows.map((r) => ({
+      id: r.id as string,
+      name: r.name as string,
+      initials: r.initials as string,
+      logo: (r.logo as string | null) ?? null,
+      primaryColor: r.primary_color as string,
+      secondaryColor: r.secondary_color as string,
+      category: (r.category as string | null) ?? null,
+      rosterCount: (r.roster_count as number) ?? 0,
+    }));
+  }
+
+  /**
    * Username + password lookup used by /auth/login when the user
    * isn't found in the `users` table. Case-insensitive on the
    * username (the UNIQUE index is on LOWER(username)).

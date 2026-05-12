@@ -214,8 +214,17 @@ export async function meTeams(req: Request, res: Response, next: NextFunction) {
     if (!req.user || req.user.role !== 'club_captain' || !req.user.clubId) {
       throw new UnauthorizedError('Solo accesible para usuarios de club');
     }
-    const teamIds = await clubService.getTeamIdsForClub(req.user.clubId);
-    res.json({ clubId: req.user.clubId, teamIds });
+    // Rich team summary list (one query) instead of just ids — the
+    // club panel needs the roster count per team and we don't want
+    // an N+1 fetch fan-out. `teamIds` stays in the response so any
+    // legacy caller (a deployed but cached FE bundle) keeps working
+    // while users transition.
+    const teams = await clubService.listTeamsForClub(req.user.clubId);
+    res.json({
+      clubId: req.user.clubId,
+      teamIds: teams.map((t) => t.id),
+      teams,
+    });
   } catch (err) {
     next(err);
   }

@@ -16,6 +16,15 @@ import { getErrorMessage } from '../../lib/errors';
 import { ParentRegistrationLinkModal } from './ParentRegistrationLinkModal';
 import { ClubPushPermissionGate } from './ClubPushPermissionGate';
 
+/**
+ * The /clubs/me/teams endpoint hydrates each team with its current
+ * roster size so the panel can render "N jugadoras" without
+ * fanning out one fetch per team.
+ */
+interface ClubTeamSummary extends Team {
+  rosterCount: number;
+}
+
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
 /**
@@ -37,7 +46,7 @@ const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 export function ClubPanel() {
   const navigate = useNavigate();
   const [clubName, setClubName] = useState<string>('');
-  const [teams, setTeams] = useState<Team[]>([]);
+  const [teams, setTeams] = useState<ClubTeamSummary[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeLinkTournament, setActiveLinkTournament] =
@@ -55,10 +64,12 @@ export function ClubPanel() {
           '';
         setClubName(fallbackName);
 
-        // Three fetches in parallel: teams of the club, full team
-        // payloads (so the avatar has the logo + colors), and the
-        // tournaments where the club has at least one team enrolled.
-        const [{ teamIds }, fetchedTournaments] = await Promise.all([
+        // Two parallel fetches: the rich team summary list (includes
+        // roster counts + display metadata in a single query) and
+        // the tournaments where the club has at least one team
+        // enrolled. The endpoint shape change replaces the prior
+        // N+1 fanout (1 request per team) with a single hit.
+        const [meTeamsResp, fetchedTournaments] = await Promise.all([
           api.clubs.meTeams(),
           api.clubs.meTournaments().catch((err) => {
             // Don't fail the whole panel if /me/tournaments hiccups —
@@ -70,16 +81,23 @@ export function ClubPanel() {
           }),
         ]);
 
-        const fetched = await Promise.all(
-          teamIds.map((id) =>
-            api.getTeam(id).catch((err) => {
-              // eslint-disable-next-line no-console
-              console.warn(`could not load team ${id}:`, err);
-              return null;
-            }),
-          ),
+        // Adapt the backend's flat color shape to the FE Team
+        // interface (which nests them under `colors`). TeamAvatar
+        // reads `team.colors.primary`.
+        setTeams(
+          meTeamsResp.teams.map((t) => ({
+            id: t.id,
+            name: t.name,
+            initials: t.initials,
+            logo: t.logo ?? undefined,
+            colors: {
+              primary: t.primaryColor,
+              secondary: t.secondaryColor,
+            },
+            category: t.category ?? undefined,
+            rosterCount: t.rosterCount,
+          })),
         );
-        setTeams(fetched.filter((t): t is Team => t !== null));
         setTournaments(fetchedTournaments);
       } catch (err) {
         toast.error(getErrorMessage(err, 'No se pudieron cargar los equipos del club'));
@@ -242,11 +260,24 @@ export function ClubPanel() {
                         >
                           {team.name}
                         </div>
-                        {team.category && (
-                          <div className="text-xs text-black/55 truncate">
-                            {team.category}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-black/55">
+                          {team.category && (
+                            <span className="truncate">{team.category}</span>
+                          )}
+                          {team.category && <span className="text-black/30">·</span>}
+                          <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                            <Users
+                              className="w-3 h-3 text-black/40"
+                              aria-hidden="true"
+                            />
+                            <span className="tabular-nums font-bold text-black/70">
+                              {team.rosterCount}
+                            </span>
+                            <span className="text-black/55">
+                              jugadora{team.rosterCount === 1 ? '' : 's'}
+                            </span>
+                          </span>
+                        </div>
                       </div>
                       <ArrowRight
                         className="w-4 h-4 text-black/40 flex-shrink-0"
