@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Plus, Users, Search, X } from 'lucide-react';
 import { Tournament, Team } from '../../../types';
 import { Button } from '../../../components/ui/button';
@@ -7,6 +7,8 @@ import { TeamFormModal } from '../../../components/admin/TeamFormModal';
 import { TeamRosterCard } from '../../../components/admin/TeamRosterCard';
 import { TeamPickerModal } from '../../../components/admin/TeamPickerModal';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
+import { api } from '../../../services/api';
+import type { Club } from '../../../services/api/clubs';
 
 interface TeamsTabProps {
   tournament: Tournament;
@@ -46,6 +48,12 @@ export function TeamsTab({
   // full Team object (instead of just the id) avoids a second lookup
   // from `enrolledTeams` when rendering the dialog message.
   const [pendingUnenrollTeam, setPendingUnenrollTeam] = useState<Team | null>(null);
+  // Admin's club library (mig 028) — loaded once on mount so the team
+  // form can surface a "Asignar club" picker when the team being edited
+  // (or created) isn't part of any club yet. Empty array on fetch
+  // failure so the modal silently hides the section instead of
+  // surfacing an error the admin can't act on.
+  const [clubs, setClubs] = useState<Club[]>([]);
   // Free-text search over the inscribed roster — matches name / initials
   // / city. Filtering happens entirely client-side because the list is
   // already in memory; for large tournaments the input stays responsive
@@ -105,6 +113,26 @@ export function TeamsTab({
   const handleFormSubmit = async (team: Team) => {
     await onTeamFormSubmit(team, editingTeam);
   };
+
+  // Load clubs once when the tab mounts. Fire-and-forget — the modal
+  // hides the picker section when this list is empty so a failed fetch
+  // degrades gracefully (admin can still create/edit teams, just can't
+  // assign a club inline).
+  useEffect(() => {
+    let cancelled = false;
+    api.clubs
+      .list()
+      .then((data) => {
+        if (!cancelled) setClubs(data);
+      })
+      .catch(() => {
+        // Silent failure — the picker is optional UX, not critical.
+        if (!cancelled) setClubs([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleEnrollFromPicker = async (teamId: string) => {
     await onEnroll(teamId);
@@ -255,6 +283,7 @@ export function TeamsTab({
         onSubmit={handleFormSubmit}
         team={editingTeam}
         allowedCategories={tournament.categories}
+        clubs={clubs}
       />
 
       {/* Confirm un-enrollment — `unenrollingId === pending.id` keeps the

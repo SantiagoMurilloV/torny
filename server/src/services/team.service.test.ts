@@ -373,7 +373,8 @@ describe('TeamService CRUD operations', () => {
       await service.create(validDto(), 'admin-1');
 
       const insertArgs = queryFn.mock.calls[0][1] as unknown[];
-      // INSERT … VALUES ($1..$9) with owner_id as the 9th positional arg
+      // INSERT … VALUES ($1..$10) with owner_id as the 9th positional arg
+      // and club_id as the 10th (null when omitted).
       expect(insertArgs[8]).toBe('admin-1');
     });
 
@@ -384,6 +385,39 @@ describe('TeamService CRUD operations', () => {
 
       const insertArgs = queryFn.mock.calls[0][1] as unknown[];
       expect(insertArgs[8]).toBeNull();
+    });
+
+    it('should pass null club_id by default', async () => {
+      const queryFn = mockPool(vi.fn().mockResolvedValue({ rows: [sampleRow()] }));
+
+      await service.create(validDto(), 'admin-1');
+
+      const insertArgs = queryFn.mock.calls[0][1] as unknown[];
+      // club_id sits at position $10 (index 9).
+      expect(insertArgs[9]).toBeNull();
+    });
+
+    it('should persist club_id when provided and club belongs to same owner', async () => {
+      // Two-step: assertClubOwnership SELECT first, then the INSERT.
+      const queryFn = mockPool(vi.fn()
+        .mockResolvedValueOnce({ rows: [{ owner_id: 'admin-1' }] }) // club lookup
+        .mockResolvedValueOnce({ rows: [sampleRow({ club_id: 'club-1' })] }), // INSERT
+      );
+
+      await service.create(validDto({ clubId: 'club-1' }), 'admin-1');
+
+      const insertArgs = queryFn.mock.calls[1][1] as unknown[];
+      expect(insertArgs[9]).toBe('club-1');
+    });
+
+    it('should reject club_id pointing to another admin (leak-safe 404)', async () => {
+      mockPool(vi.fn()
+        .mockResolvedValueOnce({ rows: [{ owner_id: 'admin-2' }] }), // club lookup
+      );
+
+      await expect(
+        service.create(validDto({ clubId: 'club-1' }), 'admin-1'),
+      ).rejects.toThrow('Club no fue encontrado');
     });
   });
 

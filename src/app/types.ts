@@ -10,6 +10,12 @@ export interface Team {
   city?: string;
   department?: string;
   category?: string;
+  /**
+   * Club this team belongs to (mig 028). When undefined, the team
+   * isn't linked to any club yet — the team form surfaces a picker so
+   * the admin can assign one.
+   */
+  clubId?: string;
   /** Captain login handle once credentials have been generated. */
   captainUsername?: string;
   /** ISO timestamp of the last credentials (re)generation. */

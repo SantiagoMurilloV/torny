@@ -315,6 +315,13 @@ export function AdminTournamentDetail() {
         department: team.department,
         category: team.category,
       };
+      // Only thread `clubId` when the admin actually picked one from the
+      // form (the modal blocks re-assignment on teams that already have
+      // a club). Sending undefined here keeps the column untouched on
+      // PATCH; an empty string would be coerced to null on the wire.
+      if (!editingTeam.clubId && team.clubId) {
+        dto.clubId = team.clubId;
+      }
       const updated = await updateTeam(editingTeam.id, dto);
       setEnrolledTeams((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
       setAllTeams((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
@@ -332,6 +339,12 @@ export function AdminTournamentDetail() {
       department: team.department,
       category: team.category,
     };
+    // Carry the club assignment forward on create when the admin picked
+    // one in the modal. Otherwise omit so the backend leaves club_id
+    // NULL (the legacy default).
+    if (team.clubId) {
+      dto.clubId = team.clubId;
+    }
     const created = await addTeam(dto);
     await api.enrollTeam(id, created.id);
     const updated = await api.getEnrolledTeams(id);

@@ -4,6 +4,7 @@ import { Team } from '../../types';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { ApiError, api } from '../../services/api';
+import type { Club } from '../../services/api/clubs';
 import { CATEGORIES, withCurrentCategories } from '../../lib/categories';
 import { getErrorMessage } from '../../lib/errors';
 import { compressLogoImage } from '../../lib/compressImage';
@@ -21,6 +22,19 @@ interface TeamFormModalProps {
    * Undefined / empty → show the full global list.
    */
   allowedCategories?: string[];
+  /**
+   * Admin's club library (mig 028). When the team isn't part of any
+   * club yet, we render a dropdown so the admin can assign one straight
+   * from this modal — saves a trip to `/admin/clubs` for the common
+   * "I just imported a team and forgot to club it" case.
+   *
+   * If a team is already linked to a club, we still surface the club
+   * name (read-only) so the admin sees the current state without an
+   * extra click. Pass an empty array when the parent hasn't loaded the
+   * library yet — the modal silently hides the section in that case so
+   * we never show a stale "Sin club" picker while the data is in flight.
+   */
+  clubs?: Club[];
 }
 
 interface FieldErrors {
@@ -73,6 +87,7 @@ export function TeamFormModal({
   onSubmit,
   team,
   allowedCategories,
+  clubs,
 }: TeamFormModalProps) {
   // When opened inside a tournament, limit the Categoría <select> to
   // the tournament's own categories. A team the admin is editing may
@@ -93,6 +108,12 @@ export function TeamFormModal({
     city: '',
     department: '',
     category: '',
+    // Empty string represents "Sin club" — we only thread a real club
+    // id back to the API when the admin actively picks one from the
+    // dropdown. Teams that already belong to a club lock this field to
+    // their current `clubId` (read-only display) so this modal never
+    // becomes a stealth re-assignment surface.
+    clubId: '',
   });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -111,6 +132,7 @@ export function TeamFormModal({
         city: team.city || '',
         department: team.department || '',
         category: team.category || '',
+        clubId: team.clubId || '',
       });
       setLogoPreview(team.logo || null);
       setLogoFile(null);
@@ -132,6 +154,7 @@ export function TeamFormModal({
           city: '',
           department: '',
           category: '',
+          clubId: '',
         });
         setLogoFile(null);
         setLogoPreview(null);
@@ -181,6 +204,16 @@ export function TeamFormModal({
       }
     }
 
+    // Resolve the clubId to send back. Two scenarios collapse into the
+    // same outcome:
+    //   · team has no clubId yet AND admin picked one → submit the new id
+    //   · team already has a clubId → reuse it (this modal does not
+    //     re-assign existing teams; that flow lives in /admin/clubs
+    //     under "Dividir club")
+    // Empty form value stays undefined so we don't accidentally send a
+    // `clubId: ''` that the backend would have to parse as "clear".
+    const resolvedClubId = team?.clubId || formData.clubId || undefined;
+
     const newTeam: Team = {
       id: team?.id || `team-${Date.now()}`,
       name: formData.name,
@@ -193,6 +226,7 @@ export function TeamFormModal({
       city: formData.city || undefined,
       department: formData.department || undefined,
       category: formData.category || undefined,
+      clubId: resolvedClubId,
     };
 
     try {
@@ -207,6 +241,7 @@ export function TeamFormModal({
           city: '',
           department: '',
           category: '',
+          clubId: '',
         });
         setLogoFile(null);
         setLogoPreview(null);
@@ -388,6 +423,54 @@ export function TeamFormModal({
               ))}
             </select>
           </div>
+
+          {/* Club assignment (mig 028). Three visible states:
+              · the team already has a clubId   → read-only display of the
+                current club name + hint redirecting to /admin/clubs for
+                re-assignment (we don't want this modal to silently move
+                a team between clubs);
+              · clubs library is empty / not loaded → hidden;
+              · the team has no club AND clubs exist → dropdown so the
+                admin can pick one inline without leaving the form. */}
+          {(() => {
+            const teamHasClub = Boolean(team?.clubId);
+            const hasClubsList = Array.isArray(clubs) && clubs.length > 0;
+            if (!teamHasClub && !hasClubsList) return null;
+            const currentClub = teamHasClub
+              ? clubs?.find((c) => c.id === team?.clubId) ?? null
+              : null;
+            return (
+              <div>
+                <label className="block text-sm font-bold mb-2" style={{ fontFamily: 'Barlow Condensed, sans-serif' }}>
+                  Club
+                </label>
+                {teamHasClub ? (
+                  <div className="w-full px-4 py-2 border-2 border-black/10 rounded-sm bg-black/5 text-sm text-black/70">
+                    {currentClub ? currentClub.name : 'Club asignado'}
+                    <p className="mt-1 text-xs text-black/45">
+                      Para mover este equipo a otro club, usá "Dividir club" en /admin/clubs.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      value={formData.clubId}
+                      onChange={(e) => setFormData({ ...formData, clubId: e.target.value })}
+                      className="w-full px-4 py-2 border-2 border-black/10 rounded-sm focus:outline-none focus:border-spk-red bg-white"
+                    >
+                      <option value="">Sin club (asignar después)</option>
+                      {clubs!.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-black/45">
+                      Opcional. Si lo dejás vacío podés agruparlo después desde la pestaña Clubs.
+                    </p>
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Colors */}
           <div className="grid grid-cols-2 gap-4">

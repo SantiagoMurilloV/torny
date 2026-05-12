@@ -85,6 +85,26 @@ export async function update(req: Request, res: Response, next: NextFunction): P
   try {
     const id = req.params.id as string;
     validateUUID(id, 'ID de equipo');
+
+    // Cross-tenant guard for club assignment (mig 028): when the body
+    // includes a `clubId`, make sure it belongs to the caller's tenant
+    // before letting the UPDATE fire. super_admin is exempt (god-mode);
+    // captains inherit their team's owner scope so they can only attach
+    // to clubs owned by the same admin that owns the team.
+    const body = req.body as { clubId?: string | null };
+    if (body && typeof body.clubId === 'string' && body.clubId.length > 0) {
+      let scopeOwnerId: string | null = null;
+      if (req.user?.role === 'admin') {
+        scopeOwnerId = req.user.userId;
+      } else if (req.user?.role === 'team_captain' || req.user?.role === 'club_captain') {
+        const team = await teamService.getById(id);
+        scopeOwnerId = team.ownerId ?? null;
+      }
+      // super_admin → scopeOwnerId stays null → assertClubOwnership is a no-op
+      // (any club passes). Same intent as the create flow.
+      await teamService.assertClubOwnership(body.clubId, scopeOwnerId);
+    }
+
     const team = await teamService.update(id, req.body);
     res.json(team);
   } catch (error) {

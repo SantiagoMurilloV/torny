@@ -114,6 +114,7 @@ export function toFrontendTeam(t: BackendTeam): Team {
     city: t.city,
     department: t.department,
     category: t.category,
+    clubId: t.clubId ?? undefined,
     captainUsername: t.captainUsername ?? undefined,
     credentialsGeneratedAt: t.credentialsGeneratedAt ?? undefined,
   };

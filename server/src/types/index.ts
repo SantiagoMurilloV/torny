@@ -163,6 +163,11 @@ export interface Team {
   category?: string;
   /** Admin user that owns this team. NULL for legacy / platform-shared rows. */
   ownerId?: string;
+  /**
+   * Club the team belongs to (mig 028). NULL when the team isn't grouped
+   * under any club yet — admins can then assign one from the team form.
+   */
+  clubId?: string;
   /** Captain handle (lowercase, unique). Populated after "Generar credenciales". */
   captainUsername?: string;
   /** ISO timestamp when credentials were generated/regenerated. */
@@ -348,6 +353,15 @@ export interface CreateTeamDto {
   city?: string;
   department?: string;
   category?: string;
+  /**
+   * Optional club assignment (mig 028). Validated server-side against
+   * the caller's owner scope — passing a club from another admin's
+   * tenant is rejected with 404 (leak-safe).
+   *   · `undefined` → leave column untouched on PATCH / null on INSERT
+   *   · `null`      → clear the club assignment
+   *   · `<uuid>`    → assign to that club (must belong to same owner)
+   */
+  clubId?: string | null;
 }
 
 export type UpdateTeamDto = Partial<CreateTeamDto>;
