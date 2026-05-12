@@ -15,6 +15,11 @@ interface AuthUser {
   role: string;
   /** Present when role is team_captain — id of the team the user manages. */
   teamId?: string;
+  /** Present when role is club_captain (mig 028) — id of the club. */
+  clubId?: string;
+  /** Present when role is club_captain — display name of the club, used
+   *  to title the panel without an extra round-trip. */
+  clubName?: string;
 }
 
 interface LoginResult {
