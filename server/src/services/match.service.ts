@@ -44,6 +44,74 @@ async function matchHeadline(matchId: string): Promise<{ title: string; url: str
 }
 
 /**
+ * Resolve the DISTINCT clubs whose teams participate in a given
+ * match. The list drives the per-club push notifications fired
+ * after score / status / schedule changes (mig 028 + 2026-05-13).
+ *
+ * Two teams that belong to the same club collapse into one entry
+ * (DISTINCT) so a club captain never gets the same notif twice for
+ * a derby. Teams without a club_id are skipped silently — there's
+ * no audience to notify.
+ *
+ * Returns an empty array on any failure so callers can spread the
+ * result safely in a `try/catch`-wrapped push dispatch. The pushes
+ * are best-effort by design.
+ */
+async function clubIdsForMatch(matchId: string): Promise<string[]> {
+  try {
+    const pool = getPool();
+    const result = await pool.query<{ club_id: string }>(
+      `SELECT DISTINCT t.club_id
+         FROM matches m
+         LEFT JOIN teams t1 ON t1.id = m.team1_id
+         LEFT JOIN teams t2 ON t2.id = m.team2_id
+         JOIN LATERAL (
+           VALUES (t1.club_id), (t2.club_id)
+         ) AS t(club_id) ON TRUE
+        WHERE m.id = $1
+          AND t.club_id IS NOT NULL`,
+      [matchId],
+    );
+    return result.rows.map((r) => r.club_id);
+  } catch (err) {
+    console.warn('[push] clubIdsForMatch failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Fan out a single push payload to every club involved in a match.
+ * Best-effort: a failure on one club must not block the others, and
+ * the calling business logic (score save, schedule update) MUST NOT
+ * see this throw. Wraps the loop in try/catch + logs.
+ *
+ * Typical payloads:
+ *   · "Cambio de horario" when an admin moves a match.
+ *   · "Resultado final" when a referee closes the last set.
+ *   · "Set cerrado" + running score on every closing set.
+ *   · "Partido en vivo" when status flips upcoming → live.
+ */
+async function dispatchClubsForMatch(
+  matchId: string,
+  payload: { title: string; body: string; url: string; tag: string },
+): Promise<void> {
+  try {
+    const keys = await ensurePushReady();
+    if (!keys) return;
+    const clubs = await clubIdsForMatch(matchId);
+    for (const clubId of clubs) {
+      try {
+        await pushService.sendToClub(clubId, payload);
+      } catch (err) {
+        console.warn(`[push] club ${clubId} dispatch failed`, err);
+      }
+    }
+  } catch (err) {
+    console.warn('[push] dispatchClubsForMatch failed:', err);
+  }
+}
+
+/**
  * Recalculate standings and re-resolve any bracket placeholders for a
  * tournament. Called after every match mutation that could affect either.
  * Bracket re-resolution is wrapped in try/catch because it's best-effort:
@@ -443,6 +511,50 @@ export class MatchService {
           );
         })
         .catch((err) => console.warn('[push] match-live dispatch failed', err));
+      // Same event, narrower audience: the captains of the two clubs
+      // involved get a sharper "tu equipo está jugando ahora" cue.
+      matchHeadline(id)
+        .then(({ title, url }) =>
+          dispatchClubsForMatch(id, {
+            title: `${title} · En vivo`,
+            body: 'Tu equipo está jugando ahora.',
+            url,
+            tag: `club-match-live-${id}`,
+          }),
+        )
+        .catch((err) =>
+          console.warn('[push] club match-live dispatch failed', err),
+        );
+    }
+
+    // Schedule change notification — anytime the admin moves the
+    // match to another (date, time, court) we ping the affected
+    // clubs so their captains can re-plan transport / warm-up. The
+    // notification fires for ANY one of those three fields, and
+    // only when at least one of them actually changed (the previous
+    // status-only edits don't qualify).
+    const dateChanged =
+      data.date !== undefined && data.date !== existing.date;
+    const timeChanged =
+      data.time !== undefined && data.time !== existing.time;
+    const courtChanged =
+      data.court !== undefined && data.court !== existing.court;
+    if (dateChanged || timeChanged || courtChanged) {
+      const finalDate = data.date ?? existing.date;
+      const finalTime = data.time ?? existing.time;
+      const finalCourt = data.court ?? existing.court;
+      matchHeadline(id)
+        .then(({ title, url }) =>
+          dispatchClubsForMatch(id, {
+            title: `${title} · Cambio de horario`,
+            body: `Nuevo horario: ${finalDate} ${finalTime} · ${finalCourt}.`,
+            url,
+            tag: `club-match-schedule-${id}`,
+          }),
+        )
+        .catch((err) =>
+          console.warn('[push] club schedule-change dispatch failed', err),
+        );
     }
 
     return mapRow(result.rows[0]);
@@ -532,6 +644,23 @@ export class MatchService {
       this.getById(matchAId),
       this.getById(matchBId),
     ]);
+    // Notify both clubs about the slot swap — the captains see "tu
+    // partido se movió" without having to refresh. Best-effort, runs
+    // after COMMIT so a push failure never poisons the swap result.
+    for (const m of [matchA, matchB]) {
+      matchHeadline(m.id)
+        .then(({ title, url }) =>
+          dispatchClubsForMatch(m.id, {
+            title: `${title} · Cambio de horario`,
+            body: `Nuevo horario: ${m.date} ${m.time} · ${m.court}.`,
+            url,
+            tag: `club-match-schedule-${m.id}`,
+          }),
+        )
+        .catch((err) =>
+          console.warn('[push] swap club dispatch failed', err),
+        );
+    }
     return { matchA, matchB };
   }
 
@@ -688,6 +817,16 @@ export class MatchService {
             tag: `match-final-${id}`,
             data: { matchId: id, type: 'match-completed' },
           });
+          // Same final, narrower audience: the two clubs get a
+          // captain-specific notif. Done inside the same promise
+          // chain so the `tag` collision isn't a concern (the
+          // public tag and the club tag differ).
+          await dispatchClubsForMatch(id, {
+            title: `${title} · Final`,
+            body: `Resultado ${setsH}–${setsA}. Tocá para ver el detalle.`,
+            url,
+            tag: `club-match-final-${id}`,
+          });
           return;
         }
         if (setJustClosed && score.sets) {
@@ -701,6 +840,12 @@ export class MatchService {
             tag: `match-score-${id}`,
             data: { matchId: id, type: 'set-closed' },
           });
+          await dispatchClubsForMatch(id, {
+            title: `${title} · Set ${score.sets.length} cerrado`,
+            body: `${last.team1Points}–${last.team2Points} · Sets ${setsH}–${setsA}`,
+            url,
+            tag: `club-match-score-${id}`,
+          });
           return;
         }
         if (becameLive) {
@@ -710,6 +855,12 @@ export class MatchService {
             url,
             tag: `match-live-${id}`,
             data: { matchId: id, type: 'match-live' },
+          });
+          await dispatchClubsForMatch(id, {
+            title: `${title} · En vivo`,
+            body: 'Tu equipo está jugando ahora.',
+            url,
+            tag: `club-match-live-${id}`,
           });
         }
       };
