@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
-import { ArrowLeft, Bell, Trophy } from 'lucide-react';
+import { ArrowLeft, Bell } from 'lucide-react';
+import { TornyTrophy } from '../../components/brand/TornyTrophy';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
@@ -52,12 +53,15 @@ export function Header({
               <span className="hidden md:inline text-sm font-medium">Volver</span>
             </motion.button>
 
+            {/* Wordmark unified — TornyTrophy + Barlow Condensed
+                font-black tracking-tight, matching the public Home,
+                Admin, Judge and Login layouts. */}
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="w-8 h-8 rounded-sm bg-white flex items-center justify-center flex-shrink-0">
-                <Trophy className="w-4 h-4 text-black" />
+              <div className="w-8 h-8 rounded-sm bg-white flex items-center justify-center flex-shrink-0 text-black">
+                <TornyTrophy className="w-5 h-5" />
               </div>
               <h1
-                className="text-base sm:text-lg md:text-xl font-bold tracking-tighter leading-none text-white truncate"
+                className="text-base sm:text-lg md:text-xl font-black tracking-wide leading-none text-white truncate"
                 style={FONT}
               >
                 Torn<span className="text-spk-red">y</span>

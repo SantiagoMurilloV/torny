@@ -19,6 +19,7 @@ import {
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { TornyTrophy } from './brand/TornyTrophy';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useIdleTimeout, useActivePresence } from '../hooks/useIdleTimeout';
@@ -180,12 +181,15 @@ export function AdminLayout() {
       >
         {/* Logo */}
         <div className="hidden md:flex items-center gap-3 p-6 border-b border-white/10 flex-shrink-0">
-          <div className="w-12 h-12 bg-white rounded-sm flex items-center justify-center">
-            <Trophy className="w-6 h-6 text-black" />
+          {/* Wordmark unified with the HomeHeader: custom TornyTrophy
+              icon in a white box + Barlow Condensed font-black with
+              tracking-tight. Consistent across every layout. */}
+          <div className="w-12 h-12 bg-white rounded-sm flex items-center justify-center text-black">
+            <TornyTrophy className="w-7 h-7" />
           </div>
           <div>
             <h1
-              className="text-2xl font-bold text-white tracking-wide"
+              className="text-2xl font-black text-white tracking-wide leading-none"
               style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
             >
               Torn<span className="text-spk-red">y</span>

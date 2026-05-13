@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { Trophy, Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Lock, User, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { TornyTrophy } from '../components/brand/TornyTrophy';
 import { motion } from 'motion/react';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../services/api';
@@ -70,13 +71,15 @@ export function Login() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-5"
           >
+            {/* Wordmark unified — same TornyTrophy + Barlow Condensed
+                font-black tracking-tight used in every other layout. */}
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-sm bg-white flex items-center justify-center flex-shrink-0">
-                <Trophy className="w-6 h-6 text-black" />
+              <div className="w-12 h-12 rounded-sm bg-white flex items-center justify-center flex-shrink-0 text-black">
+                <TornyTrophy className="w-7 h-7" />
               </div>
               <div>
                 <h1
-                  className="text-2xl font-bold tracking-tighter leading-none"
+                  className="text-2xl font-black tracking-wide leading-none"
                   style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
                 >
                   Torn<span className="text-spk-red">y</span>

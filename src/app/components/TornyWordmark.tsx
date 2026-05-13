@@ -122,16 +122,19 @@ export function TornyWordmark({
             />
           )}
 
-          {/* Wordmark TORN + Y roja. letterSpacing positivo (2) en
-              vez del -1 anterior — con kerning negativo la "r" y la
-              "n" se mezclaban visualmente en el header de la app. */}
+          {/* Wordmark "TORNY" — Arial Black all-caps (original brand
+              font). letterSpacing pumped to 5 so the R + N no longer
+              merge visually; with the previous -1 / 2 values the two
+              letters read as a single "Rn" blob on small mobile
+              renders. 5 keeps the mark recognisable while giving
+              every letter a clean silhouette. */}
           <text
             x={variant === 'full' ? 218 : 145}
             y="58"
             fontFamily="'Arial Black','Impact','Haettenschweiler',sans-serif"
             fontWeight={900}
             fontSize="52"
-            letterSpacing="2"
+            letterSpacing="5"
             textAnchor="middle"
             fill="currentColor"
           >

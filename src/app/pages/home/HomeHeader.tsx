@@ -49,7 +49,7 @@ export function HomeHeader() {
             </motion.div>
             <div className="min-w-0">
               <h1
-                className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight leading-none truncate"
+                className="text-2xl sm:text-3xl md:text-4xl font-black tracking-wide leading-none truncate"
                 style={FONT}
               >
                 Torn<span className="text-spk-red">y</span>
