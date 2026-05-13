@@ -129,6 +129,17 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
 
   // Tournament day range — one entry per calendar day between start
   // and end (inclusive). Falls back to "today" if dates missing.
+  //
+  // ALSO append any extra day where `matches` already live but that
+  // falls OUTSIDE the tournament's start..end window. This is the
+  // recovery path for when an upstream auto-scheduler (the bracket
+  // materializer mainly) overflowed past `endDate` and left cards
+  // stranded on a day the day-picker would otherwise refuse to
+  // show. Without this, those orphan-day matches are completely
+  // invisible to the admin and impossible to drag back inside the
+  // range. The cronograma is the only UI that can rescue them, so
+  // we surface every day-with-matches as an option even if it's
+  // beyond the official tournament window.
   const days = useMemo<string[]>(() => {
     const start = toIso(tournament.startDate) || new Date().toISOString().slice(0, 10);
     const end = toIso(tournament.endDate) || start;
@@ -141,8 +152,20 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
       cursor.setDate(cursor.getDate() + 1);
       safety++;
     }
+    // Append any out-of-range days that DO have matches. Sort lex
+    // (YYYY-MM-DD) so they slot in chronologically alongside the
+    // official days.
+    const inRange = new Set(out);
+    for (const m of matches) {
+      const iso = toIso(m.date);
+      if (iso && !inRange.has(iso)) {
+        inRange.add(iso);
+        out.push(iso);
+      }
+    }
+    out.sort();
     return out;
-  }, [tournament.startDate, tournament.endDate]);
+  }, [tournament.startDate, tournament.endDate, matches]);
 
   // Pick a default day on first render — prefer "today" if it falls
   // inside the range, otherwise the first day with matches scheduled,
@@ -832,6 +855,16 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
             <SelectContent>
               {days.map((d) => {
                 const stats = dayStats.get(d) ?? { total: 0, bracket: 0 };
+                // Flag days that fall outside the tournament's
+                // official start..end window. They only appear here
+                // because there are matches stuck on them (the
+                // bracket auto-scheduler overflowed past endDate);
+                // surface that visually so the admin knows to drag
+                // those cards back into the official range.
+                const startIso = toIso(tournament.startDate);
+                const endIso = toIso(tournament.endDate) || startIso;
+                const outsideRange =
+                  !!startIso && (d < startIso || d > endIso);
                 return (
                   <SelectItem key={d} value={d}>
                     <span className="flex items-center gap-2 w-full">
@@ -839,6 +872,15 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
                       {stats.total > 0 && (
                         <span className="text-[10px] font-bold text-black/55 tabular-nums">
                           · {stats.total}
+                        </span>
+                      )}
+                      {outsideRange && (
+                        <span
+                          className="inline-flex items-center px-1.5 py-0.5 rounded-sm bg-amber-100 text-amber-800 text-[9px] font-bold uppercase tracking-wider"
+                          style={FONT}
+                          title="Este día está fuera del rango oficial del torneo. Arrastrá las carticas a un día válido."
+                        >
+                          Fuera del rango
                         </span>
                       )}
                       {/* Pill rojo cuando el día tiene matches del
@@ -1372,6 +1414,21 @@ function MatchCard({
             <div className="max-h-60 overflow-y-auto">
               {days.map((d) => {
                 const isCurrent = d === currentDay;
+                // Highlight out-of-range days (matches landed past
+                // the tournament's endDate). Same amber pill as the
+                // top day-picker so the visual cue is consistent.
+                const startIso = tournament
+                  ? (tournament.startDate instanceof Date
+                      ? tournament.startDate.toISOString().slice(0, 10)
+                      : String(tournament.startDate ?? '').slice(0, 10))
+                  : '';
+                const endIso = tournament
+                  ? (tournament.endDate instanceof Date
+                      ? tournament.endDate.toISOString().slice(0, 10)
+                      : String(tournament.endDate ?? '').slice(0, 10))
+                  : startIso;
+                const outsideRange =
+                  !!startIso && (d < startIso || d > (endIso || startIso));
                 return (
                   <button
                     key={d}
@@ -1381,11 +1438,22 @@ function MatchCard({
                       setDayPickerOpen(false);
                       if (!isCurrent) onMoveToDay(match, d);
                     }}
-                    className="w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between"
+                    className="w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between gap-2"
                   >
-                    <span>{formatDayLabel(d)}</span>
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <span className="truncate">{formatDayLabel(d)}</span>
+                      {outsideRange && (
+                        <span
+                          className="inline-flex items-center px-1 py-0.5 rounded-sm bg-amber-100 text-amber-800 text-[8px] font-bold uppercase tracking-wider flex-shrink-0"
+                          style={FONT}
+                          title="Fuera del rango oficial"
+                        >
+                          Fuera
+                        </span>
+                      )}
+                    </span>
                     {isCurrent && (
-                      <span className="text-[9px] text-black/40 uppercase">
+                      <span className="text-[9px] text-black/40 uppercase flex-shrink-0">
                         Actual
                       </span>
                     )}
