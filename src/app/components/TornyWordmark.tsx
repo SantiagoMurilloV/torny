@@ -122,14 +122,16 @@ export function TornyWordmark({
             />
           )}
 
-          {/* Wordmark TORN + Y roja */}
+          {/* Wordmark TORN + Y roja. letterSpacing positivo (2) en
+              vez del -1 anterior — con kerning negativo la "r" y la
+              "n" se mezclaban visualmente en el header de la app. */}
           <text
             x={variant === 'full' ? 218 : 145}
             y="58"
             fontFamily="'Arial Black','Impact','Haettenschweiler',sans-serif"
             fontWeight={900}
             fontSize="52"
-            letterSpacing="-1"
+            letterSpacing="2"
             textAnchor="middle"
             fill="currentColor"
           >
