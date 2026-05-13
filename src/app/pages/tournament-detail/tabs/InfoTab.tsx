@@ -34,9 +34,16 @@ export function InfoTab({
   enrolledCount: number;
   matchesCount: number;
 }) {
-  const days = Math.ceil(
-    (tournament.endDate.getTime() - tournament.startDate.getTime()) / DAY_MS,
-  );
+  // Inclusive day count: a tournament from May 15 to May 17 must
+  // read as 3 días, not 2. The naive `(end - start) / DAY_MS` only
+  // measures the gap between the two anchor days, so we add the
+  // start day back. Math.round guards against the noon-anchoring in
+  // `parseWireDate` producing a 23h59m or 24h01m delta when DST
+  // straddles the range.
+  const days =
+    Math.round(
+      (tournament.endDate.getTime() - tournament.startDate.getTime()) / DAY_MS,
+    ) + 1;
 
   const regulationText = tournament.regulationText?.trim();
   const regulationPdf = tournament.regulationPdf;
