@@ -13,6 +13,7 @@ import {
   getStandings,
   recalculateStandings,
   bulkMoveDate,
+  cleanByeMatches,
   getBracket,
   getEnrolledTeams,
   enrollTeam,
@@ -66,6 +67,10 @@ router.post('/:id/standings/recalculate', requireTournamentAccess, recalculateSt
 // placed matches past the tournament's endDate). After the move,
 // the admin reorders manually via drag-and-drop in Cronograma.
 router.post('/:id/bulk-move-date', requireTournamentAccess, bulkMoveDate);
+// Drop phantom matches that correspond to BYE bracket rows (pase
+// directo, no real game). Owner-gated. Safe: skips matches with
+// score, status != upcoming, or any team_id set.
+router.post('/:id/clean-bye-matches', requireTournamentAccess, cleanByeMatches);
 router.get('/:id/bracket', cacheGet(15, { swrSeconds: 60 }), getBracket);
 
 // Team enrollment — list is public (spectators see who's playing); the
