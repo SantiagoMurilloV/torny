@@ -119,6 +119,24 @@ export async function clearCategoryFixtures(
  * Plata (the round column is "Category|gold|…" / "Category|silver|…").
  * Passing no tier targets both legacy 2-segment rounds and any tier so
  * callers that toggle between modes can clear cleanly.
+ *
+ * IMPORTANT (2026-05-13 fix): we ALSO have to drop the materialized
+ * `matches` rows that link to those bracket_matches BEFORE deleting
+ * the bracket rows. The FK is `ON DELETE SET NULL` (mig 018), which
+ * means deleting a bracket_match silently nulls `matches.bracket_match_id`
+ * and leaves an "orphan" upcoming row pointing nowhere. When the
+ * materializer runs again on the regenerated bracket, it can't see
+ * those orphans (the `existing` map is built from
+ * `bracket_match_id IS NOT NULL`), so it inserts FRESH matches → the
+ * cronograma shows two cards for the same phase ("Cuartos · Oro|…").
+ *
+ * Safety rules for the matches purge:
+ *   · `status = 'upcoming'` only — never destroy live or completed
+ *     fixtures. If a referee already loaded a score, that match was
+ *     played and belongs to the historical record; leaving it as an
+ *     orphan is the right behaviour.
+ *   · `score_team1 IS NULL AND score_team2 IS NULL` — extra belt over
+ *     status in case some path marked a row 'upcoming' after scoring.
  */
 export async function clearCategoryBracket(
   client: PoolClient,
@@ -127,13 +145,43 @@ export async function clearCategoryBracket(
   tier?: BracketTier | null,
 ): Promise<void> {
   if (tier) {
-    // 1. Wipe this tier's 3-segment rows ("Category|<tier>|roundName").
+    // 1. Drop materialized matches that link to this tier's bracket
+    //    rows OR to the legacy 2-segment rows for the same category.
+    //    Same WHERE clauses as the bracket_matches deletes below.
+    await client.query(
+      `DELETE FROM matches
+         WHERE tournament_id = $1
+           AND status = 'upcoming'
+           AND score_team1 IS NULL
+           AND score_team2 IS NULL
+           AND bracket_match_id IN (
+             SELECT id FROM bracket_matches
+               WHERE tournament_id = $1
+                 AND (
+                   round LIKE $2
+                   OR (
+                     round LIKE $3
+                     AND round NOT LIKE $4
+                     AND round NOT LIKE $5
+                   )
+                 )
+           )`,
+      [
+        tournamentId,
+        `${category}|${tier}|%`,        // this tier's 3-seg rounds
+        `${category}|%`,                 // any row for the category
+        `${category}|gold|%`,            // exclude other tier
+        `${category}|silver|%`,
+      ],
+    );
+
+    // 2. Wipe this tier's 3-segment rows ("Category|<tier>|roundName").
     const tierPrefix = `${category}|${tier}|%`;
     await client.query(
       'DELETE FROM bracket_matches WHERE tournament_id = $1 AND round LIKE $2',
       [tournamentId, tierPrefix],
     );
-    // 2. Also purge legacy 2-segment rows ("Category|roundName") for
+    // 3. Also purge legacy 2-segment rows ("Category|roundName") for
     //    the same category — a tiered generation supersedes any
     //    single-bracket mode that was there before, otherwise those
     //    orphan rows show up in the UI as a phantom 3rd bracket
@@ -155,7 +203,21 @@ export async function clearCategoryBracket(
     );
     return;
   }
+  // Non-tiered branch: drop the whole category's bracket. Same
+  // matches-first ordering to keep orphans out of the cronograma.
   const prefix = `${category}|%`;
+  await client.query(
+    `DELETE FROM matches
+       WHERE tournament_id = $1
+         AND status = 'upcoming'
+         AND score_team1 IS NULL
+         AND score_team2 IS NULL
+         AND bracket_match_id IN (
+           SELECT id FROM bracket_matches
+             WHERE tournament_id = $1 AND round LIKE $2
+         )`,
+    [tournamentId, prefix],
+  );
   await client.query(
     'DELETE FROM bracket_matches WHERE tournament_id = $1 AND round LIKE $2',
     [tournamentId, prefix],
