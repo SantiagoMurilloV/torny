@@ -737,6 +737,27 @@ export class BracketGenerator {
     // payload (preserves caller compatibility). Order by round +
     // position so cuartos materialize before semis, keeping the
     // schedule monotonic.
+    // Skip BYE rows: a bracket slot where one side is permanently
+    // empty (the seed gets a free pass to the next round). Bye is
+    // identified by an empty placeholder string on one side combined
+    // with a NULL team_id on that same side, while the other side
+    // has either a real team or a real placeholder. Materializing a
+    // bye into `matches` would clutter the cronograma with phantom
+    // cards for non-games (no rival, no court needed). The pestaña
+    // Bracket still renders byes from `bracket_matches` directly so
+    // the tree shows the pase directo as expected.
+    //
+    // Detection rule:
+    //   side is empty   ⇢ team_id IS NULL AND (placeholder IS NULL
+    //                       OR trim(placeholder) IN ('', '-'))
+    //   side is filled  ⇢ team_id IS NOT NULL OR placeholder is a
+    //                       real string ≠ '-'
+    //   bye             ⇢ exactly ONE side is empty AND the OTHER
+    //                       side is filled.
+    //
+    // We also accept the case where both placeholders carry seed
+    // labels but one is "-" sentinel — same shape as a real bye row
+    // returned by the bracket generator.
     const bmRes = await pool.query(
       `SELECT id, team1_id, team2_id, round, position
          FROM bracket_matches
@@ -745,6 +766,28 @@ export class BracketGenerator {
              team1_id IS NULL
              OR team2_id IS NULL
              OR team1_id <> team2_id
+           )
+           AND NOT (
+             -- bye: team1 filled (id or placeholder ≠ '-') AND
+             --      team2 empty (id NULL and placeholder NULL or '-')
+             (
+               (team1_id IS NOT NULL
+                 OR (team1_placeholder IS NOT NULL
+                     AND btrim(team1_placeholder) NOT IN ('', '-')))
+               AND team2_id IS NULL
+               AND (team2_placeholder IS NULL
+                    OR btrim(team2_placeholder) IN ('', '-'))
+             )
+             OR
+             -- bye: mirror — team2 filled, team1 empty
+             (
+               (team2_id IS NOT NULL
+                 OR (team2_placeholder IS NOT NULL
+                     AND btrim(team2_placeholder) NOT IN ('', '-')))
+               AND team1_id IS NULL
+               AND (team1_placeholder IS NULL
+                    OR btrim(team1_placeholder) IN ('', '-'))
+             )
            )
          ORDER BY round, position`,
       [tournamentId],

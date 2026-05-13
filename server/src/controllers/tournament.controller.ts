@@ -136,6 +136,153 @@ export async function getStandings(req: Request, res: Response, next: NextFuncti
 }
 
 /**
+ * Delete `matches` rows that correspond to BYE slots in the bracket.
+ *
+ * A bye is a bracket row where one team is permanently absent (the
+ * other side gets a free pass to the next round). Materializing a
+ * bye creates a phantom card in the cronograma (both team_ids
+ * NULL, taking a court+time slot for a game that never plays). The
+ * fixed materializer (commit 2026-05-13) now skips bye rows at
+ * insert time, but pre-existing data still carries the cards.
+ *
+ * This endpoint scans the tournament's bracket for bye rows and
+ * deletes any matches row whose phase matches the round of a bye
+ * AND has both team_ids NULL (the materializer's bye footprint) AND
+ * no score loaded. We DON'T touch:
+ *   · matches with score (history protection)
+ *   · matches with at least one team_id set (real upcoming game)
+ *   · matches whose phase doesn't match a known bye round
+ *
+ * Returns the count of phantom rows removed so the admin can
+ * verify the cleanup against the cronograma.
+ */
+export async function cleanByeMatches(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    validateUUID(id, 'ID de torneo');
+    const pool = (await import('../config/database')).getPool();
+
+    // 1) Discover bye rounds: rounds where at least one side is
+    //    permanently empty. We compute the bye position count per
+    //    round so the delete below can be capped accordingly.
+    const byesRes = await pool.query<{ round: string; bye_count: number }>(
+      `SELECT round, COUNT(*)::int AS bye_count
+         FROM bracket_matches
+         WHERE tournament_id = $1
+           AND (
+             (
+               (team1_id IS NOT NULL
+                 OR (team1_placeholder IS NOT NULL
+                     AND btrim(team1_placeholder) NOT IN ('', '-')))
+               AND team2_id IS NULL
+               AND (team2_placeholder IS NULL
+                    OR btrim(team2_placeholder) IN ('', '-'))
+             )
+             OR
+             (
+               (team2_id IS NOT NULL
+                 OR (team2_placeholder IS NOT NULL
+                     AND btrim(team2_placeholder) NOT IN ('', '-')))
+               AND team1_id IS NULL
+               AND (team1_placeholder IS NULL
+                    OR btrim(team1_placeholder) IN ('', '-'))
+             )
+           )
+         GROUP BY round`,
+      [id],
+    );
+
+    if (byesRes.rows.length === 0) {
+      res.json({
+        tournamentId: id,
+        deletedCount: 0,
+        deleted: [],
+        byeRoundsScanned: 0,
+        note: 'No se encontraron byes en bracket_matches.',
+      });
+      return;
+    }
+
+    // 2) For each bye round, delete up to `bye_count` matches rows
+    //    that match the phase AND are unresolved (both team ids
+    //    NULL) AND have no score. Round in bracket_matches uses
+    //    `Cat|<roundKey>` (e.g. `Infantil Femenino|ronda-1`); the
+    //    materializer maps that to a human phase like `Ronda 1|Cat`.
+    //    The mapping uses `bracketRoundToMatchPhase` server-side —
+    //    we replicate the inverse here with the known short→long
+    //    mapping so we hit the right phase column.
+    const roundKeyToLabel: Record<string, string> = {
+      'ronda-1': 'Ronda 1',
+      'ronda-2': 'Ronda 2',
+      'ronda-3': 'Ronda 3',
+      cuartos: 'Cuartos',
+      semifinal: 'Semifinal',
+      final: 'Final',
+      'tercer-puesto': 'Tercer puesto',
+    };
+
+    const deleted: Array<{
+      round: string;
+      phase: string;
+      matchesDeleted: number;
+      byeCount: number;
+    }> = [];
+    let total = 0;
+    for (const r of byesRes.rows) {
+      const round = r.round; // e.g. "Infantil Femenino|ronda-1"
+      const segs = round.split('|');
+      const category = segs.length >= 2 ? segs[0] : '';
+      const roundKey = segs[segs.length - 1];
+      const label = roundKeyToLabel[roundKey] ?? roundKey;
+      const phase = category ? `${label}|${category}` : label;
+
+      // Delete the bye footprint: unresolved (team1+team2 both NULL),
+      // upcoming, no score. Cap at the bye_count for this round so
+      // we don't accidentally remove legitimate fight-in fixtures
+      // that happen to share the round label.
+      const delRes = await pool.query<{ id: string }>(
+        `WITH cand AS (
+           SELECT id FROM matches
+             WHERE tournament_id = $1
+               AND phase = $2
+               AND team1_id IS NULL
+               AND team2_id IS NULL
+               AND status = 'upcoming'
+               AND score_team1 IS NULL
+               AND score_team2 IS NULL
+             ORDER BY date, time, court
+             LIMIT $3
+         )
+         DELETE FROM matches WHERE id IN (SELECT id FROM cand)
+         RETURNING id`,
+        [id, phase, r.bye_count],
+      );
+      const n = delRes.rowCount ?? 0;
+      deleted.push({
+        round,
+        phase,
+        matchesDeleted: n,
+        byeCount: r.bye_count,
+      });
+      total += n;
+    }
+
+    res.json({
+      tournamentId: id,
+      deletedCount: total,
+      deleted,
+      byeRoundsScanned: byesRes.rows.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * Bulk-move every match of this tournament whose `date = fromDate`
  * onto `toDate`. Built for the 2026-05-13 incident where the bracket
  * materializer overflowed past the tournament's `endDate` and left
