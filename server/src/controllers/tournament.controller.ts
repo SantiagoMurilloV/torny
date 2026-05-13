@@ -225,6 +225,41 @@ export async function cleanByeMatches(
       'tercer-puesto': 'Tercer puesto',
     };
 
+    // Strategy: rather than try to match individual bye rows to
+    // individual `matches` rows (impossible when `bracket_match_id`
+    // is NULL on every legacy fixture), we wipe the WHOLE bracket-
+    // phase footprint of `matches` that's still unresolved and
+    // un-scored, then let the materializer (which now skips byes)
+    // rebuild from `bracket_matches`. The result is one card per
+    // real game and zero cards for byes.
+    //
+    // Hard guarantees preserved:
+    //   · `status = 'upcoming'` and `score_team1/2 IS NULL` — never
+    //     destroy played fixtures.
+    //   · We touch only matches whose `phase` matches the rounds
+    //     that exist in `bracket_matches` for this tournament, so
+    //     non-bracket phases (e.g. group rows whose admin renamed
+    //     phase) stay untouched.
+    //   · `bracket_match_id IS NULL` is NOT a filter — we also drop
+    //     stale linked rows that the materializer can recreate.
+    //     The clean ON CONFLICT path in materialize means re-running
+    //     immediately is idempotent.
+    const bracketPhasesRes = await pool.query<{ phase: string }>(
+      `SELECT DISTINCT phase
+         FROM matches
+         WHERE tournament_id = $1
+           AND status = 'upcoming'
+           AND score_team1 IS NULL
+           AND score_team2 IS NULL
+           AND phase IS NOT NULL
+           AND phase <> ''
+           AND phase <> 'grupos'`,
+      [id],
+    );
+    const bracketPhases = bracketPhasesRes.rows
+      .map((r) => r.phase)
+      .filter(Boolean);
+
     const deleted: Array<{
       round: string;
       phase: string;
@@ -232,43 +267,68 @@ export async function cleanByeMatches(
       byeCount: number;
     }> = [];
     let total = 0;
-    for (const r of byesRes.rows) {
-      const round = r.round; // e.g. "Infantil Femenino|ronda-1"
-      const segs = round.split('|');
-      const category = segs.length >= 2 ? segs[0] : '';
-      const roundKey = segs[segs.length - 1];
-      const label = roundKeyToLabel[roundKey] ?? roundKey;
-      const phase = category ? `${label}|${category}` : label;
-
-      // Delete the bye footprint: unresolved (team1+team2 both NULL),
-      // upcoming, no score. Cap at the bye_count for this round so
-      // we don't accidentally remove legitimate fight-in fixtures
-      // that happen to share the round label.
-      const delRes = await pool.query<{ id: string }>(
-        `WITH cand AS (
-           SELECT id FROM matches
-             WHERE tournament_id = $1
-               AND phase = $2
-               AND team1_id IS NULL
-               AND team2_id IS NULL
-               AND status = 'upcoming'
-               AND score_team1 IS NULL
-               AND score_team2 IS NULL
-             ORDER BY date, time, court
-             LIMIT $3
-         )
-         DELETE FROM matches WHERE id IN (SELECT id FROM cand)
-         RETURNING id`,
-        [id, phase, r.bye_count],
+    if (bracketPhases.length > 0) {
+      // One delete sweep over every bracket phase. Counting per-phase
+      // for the response is a separate query so we keep the delete
+      // atomic and cheap.
+      const counts = await pool.query<{ phase: string; n: number }>(
+        `SELECT phase, COUNT(*)::int AS n
+           FROM matches
+           WHERE tournament_id = $1
+             AND status = 'upcoming'
+             AND score_team1 IS NULL
+             AND score_team2 IS NULL
+             AND phase = ANY($2)
+           GROUP BY phase`,
+        [id, bracketPhases],
       );
-      const n = delRes.rowCount ?? 0;
-      deleted.push({
-        round,
-        phase,
-        matchesDeleted: n,
-        byeCount: r.bye_count,
-      });
-      total += n;
+      const countsByPhase = new Map<string, number>();
+      for (const r of counts.rows) countsByPhase.set(r.phase, r.n);
+
+      const wipe = await pool.query(
+        `DELETE FROM matches
+           WHERE tournament_id = $1
+             AND status = 'upcoming'
+             AND score_team1 IS NULL
+             AND score_team2 IS NULL
+             AND phase = ANY($2)
+           RETURNING id, phase`,
+        [id, bracketPhases],
+      );
+      total = wipe.rowCount ?? 0;
+
+      // Group the delete report by bracket round metadata so the
+      // operator can sanity-check that the right rounds got wiped.
+      const byPhase = new Map<string, number>();
+      for (const r of wipe.rows) {
+        byPhase.set(r.phase as string, (byPhase.get(r.phase as string) ?? 0) + 1);
+      }
+      for (const r of byesRes.rows) {
+        const round = r.round;
+        const segs = round.split('|');
+        const category = segs.length >= 2 ? segs[0] : '';
+        const roundKey = segs[segs.length - 1];
+        const label = roundKeyToLabel[roundKey] ?? roundKey;
+        const phase = category ? `${label}|${category}` : label;
+        deleted.push({
+          round,
+          phase,
+          matchesDeleted: byPhase.get(phase) ?? 0,
+          byeCount: r.bye_count,
+        });
+      }
+    }
+
+    // Re-run the materializer right away so the response reflects
+    // the rebuilt state. Best-effort: if it fails, the next admin GET
+    // will trigger it anyway (the controller hooks it on auth'd
+    // reads). We still return the delete report either way.
+    let rematerializeError: string | null = null;
+    try {
+      await bracketGenerator.materializePendingBracketMatches(id);
+    } catch (err) {
+      rematerializeError =
+        err instanceof Error ? err.message : String(err);
     }
 
     res.json({
@@ -276,6 +336,7 @@ export async function cleanByeMatches(
       deletedCount: total,
       deleted,
       byeRoundsScanned: byesRes.rows.length,
+      rematerializeError,
     });
   } catch (error) {
     next(error);
