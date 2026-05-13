@@ -24,6 +24,7 @@ import { getErrorMessage } from '../../lib/errors';
 import { ParentRegistrationLinkModal } from './ParentRegistrationLinkModal';
 import { ClubPushPermissionGate } from './ClubPushPermissionGate';
 import { ClubCronogramaSection } from './ClubCronogramaSection';
+import { SponsorsCarousel } from '../tournament-detail/SponsorsCarousel';
 
 /**
  * The /clubs/me/teams endpoint hydrates each team with its current
@@ -184,9 +185,32 @@ export function ClubPanel() {
     });
   }, [teams, teamSearch]);
 
+  // Tournament whose sponsors marquee runs at the top of the club
+  // panel. We prefer ongoing > upcoming > completed so a captain
+  // logged in mid-event sees the live tournament's brands; if the
+  // club is enrolled in multiple events, we surface the most
+  // active one. NULL when the club hasn't joined any tournament
+  // yet — the carousel auto-hides in that case too.
+  const sponsorsTournament =
+    tournaments.find((t) => t.status === 'ongoing') ??
+    tournaments.find((t) => t.status === 'upcoming') ??
+    tournaments[0] ??
+    null;
+
   return (
     <>
       <ClubPushPermissionGate />
+      {/* Sponsors marquee — same component the public tournament
+          page uses, mounted here right below the layout header so
+          the captain sees the brand stream every time they enter
+          the panel. Picks the most active tournament the club is
+          enrolled in for sponsor source. */}
+      {sponsorsTournament && (
+        <SponsorsCarousel
+          tournamentId={sponsorsTournament.id}
+          speedSeconds={sponsorsTournament.sponsorsSpeedSeconds ?? null}
+        />
+      )}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3 flex-wrap">
