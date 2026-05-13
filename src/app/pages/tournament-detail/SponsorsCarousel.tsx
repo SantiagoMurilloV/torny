@@ -52,15 +52,34 @@ export function SponsorsCarousel({ tournamentId }: { tournamentId: string }) {
     };
   }, [tournamentId]);
 
-  // Two-copy strip so the marquee loop is seamless. `useMemo` so the
-  // duplication only happens when the actual list changes.
-  const looped = useMemo(() => [...sponsors, ...sponsors], [sponsors]);
+  // Marquee strip with enough copies that there's NEVER a visible
+  // gap. The animation translates by -50% (which equals one full
+  // copy of the list), so the second half is always identical to
+  // the first half — that handles 1-N elements without re-tuning.
+  //
+  // Below ~6 unique logos the looped pair can still leave dead
+  // space because a single copy is shorter than the viewport. We
+  // fix that by duplicating each "half" until we have at least 10
+  // elements per half (≈ enough for any reasonable phone or
+  // desktop width). Then the full strip is 2 × that → seamless +
+  // dense regardless of how few sponsors the admin uploaded.
+  const looped = useMemo(() => {
+    if (sponsors.length === 0) return [];
+    const TARGET_PER_HALF = 10;
+    const repeatsPerHalf = Math.max(
+      1,
+      Math.ceil(TARGET_PER_HALF / sponsors.length),
+    );
+    const half: typeof sponsors = [];
+    for (let r = 0; r < repeatsPerHalf; r++) half.push(...sponsors);
+    // Two identical halves so the -50% loop is seamless.
+    return [...half, ...half];
+  }, [sponsors]);
 
-  // Speed in pixels-per-second. Scales the animation `duration` by
-  // the strip's natural width so a wide list (10+ sponsors) doesn't
-  // crawl while a short list (2-3) doesn't blur past. Falls back to
-  // a sensible 40s for the typical 6-8 sponsors range.
-  const durationSec = Math.max(20, sponsors.length * 4);
+  // Speed scaled to the FULL strip width: more elements → longer
+  // duration so the per-element speed stays roughly constant
+  // regardless of how many repeats `looped` ended up with.
+  const durationSec = Math.max(20, looped.length * 2.5);
 
   if (!loaded || sponsors.length === 0) {
     // Pre-load → keep a thin strip space-holder so the page doesn't
