@@ -562,6 +562,73 @@ describe('MatchService CRUD operations', () => {
         service.update('match-1', { court: 'Cancha 1', time: '14:00' }),
       ).rejects.toThrow(/cancha .* ya tiene un partido/i);
     });
+
+    it('should allow rescheduling a bracket slot whose teams are still NULL (mig 030)', async () => {
+      // Materializer-created cuartos/semis row: both team_ids NULL.
+      // The admin drag-drops it to a new time. The merged teams stay
+      // null on both sides → the pre-mig-030 `mergedTeam1 ===
+      // mergedTeam2` check used to fire ("Los dos equipos deben ser
+      // diferentes" because `null === null === true`), blocking the
+      // reprogram. With the guard in place the update must succeed.
+      const unresolvedRow = sampleMatchRow({
+        team1_id: null,
+        team2_id: null,
+        phase: 'Cuartos · Oro|Femenino',
+      });
+      const movedRow = sampleMatchRow({
+        team1_id: null,
+        team2_id: null,
+        phase: 'Cuartos · Oro|Femenino',
+        time: '15:00',
+      });
+      mockPool(
+        vi.fn()
+          .mockResolvedValueOnce({ rows: [unresolvedRow] })  // getById
+          .mockResolvedValueOnce({ rows: [] })                // getSets
+          .mockResolvedValueOnce({ rows: [] })                // conflict check (no collisions)
+          .mockResolvedValueOnce({ rows: [movedRow] })        // UPDATE
+          .mockResolvedValueOnce({ rows: [] }),               // getSets after update
+      );
+
+      const result = await service.update('match-1', { time: '15:00' });
+
+      expect(result.time).toBe('15:00');
+      expect(result.team1Id).toBeNull();
+      expect(result.team2Id).toBeNull();
+    });
+
+    it('should NOT mark two unresolved slots in the same court+time as a team collision', async () => {
+      // Two bracket placeholders share court+time. Before the null-
+      // guard fix the JS-side `r.team1_id === mergedTeam1` would
+      // succeed (null === null) and surface "Uno de los equipos
+      // coincide" — confusing the admin when in reality nobody knows
+      // who's playing yet. The error should fall through to the
+      // cancha-collision branch.
+      const draggedRow = sampleMatchRow({
+        team1_id: null,
+        team2_id: null,
+        phase: 'Semifinal|Femenino',
+      });
+      mockPool(
+        vi.fn()
+          .mockResolvedValueOnce({ rows: [draggedRow] })  // getById
+          .mockResolvedValueOnce({ rows: [] })             // getSets
+          .mockResolvedValueOnce({                          // conflict: another null-null on same court
+            rows: [{
+              id: 'other-match',
+              team1_id: null,
+              team2_id: null,
+              court: 'Cancha 1',
+              team1_name: null,
+              team2_name: null,
+            }],
+          }),
+      );
+
+      await expect(
+        service.update('match-1', { court: 'Cancha 1', time: '14:00' }),
+      ).rejects.toThrow(/cancha .* ya tiene un partido/i);
+    });
   });
 
   describe('delete', () => {

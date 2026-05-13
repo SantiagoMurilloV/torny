@@ -100,9 +100,13 @@ export async function getMatches(req: Request, res: Response, next: NextFunction
     // Public visitors land here via the cache hot-path before the
     // controller runs (the cacheGet middleware sits before this in
     // tournament.routes.ts), so this side-effect only fires for
-    // admin / super_admin requests that carry an Authorization
-    // header — exactly the audience that NEEDS the materialization.
-    if (req.headers.authorization) {
+    // requests that carry an Authorization header. We further narrow
+    // it to admin / super_admin: judges fetch this endpoint on every
+    // referee-panel tick and don't need (or have any business
+    // triggering) bracket materialization — the admin that created
+    // the torneo is the right actor.
+    const caller = optionalUser(req);
+    if (caller && (caller.role === 'admin' || caller.role === 'super_admin')) {
       try {
         await bracketGenerator.materializePendingBracketMatches(id);
       } catch (err) {

@@ -175,10 +175,17 @@ export function MatchesTab({
   // failure so the modal keeps itself open and shows the error.
   const handleEditSubmit = async (m: Match) => {
     if (!editingMatch) return;
+    // For unresolved bracket slots, `m.team1.id` / `m.team2.id` carry
+    // the empty-string placeholder (resolveTeam(null)). Forwarding
+    // those as real ids would make the backend's `SELECT id FROM
+    // teams WHERE id = ''` return zero rows and reject the edit with
+    // "Equipo 1 no encontrado". Omitting the field keeps the
+    // server-side team_id as NULL — exactly what an unresolved slot
+    // needs while the admin is only reprogramming date / time / court.
     const dto: UpdateMatchDto = {
       tournamentId: m.tournamentId,
-      team1Id: m.team1.id,
-      team2Id: m.team2.id,
+      ...(m.team1.id ? { team1Id: m.team1.id } : {}),
+      ...(m.team2.id ? { team2Id: m.team2.id } : {}),
       date: m.date.toISOString().split('T')[0],
       time: m.time,
       court: m.court,
@@ -385,24 +392,45 @@ export function MatchesTab({
           </PopoverContent>
         </Popover>
 
-        {/* Reparar — icon-only so it costs the same as the filtros
-            button on mobile. The wrench icon (or spinner while in
-            flight) carries the meaning; the title attribute keeps the
-            label discoverable on hover/long-press. */}
-        <button
-          type="button"
-          onClick={() => setRepairConfirmOpen(true)}
-          disabled={repairing || !effectiveTournamentId}
-          aria-label="Reparar horarios"
-          title="Reparar horarios — detecta y reagenda partidos con conflicto (mismo equipo en dos partidos a la misma hora)"
-          className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 border border-spk-blue/40 text-spk-blue hover:bg-spk-blue/10 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {repairing ? (
-            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <Wrench className="w-4 h-4" aria-hidden="true" />
-          )}
-        </button>
+        {/* DESHABILITADO PERMANENTEMENTE hasta nuevo aviso (2026-05-13,
+            decisión del product owner). `repairTournamentSchedule`
+            usa una key `${teamId}|${date}|${time}` para detectar
+            conflictos; tras mig 030 los bracket slots no resueltos
+            tienen `team1_id = null`, que se serializa como la string
+            literal "null" y colapsa TODOS los slots pendientes en una
+            única entrada del Map. Resultado: el reparador los
+            considera conflictos mutuos y reagenda agresivamente la
+            eliminatoria, deshaciendo el plan manual que el admin
+            armó en el cronograma.
+
+            Reactivar después de:
+              · Excluir matches con team1_id/team2_id NULL del
+                `repairTournamentSchedule` (no son conflictos
+                reagendables — el bracket los reabsorbe cuando avanza
+                el winner).
+              · O usar `bracket_match_id IS NULL` como filtro previo
+                (sólo reparar fase de grupos / liga).
+
+            Mientras tanto el admin reagenda manualmente vía drag-and-
+            drop del Cronograma, que ya tiene su propia validación de
+            conflictos por slot. */}
+        {/* eslint-disable-next-line @typescript-eslint/no-unused-vars */}
+        {false && (
+          <button
+            type="button"
+            onClick={() => setRepairConfirmOpen(true)}
+            disabled={repairing || !effectiveTournamentId}
+            aria-label="Reparar horarios"
+            title="Reparar horarios — detecta y reagenda partidos con conflicto"
+            className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 border border-spk-blue/40 text-spk-blue hover:bg-spk-blue/10 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {repairing ? (
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Wrench className="w-4 h-4" aria-hidden="true" />
+            )}
+          </button>
+        )}
       </div>
 
       {filteredMatches.length === 0 ? (
