@@ -724,21 +724,35 @@ export class BracketGenerator {
     );
     const totalBracketRows = bracketAllRes.rows.length;
 
-    // Bracket rows ready to be played: both teams resolved, distinct.
-    // Order by round + position so cuartos materialize before semis,
-    // which keeps the schedule monotonic.
+    // Materialize EVERY bracket slot — including the ones where
+    // team1_id / team2_id are still NULL because the upstream round
+    // hasn't completed yet. The admin needs all of these visible in
+    // the cronograma to schedule the whole tournament end-to-end
+    // (e.g. assign cuartos slots before grupos even start playing).
+    // Until mig 030 the `matches.team1_id` was NOT NULL so we had to
+    // skip nullable rows; the schema now allows them and the
+    // frontend renders unresolved fixtures blurred so the admin sees
+    // the slot label without the seed-based guess. The slotsWith…
+    // counter still tracks fully-resolved rows for the response
+    // payload (preserves caller compatibility). Order by round +
+    // position so cuartos materialize before semis, keeping the
+    // schedule monotonic.
     const bmRes = await pool.query(
       `SELECT id, team1_id, team2_id, round, position
          FROM bracket_matches
          WHERE tournament_id = $1
-           AND team1_id IS NOT NULL
-           AND team2_id IS NOT NULL
-           AND team1_id <> team2_id
+           AND (
+             team1_id IS NULL
+             OR team2_id IS NULL
+             OR team1_id <> team2_id
+           )
          ORDER BY round, position`,
       [tournamentId],
     );
-    const slotsWithBothTeamsResolved = bmRes.rows.length;
-    if (slotsWithBothTeamsResolved === 0) {
+    const slotsWithBothTeamsResolved = bmRes.rows.filter(
+      (r) => r.team1_id !== null && r.team2_id !== null,
+    ).length;
+    if (bmRes.rows.length === 0) {
       return { ...empty, totalBracketRows };
     }
 
@@ -771,13 +785,18 @@ export class BracketGenerator {
     }
     const existing = new Map<
       string,
-      { id: string; team1_id: string; team2_id: string; status: string }
+      {
+        id: string;
+        team1_id: string | null;
+        team2_id: string | null;
+        status: string;
+      }
     >();
     for (const r of existRes.rows) {
       existing.set(r.bracket_match_id as string, {
         id: r.id as string,
-        team1_id: r.team1_id as string,
-        team2_id: r.team2_id as string,
+        team1_id: (r.team1_id as string | null) ?? null,
+        team2_id: (r.team2_id as string | null) ?? null,
         status: r.status as string,
       });
     }
@@ -833,8 +852,14 @@ export class BracketGenerator {
 
       for (const bm of bmRes.rows) {
         const bracketId = bm.id as string;
-        const team1Id = bm.team1_id as string;
-        const team2Id = bm.team2_id as string;
+        // team1Id / team2Id may now legitimately be NULL — this is the
+        // case for bracket slots waiting on a previous round (cuartos
+        // before grupos finish, semis before cuartos finish, etc).
+        // Mig 030 dropped the NOT NULL constraint on matches so we
+        // can persist the slot anyway with a pre-assigned date / time
+        // / court; advanceWinner fills the teams in later.
+        const team1Id = (bm.team1_id as string | null) ?? null;
+        const team2Id = (bm.team2_id as string | null) ?? null;
         const round = bm.round as string;
 
         const exists = existing.get(bracketId);
@@ -842,7 +867,8 @@ export class BracketGenerator {
           slotsAlreadyMaterialized++;
           // Re-sync teams while the materialized match hasn't been
           // touched by the referee yet. Once a score lands the match
-          // is the source of truth.
+          // is the source of truth. Compare with == null shortcut so
+          // a NULL→NULL sync doesn't trigger an UPDATE.
           if (
             exists.status === 'upcoming' &&
             (exists.team1_id !== team1Id || exists.team2_id !== team2Id)
