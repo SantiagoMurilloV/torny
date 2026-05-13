@@ -40,7 +40,7 @@
   
 
   
-  <text x="220" y="58" font-family="&#39;Archivo Black&#39;,&#39;Arial Black&#39;,&#39;Impact&#39;,&#39;Haettenschweiler&#39;,sans-serif" font-weight="900" font-size="52" letter-spacing="4" text-anchor="middle" fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>
+  <text x="220" y="58" font-family="&#39;Arial Black&#39;,&#39;Impact&#39;,&#39;Haettenschweiler&#39;,sans-serif" font-weight="900" font-size="52" letter-spacing="-1" text-anchor="middle" fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>
 
 
   <text x="220" y="78" font-family="&#39;Arial&#39;,sans-serif" font-weight="400" font-size="9" letter-spacing="4" text-anchor="middle" fill="#FFFFFF" opacity="0.25">VOLLEYBALL TOURNAMENTS</text>

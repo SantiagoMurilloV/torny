@@ -122,15 +122,14 @@ export function TornyWordmark({
             />
           )}
 
-          {/* Wordmark TORN + Y roja. letterSpacing 4 da aire entre R
-              y N (con -1 las dos letras se mezclaban visualmente). */}
+          {/* Wordmark TORN + Y roja */}
           <text
             x={variant === 'full' ? 218 : 145}
             y="58"
-            fontFamily="'Archivo Black','Arial Black','Impact','Haettenschweiler',sans-serif"
+            fontFamily="'Arial Black','Impact','Haettenschweiler',sans-serif"
             fontWeight={900}
             fontSize="52"
-            letterSpacing="4"
+            letterSpacing="-1"
             textAnchor="middle"
             fill="currentColor"
           >

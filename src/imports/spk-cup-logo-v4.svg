@@ -45,10 +45,10 @@
   <text
     x="250"
     y="378"
-    font-family="'Archivo Black','Arial Black','Impact','Haettenschweiler',sans-serif"
+    font-family="'Arial Black','Impact','Haettenschweiler',sans-serif"
     font-weight="900"
     font-size="116"
-    letter-spacing="8"
+    letter-spacing="-1"
     text-anchor="middle"
     dominant-baseline="auto"
     fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>

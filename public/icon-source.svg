@@ -54,5 +54,5 @@
   <rect x="56" y="244" width="400" height="3" rx="1.5" fill="#E31E24" />
 
   <!-- "TORNY" — main wordmark (Y final en rojo como acento). -->
-  <text x="256" y="388" font-family="'Archivo Black','Arial Black','Impact','Haettenschweiler',sans-serif" font-weight="900" font-size="108" letter-spacing="7" text-anchor="middle" fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>
+  <text x="256" y="388" font-family="'Arial Black','Impact','Haettenschweiler',sans-serif" font-weight="900" font-size="108" letter-spacing="-1" text-anchor="middle" fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>
 </svg>
