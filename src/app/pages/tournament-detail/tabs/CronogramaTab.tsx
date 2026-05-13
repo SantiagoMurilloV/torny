@@ -285,12 +285,18 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
           so the spectator sees "12 partidos" right next to the day
           picker without scrolling. Hidden when the day has zero
           matches (the empty-state below explains that case better). */}
-      {/* El título "PROGRAMACIÓN" se removió (2026-05-13): el usuario
-          ya sabe que está en la pestaña Programación por la nav, y el
-          h2 robaba foco al contador + descripción que sí orientan. */}
+      {/* Título "PROGRAMACIÓN" + contador en la misma línea
+          (restaurado 2026-05-13 a pedido del product owner) —
+          ayuda al visitante a anclar dónde está cuando abre el
+          torneo en mobile y la pestaña no se ve. Sólo aplica al
+          público; en el admin sigue sin h2 porque la sidebar ya
+          rotula la sección. */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <Calendar className="w-5 h-5 text-black/60" aria-hidden="true" />
+          <h2 className="text-xl font-bold" style={FONT}>
+            PROGRAMACIÓN
+          </h2>
           {matchCount > 0 && (
             <span
               className="inline-flex items-center px-2 py-0.5 rounded-sm bg-black text-white text-xs font-bold tabular-nums"

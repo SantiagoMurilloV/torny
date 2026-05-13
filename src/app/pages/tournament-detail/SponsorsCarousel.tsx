@@ -77,13 +77,11 @@ export function SponsorsCarousel({ tournamentId }: { tournamentId: string }) {
       className="bg-white border-y border-black/[0.06] overflow-hidden"
     >
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-12 py-3 sm:py-4">
+        {/* Label "Patrocinadores" retirado (2026-05-13) — el contexto
+            visual (logos de marca corriendo en un strip) ya es
+            suficiente; el rótulo le robaba ancho útil al marquee y
+            quedaba flotando solo en mobile. */}
         <div className="flex items-center gap-3">
-          <span
-            className="hidden sm:inline-block text-[10px] font-bold uppercase text-black/45 tracking-[0.18em] flex-shrink-0"
-            style={FONT}
-          >
-            Patrocinadores
-          </span>
           <div className="relative flex-1 overflow-hidden">
             <div
               className="flex items-center gap-8 sm:gap-12"
