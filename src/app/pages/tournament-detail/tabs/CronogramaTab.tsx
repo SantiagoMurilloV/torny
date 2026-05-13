@@ -272,7 +272,7 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
         <div className="flex items-center gap-3">
           <Calendar className="w-5 h-5 text-black/60" aria-hidden="true" />
           <h2 className="text-xl font-bold" style={FONT}>
-            CRONOGRAMA
+            PROGRAMACIÓN
           </h2>
           {matchCount > 0 && (
             <span
@@ -294,11 +294,14 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
         </span>
       </div>
 
-      {/* Filters — three controls in one row, wraps to two rows on
-          narrow screens. Search expands to fill the leftover space so
-          spectators on phones can type comfortably. */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex-1 min-w-[160px] relative">
+      {/* Filters — search on top full-width, then the two selectors
+          (day + category) sit underneath sharing the same width as the
+          search. The 1fr/1fr grid keeps them visually balanced even on
+          a 360px phone — no wrap, no shifted column. On desktop the
+          whole stack stays the same width so the page reads as one
+          tight toolbar. */}
+      <div className="space-y-2">
+        <div className="relative">
           <Search
             className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none"
             aria-hidden="true"
@@ -322,44 +325,112 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
             </button>
           )}
         </div>
-        <Select value={selectedDay} onValueChange={setSelectedDay}>
-          <SelectTrigger className="w-[170px]">
-            <SelectValue placeholder="Día" />
-          </SelectTrigger>
-          <SelectContent>
-            {days.map((d) => (
-              <SelectItem key={d} value={d}>
-                {formatDayLabel(d)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-          <SelectTrigger className="w-[170px]">
-            <SelectValue placeholder="Categoría" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas las categorías</SelectItem>
-            {categories.map((cat) => (
-              <SelectItem key={cat} value={cat}>
-                {cat}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="grid grid-cols-2 gap-2">
+          <Select value={selectedDay} onValueChange={setSelectedDay}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Día" />
+            </SelectTrigger>
+            <SelectContent>
+              {days.map((d) => (
+                <SelectItem key={d} value={d}>
+                  {formatDayLabel(d)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Categoría" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las categorías</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {/* Grid — empty cells render as drop-target-style blanks so the
-          full court × time matrix is visible (no missing rows). The
-          render loop emits a Cell for EVERY (court, time) except those
-          covered by a multi-row span above. */}
-      <div className="bg-white border border-black/10 rounded-lg overflow-hidden">
+      {/* Category legend — compact key explaining the colour→category
+          mapping. Behaviour:
+          ·  When the category filter is active (e.g. only "Benjamín"),
+             we only render that one chip — no point showing the rest
+             when they're not on screen.
+          ·  When showing all categories, names get a max-width with
+             ellipsis so a "Infantil Especial" never wraps the row or
+             pushes "Mini" off-screen. The chip itself never wraps.
+          The whole bar is hidden when there's a single category total
+          since the colour is then redundant. */}
+      {(() => {
+        const legendCats =
+          selectedCategory === 'all'
+            ? categories
+            : categories.filter((c) => c === selectedCategory);
+        if (legendCats.length === 0 || categories.length <= 1) return null;
+        return (
+          <div className="bg-white border border-black/10 rounded-sm px-2 py-1">
+            <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 overflow-x-auto -mx-0.5 px-0.5">
+                {legendCats.map((cat) => {
+                  const c = categoryColorMap.get(cat) ?? CATEGORY_COLORS[0];
+                  return (
+                    <span
+                      key={cat}
+                      className={`${c.bg} ${c.border} ${c.text} inline-flex items-center gap-1 border rounded-sm px-1.5 py-0 text-[9px] font-bold uppercase tracking-wide flex-shrink-0 max-w-[88px]`}
+                      style={FONT}
+                      title={cat}
+                    >
+                      <span
+                        className="inline-block w-1 h-1 rounded-full bg-current opacity-75 flex-shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">{cat}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Grid — same court × time matrix on every screen size. On
+          mobile we shrink the cell + column dimensions via CSS
+          variables ({@code --tl-time}, {@code --tl-court}, {@code --tl-row})
+          so the whole schedule remains visible at a glance instead of
+          forcing the spectator to scroll a 200-row vertical timeline.
+          The grid still overflows horizontally when courts > 2, but
+          the narrower columns let two full courts fit on a 360px
+          viewport without truncation. */}
+      {/* Wrapper — on mobile we break out of the parent's px-6 padding
+          via -mx-6 so the grid runs edge-to-edge (gains ~48px of
+          horizontal real estate, enough for ~half a column on a 360px
+          viewport). Border-x is dropped on mobile too since the
+          viewport edges already act as the visual boundary; desktop
+          keeps the original rounded card look. CSS variables shrink
+          the track sizes so cards stay readable but pack tightly. */}
+      <div
+        className="bg-white border-y sm:border border-black/10 rounded-none sm:rounded-lg overflow-hidden -mx-6 sm:mx-0
+          [--tl-time:32px] [--tl-court:78px] [--tl-row:40px]
+          sm:[--tl-time:60px] sm:[--tl-court:180px] sm:[--tl-row:72px]"
+      >
         <div className="overflow-x-auto">
           <div
             className="inline-grid"
+            // Use the CSS variables seeded on the wrapper above so the
+            // grid track sizes shrink on mobile without duplicating the
+            // whole `style={…}` object. `gridAutoRows` falls back to a
+            // minmax that obeys the same variable so spanning matches
+            // (multi-row cards) still calculate correctly.
             style={{
-              gridTemplateColumns: `60px repeat(${courts.length}, minmax(180px, 1fr))`,
-              gridAutoRows: 'minmax(72px, auto)',
+              gridTemplateColumns:
+                'var(--tl-time) repeat(' +
+                courts.length +
+                ', minmax(var(--tl-court), 1fr))',
+              gridAutoRows: 'minmax(var(--tl-row), auto)',
             }}
           >
             {/* Top-left empty corner */}
@@ -367,19 +438,21 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
               className="sticky top-0 left-0 z-20 bg-white border-b border-r border-black/10"
               style={{ gridRow: 1, gridColumn: 1 }}
             />
-            {/* Court headers — bigger + centered + thin white divider
-                between adjacent columns so each cancha reads as its own
-                lane. */}
+            {/* Court headers — text-[9px] on mobile so cancha names
+                fit inside the 88px column without clipping. Thicker
+                white divider (border-l-2 + 30% opacity) between
+                adjacent headers so each cancha reads as its own lane
+                against the solid black background. */}
             {courts.map((court, colIdx) => (
               <div
                 key={court}
-                className={`sticky top-0 z-10 bg-black text-white px-4 py-3 border-b border-black/10 flex items-center justify-center text-center ${
-                  colIdx > 0 ? 'border-l border-white/10' : ''
+                className={`sticky top-0 z-10 bg-black text-white px-1 py-1 sm:px-4 sm:py-3 border-b border-black/10 flex items-center justify-center text-center ${
+                  colIdx > 0 ? 'border-l-2 border-white/30' : ''
                 }`}
                 style={{ gridRow: 1, gridColumn: colIdx + 2 }}
               >
                 <div
-                  className="text-sm sm:text-base font-bold uppercase tracking-widest truncate"
+                  className="text-[9px] sm:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate"
                   style={FONT}
                   title={court}
                 >
@@ -388,11 +461,17 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
               </div>
             ))}
 
-            {/* Time labels */}
+            {/* Time labels — centered both axes on mobile so the
+                hour reads as a clean anchor for its row. Tabular nums
+                keep digit widths uniform across rows. Last row drops
+                border-b so it doesn't double up with the wrapper's
+                bottom edge. */}
             {times.map((time, rowIdx) => (
               <div
                 key={`time-${time}`}
-                className="sticky left-0 z-10 bg-white border-b border-r border-black/10 px-2 py-2 text-xs font-bold text-black/70 tabular-nums"
+                className={`sticky left-0 z-10 bg-white ${
+                  rowIdx === times.length - 1 ? '' : 'border-b'
+                } border-r border-black/10 px-0.5 py-0.5 sm:px-2 sm:py-2 text-[9px] sm:text-xs font-bold text-black/70 tabular-nums text-center sm:text-left flex items-center justify-center sm:justify-start`}
                 style={{ gridRow: rowIdx + 2, gridColumn: 1, ...FONT }}
               >
                 {time}
@@ -425,26 +504,36 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
                 const maxAvailable = times.length - rowIdx;
                 const renderSpan = Math.min(span, maxAvailable);
                 const isOverlap = coveredCells.has(key);
+                const isLastRow = rowIdx === times.length - 1;
+                const isLastCol = colIdx === courts.length - 1;
                 return (
                   <div
                     key={key}
-                    className={`border-b border-r border-black/10 p-1.5 ${
+                    // Drop the bottom/right hairline on the last row /
+                    // last column so the inner gridlines don't double
+                    // up against the wrapper's own border. Cleaner
+                    // edge — the table ends in pure white instead of a
+                    // 2px-thick gridline+wrapper sandwich.
+                    className={`${isLastRow ? '' : 'border-b'} ${
+                      isLastCol ? '' : 'border-r'
+                    } border-black/10 p-0.5 sm:p-1.5 ${
                       isOverlap
                         ? 'ring-2 ring-red-500 ring-inset bg-white relative z-10 shadow-md'
                         : ''
                     }`}
-                    // Inline minHeight beats the Tailwind arbitrary
-                    // class for grid items — turns out CSS Grid doesn't
-                    // always honour `min-h-[72px]` when the row track
-                    // is auto-sized, leaving cells flat. Inline forces
-                    // the grid track floor.
+                    // Inline minHeight reads the same CSS variable used
+                    // by gridAutoRows so the floor matches the track
+                    // size on every breakpoint (mobile 56px, desktop
+                    // 72px). Inline beats Tailwind arbitrary classes for
+                    // grid items — CSS Grid sometimes ignores
+                    // `min-h-[Npx]` when the row track is auto-sized.
                     style={{
                       gridRow:
                         renderSpan > 1
                           ? `${rowIdx + 2} / span ${renderSpan}`
                           : rowIdx + 2,
                       gridColumn: colIdx + 2,
-                      minHeight: 72,
+                      minHeight: 'var(--tl-row)',
                     }}
                   >
                     {cellMatches.length === 0 ? (
@@ -455,7 +544,6 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
                       // spectator never sees a white void.
                       <div
                         className="h-full w-full rounded-sm border-2 border-dashed border-black/15 bg-black/[0.025]"
-                        style={{ minHeight: 60 }}
                         aria-hidden="true"
                       />
                     ) : (
@@ -529,12 +617,12 @@ function PublicMatchCard({
       onClick={onClick}
       className={`${color.bg} ${color.border} ${
         isLive ? 'ring-2 ring-spk-red/70' : ''
-      } border rounded-md px-2 py-1.5 text-left w-full transition-all hover:shadow-md hover:-translate-y-0.5 h-full flex flex-col`}
+      } border rounded-sm sm:rounded-md px-1 py-0.5 sm:px-2 sm:py-1.5 text-left w-full transition-all hover:shadow-md sm:hover:-translate-y-0.5 h-full flex flex-col`}
     >
-      <div className="flex items-center gap-1.5 mb-1">
+      <div className="flex items-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1">
         {groupLabel && (
           <span
-            className={`text-[9px] font-bold ${color.text}`}
+            className={`text-[8px] sm:text-[9px] font-bold ${color.text} truncate`}
             style={FONT}
           >
             {groupLabel}
@@ -542,41 +630,43 @@ function PublicMatchCard({
         )}
         {isLive && (
           <span
-            className="text-[9px] font-bold uppercase text-white bg-spk-red px-1.5 py-0.5 rounded-sm tracking-wider"
+            className="text-[8px] sm:text-[9px] font-bold uppercase text-white bg-spk-red px-1 py-px sm:px-1.5 sm:py-0.5 rounded-sm tracking-wider"
             style={FONT}
           >
             En vivo
           </span>
         )}
         {match.score && (
-          <span className="ml-auto text-[10px] font-bold tabular-nums text-black/70">
+          <span className="ml-auto text-[9px] sm:text-[10px] font-bold tabular-nums text-black/70">
             {match.score.team1}-{match.score.team2}
           </span>
         )}
       </div>
-      {/* Teams cluster vertically centered when the card is taller
-          than its content (multi-row spans for long categories), so
-          the empty area in the middle of a stretched card disappears.
-          Footer below sits at the bottom because flex-1 here pushes
-          it down. Single-row cards stay compact since flex-1 has no
-          extra height to absorb. */}
-      <div className="flex-1 flex flex-col justify-center gap-1.5">
-        <div className="flex items-center gap-1.5">
+      {/* Teams — tight on mobile (gap-0.5, xs avatar, text-[9px]) so a
+          2-row card fits inside a 44px-tall cell. Desktop keeps the
+          original spacing. Truncate is the safety net for long club
+          names; the spectator can tap to drill in for the full text. */}
+      <div className="flex-1 flex flex-col justify-center gap-0.5 sm:gap-1.5">
+        <div className="flex items-center gap-1 sm:gap-1.5">
           <TeamAvatar team={match.team1} size="xs" />
-          <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
+          <span className="text-[9px] sm:text-[11px] font-medium text-black/85 truncate flex-1 min-w-0 leading-tight">
             {match.team1.name}
           </span>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 sm:gap-1.5">
           <TeamAvatar team={match.team2} size="xs" />
-          <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">
+          <span className="text-[9px] sm:text-[11px] font-medium text-black/85 truncate flex-1 min-w-0 leading-tight">
             {match.team2.name}
           </span>
         </div>
       </div>
+      {/* Footer hidden on mobile — duration is redundant because the
+          time column on the left already anchors the row, and the
+          end-time/range adds clutter inside an 88px-wide card. Visible
+          on tablet+ where the wider card has room for the metadata. */}
       {(durationMin > 0 || endTime) && (
         <div
-          className="pt-1 flex items-center justify-between gap-1 text-[9px] font-bold uppercase tracking-wider text-black/60"
+          className="hidden sm:flex pt-1 items-center justify-between gap-1 text-[9px] font-bold uppercase tracking-wider text-black/60"
           style={FONT}
         >
           <span className="inline-flex items-center gap-0.5">
@@ -590,3 +680,4 @@ function PublicMatchCard({
     </button>
   );
 }
+

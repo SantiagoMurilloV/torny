@@ -714,7 +714,7 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
         <div className="flex items-center gap-3">
           <Calendar className="w-5 h-5 text-black/60" />
           <h2 className="text-xl font-bold" style={FONT}>
-            CRONOGRAMA
+            PROGRAMACIÓN
           </h2>
           <span
             className="inline-flex items-center px-2 py-0.5 rounded-sm bg-black text-white text-xs font-bold tabular-nums"

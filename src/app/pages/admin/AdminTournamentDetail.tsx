@@ -42,7 +42,7 @@ const SECTION_TITLE: Record<TabId, string> = {
   teams: 'Inscripción equipos y plantel',
   fixtures: 'Cruces',
   matches: 'Partidos',
-  cronograma: 'Cronograma',
+  cronograma: 'Programación',
 };
 
 /**

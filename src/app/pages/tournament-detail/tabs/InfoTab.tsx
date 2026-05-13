@@ -48,37 +48,56 @@ export function InfoTab({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-4xl space-y-12"
+      className="max-w-4xl space-y-8"
     >
-      <div>
-        <h3 className="text-3xl font-bold mb-6" style={FONT}>
-          SOBRE EL TORNEO
+      {/* Section headers replaced with quiet eyebrow labels — uppercase
+          Barlow Condensed at text-[11px] over a hairline divider. The
+          old display-style h3/h4 (text-3xl/xl) overpowered the actual
+          body content; subtle labels let the description, courts and
+          counters carry the page. */}
+      <section>
+        <h3
+          className="text-[11px] font-bold uppercase text-black/50 tracking-[0.16em] pb-1.5 border-b border-black/10 mb-3"
+          style={FONT}
+        >
+          Sobre el torneo
         </h3>
-        <p className="text-lg text-black/70 leading-relaxed">{tournament.description}</p>
-      </div>
+        <p className="text-sm sm:text-base text-black/75 leading-relaxed">
+          {tournament.description}
+        </p>
+      </section>
 
-      <div className={hasRegulation ? 'grid md:grid-cols-2 gap-8' : ''}>
-        <div>
-          <h4 className="text-xl font-bold mb-4" style={FONT}>
-            CANCHAS
+      <div className={hasRegulation ? 'grid md:grid-cols-2 gap-6 sm:gap-8' : ''}>
+        <section>
+          <h4
+            className="text-[11px] font-bold uppercase text-black/50 tracking-[0.16em] pb-1.5 border-b border-black/10 mb-3"
+            style={FONT}
+          >
+            Canchas
           </h4>
-          <div className="space-y-3">
+          <ul className="space-y-2">
             {tournament.courts.map((court, index) => (
-              <div key={index} className="flex items-center gap-3 text-black/70">
-                <MapPin className="w-5 h-5 text-spk-red" />
-                <span className="text-lg">{court}</span>
-              </div>
+              <li
+                key={index}
+                className="flex items-center gap-2 text-sm text-black/75"
+              >
+                <MapPin className="w-4 h-4 text-spk-red/80 flex-shrink-0" aria-hidden="true" />
+                <span>{court}</span>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </section>
 
         {hasRegulation && (
-          <div>
-            <h4 className="text-xl font-bold mb-4" style={FONT}>
-              REGLAMENTO
+          <section>
+            <h4
+              className="text-[11px] font-bold uppercase text-black/50 tracking-[0.16em] pb-1.5 border-b border-black/10 mb-3"
+              style={FONT}
+            >
+              Reglamento
             </h4>
             {regulationText && (
-              <p className="text-base text-black/70 leading-relaxed whitespace-pre-wrap mb-4">
+              <p className="text-sm text-black/75 leading-relaxed whitespace-pre-wrap mb-3">
                 {regulationText}
               </p>
             )}
@@ -86,25 +105,28 @@ export function InfoTab({
               <button
                 type="button"
                 onClick={() => setPdfOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-spk-red text-white hover:bg-spk-red-dark font-bold rounded-sm transition-colors text-sm"
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-black text-white hover:bg-spk-red font-bold rounded-sm transition-colors text-xs uppercase tracking-wider"
                 style={FONT}
               >
-                <FileText className="w-4 h-4" />
+                <FileText className="w-3.5 h-3.5" />
                 Ver reglamento (PDF)
               </button>
             )}
-          </div>
+          </section>
         )}
       </div>
 
-      <div className="pt-8 border-t border-black/10">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+      {/* Counters — reduced from text-4xl jumbo to text-2xl with a
+          tighter label so they read as quiet stats, not a hero
+          dashboard. The pt-6/border-t still separates the block. */}
+      <section className="pt-6 border-t border-black/10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 sm:gap-8">
           <Counter label="Equipos" value={enrolledCount || tournament.teamsCount} />
           <Counter label="Partidos" value={matchesCount} />
           <Counter label="Canchas" value={tournament.courts.length} />
           <Counter label="Días" value={days} />
         </div>
-      </div>
+      </section>
 
       {regulationPdf && (
         <PdfViewerModal
@@ -122,10 +144,18 @@ export function InfoTab({
 function Counter({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <div className="text-4xl font-bold mb-2" style={FONT}>
+      <div
+        className="text-2xl sm:text-3xl font-bold mb-1 tabular-nums"
+        style={FONT}
+      >
         {value}
       </div>
-      <div className="text-sm text-black/60 uppercase tracking-wider">{label}</div>
+      <div
+        className="text-[11px] text-black/55 uppercase tracking-[0.14em]"
+        style={FONT}
+      >
+        {label}
+      </div>
     </div>
   );
 }

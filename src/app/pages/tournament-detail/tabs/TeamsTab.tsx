@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
-import { Search } from 'lucide-react';
+import { Search, Users, X } from 'lucide-react';
 import type { StandingsRow, Team } from '../../../types';
 import { TeamAvatar } from '../../../components/TeamAvatar';
 
@@ -36,19 +36,66 @@ export function TeamsTab({
     );
   }, [enrolledTeams, standings, query]);
 
+  // Visible count to feed the header pill — uses whichever list is
+  // active (standings rows or enrolled fallback) before any filter is
+  // applied so the badge always shows the tournament-wide total.
+  const totalCount =
+    standings.length > 0 ? standings.length : enrolledTeams.length;
+
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-      <div className="max-w-2xl">
-        <div className="relative">
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-black/40" />
-          <input
-            type="text"
-            placeholder="Buscar equipo..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full pl-16 pr-6 py-5 bg-black/5 border-2 border-black/10 rounded-sm text-lg focus:outline-none focus:border-black transition-colors placeholder:text-black/40"
-          />
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+      {/* Header — mirrors the "PROGRAMACIÓN" tab so the two pages feel
+          like one design system: icon + uppercase Barlow display + a
+          black pill with the total count. Replaces the old jumbo
+          search-only header that floated on the page. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <Users className="w-5 h-5 text-black/60" aria-hidden="true" />
+          <h2 className="text-xl font-bold" style={FONT}>
+            EQUIPOS
+          </h2>
+          {totalCount > 0 && (
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-sm bg-black text-white text-xs font-bold tabular-nums"
+              style={FONT}
+            >
+              {totalCount} {totalCount === 1 ? 'equipo' : 'equipos'}
+            </span>
+          )}
         </div>
+        <span className="text-xs text-black/50">
+          Tocá un equipo para ver su plantel, fixtures y resultados.
+        </span>
+      </div>
+
+      {/* Subtle search — single line, hairline border, same height
+          (py-2 + text-sm) as the rest of the public tabs so the
+          toolbar reads as one cohesive control. The previous
+          jumbo input (py-5, text-lg, border-2) was breaking the
+          design language on the page. */}
+      <div className="relative">
+        <Search
+          className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none"
+          aria-hidden="true"
+        />
+        <input
+          type="text"
+          placeholder="Buscar equipo…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          aria-label="Buscar equipo"
+          className="w-full pl-9 pr-9 py-2 text-sm rounded-sm border border-spk-hairline focus:border-spk-red focus:ring-2 focus:ring-spk-red/20 outline-none bg-white"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => setQuery('')}
+            aria-label="Limpiar búsqueda"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-black/40 hover:text-black rounded-sm"
+          >
+            <X className="w-3.5 h-3.5" aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {filteredStandings.length === 0 && filteredEnrolled.length === 0 ? (

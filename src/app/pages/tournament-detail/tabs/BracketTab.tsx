@@ -5,7 +5,13 @@ import type { BracketMatch } from '../../../types';
 import { Bracket } from '../../../components/Bracket';
 import { LiveBadge } from '../LiveBadge';
 import { categoryOfBracketRound } from '../../../lib/phase';
-import { CategoryFilterBar } from '../CategoryFilterBar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../components/ui/select';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
@@ -56,14 +62,29 @@ export function BracketTab({
       animate={{ opacity: 1, y: 0 }}
       className="space-y-4 sm:space-y-6"
     >
-      <div className="flex items-start justify-between gap-3">
+      {/* Toolbar — category dropdown on the left (replacing the pill
+          strip that broke into 2-3 rows on phones with many
+          divisions), live pill on the right. Hidden entirely while no
+          bracket exists since there's nothing to filter. */}
+      <div className="flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
-          {hasBracket && (
-            <CategoryFilterBar
-              categories={categories}
+          {hasBracket && categories.length > 1 && (
+            <Select
               value={categoryFilter}
-              onChange={setCategoryFilter}
-            />
+              onValueChange={(v) => setCategoryFilter(v as string | 'all')}
+            >
+              <SelectTrigger className="w-full sm:w-[220px]">
+                <SelectValue placeholder="Categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las categorías</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
         </div>
         <LiveBadge lastRefreshedAt={lastRefreshedAt} />
