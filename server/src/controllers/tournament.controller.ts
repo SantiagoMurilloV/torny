@@ -136,6 +136,76 @@ export async function getStandings(req: Request, res: Response, next: NextFuncti
 }
 
 /**
+ * Bulk-move every match of this tournament whose `date = fromDate`
+ * onto `toDate`. Built for the 2026-05-13 incident where the bracket
+ * materializer overflowed past the tournament's `endDate` and left
+ * cards on a day the cronograma can't reach (its day-picker is
+ * bounded by startDate..endDate).
+ *
+ * Deliberately bypasses the per-row schedule-conflict check that
+ * `match.service.update` enforces — the whole point of this endpoint
+ * is to gather the overflow back inside the range even if it causes
+ * temporary overlaps. The admin then drag-drops each card to a free
+ * slot in the cronograma (which DOES enforce conflicts per move).
+ *
+ * Hard safety rails:
+ *   · `status = 'upcoming'` only — never reschedule live/completed.
+ *   · `score_team1 IS NULL AND score_team2 IS NULL` — extra belt.
+ *   · Scoped to a single tournament_id (the route param). Cannot
+ *     reach across torneos.
+ *   · Returns the count + ids that were moved so the operator can
+ *     audit. Gated by `requireTournamentAccess` (admin/super_admin
+ *     owner of the torneo) at the route layer.
+ */
+export async function bulkMoveDate(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    validateUUID(id, 'ID de torneo');
+    const { fromDate, toDate } = (req.body ?? {}) as {
+      fromDate?: string;
+      toDate?: string;
+    };
+    const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+    if (!fromDate || !dateRe.test(fromDate)) {
+      throw new ValidationError('fromDate debe ser YYYY-MM-DD');
+    }
+    if (!toDate || !dateRe.test(toDate)) {
+      throw new ValidationError('toDate debe ser YYYY-MM-DD');
+    }
+    if (fromDate === toDate) {
+      throw new ValidationError('fromDate y toDate son iguales — no hay nada que mover');
+    }
+
+    const pool = (await import('../config/database')).getPool();
+    const result = await pool.query<{ id: string; phase: string; time: string; court: string }>(
+      `UPDATE matches
+          SET date = $3, updated_at = NOW()
+        WHERE tournament_id = $1
+          AND date = $2
+          AND status = 'upcoming'
+          AND score_team1 IS NULL
+          AND score_team2 IS NULL
+       RETURNING id, phase, time, court`,
+      [id, fromDate, toDate],
+    );
+
+    res.json({
+      tournamentId: id,
+      fromDate,
+      toDate,
+      movedCount: result.rowCount ?? 0,
+      moved: result.rows,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * Force-recalculate and persist the standings for a tournament, then re-
  * resolve any bracket slots that reference group positions so the knockout
  * bracket stays in sync with the freshly computed table. Used by the admin

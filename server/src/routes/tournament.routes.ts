@@ -12,6 +12,7 @@ import {
   getMatches,
   getStandings,
   recalculateStandings,
+  bulkMoveDate,
   getBracket,
   getEnrolledTeams,
   enrollTeam,
@@ -59,6 +60,12 @@ router.delete('/:id', requireTournamentAccess, remove);
 router.get('/:id/matches', cacheGet(15, { swrSeconds: 60 }), getMatches);
 router.get('/:id/standings', cacheGet(15, { swrSeconds: 60 }), getStandings);
 router.post('/:id/standings/recalculate', requireTournamentAccess, recalculateStandings);
+// Bulk move every match of (tournament, date=fromDate) onto toDate.
+// Owner-gated. Skips conflict validation by design — the admin uses
+// it to recover orphan-day overflow (e.g. bracket materializer
+// placed matches past the tournament's endDate). After the move,
+// the admin reorders manually via drag-and-drop in Cronograma.
+router.post('/:id/bulk-move-date', requireTournamentAccess, bulkMoveDate);
 router.get('/:id/bracket', cacheGet(15, { swrSeconds: 60 }), getBracket);
 
 // Team enrollment — list is public (spectators see who's playing); the
