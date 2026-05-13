@@ -38,6 +38,9 @@ export interface BackendTournament {
   teamsCount: number;
   format: 'groups' | 'knockout' | 'groups+knockout' | 'league';
   courts: string[];
+  /** mig 031 — locality shown in the public Hero. Optional; the Hero
+   *  falls back to `courts[0]` when null. */
+  city?: string;
   courtLocations?: Record<string, string>;
   categories?: string[];
   ownerId?: string;

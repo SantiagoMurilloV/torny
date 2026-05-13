@@ -86,6 +86,8 @@ function mapRow(row: Record<string, unknown>): Tournament {
     teamsCount: row.teams_count as number,
     format: row.format as Tournament['format'],
     courts: row.courts as string[],
+    // mig 031 — tournament locality, shown in the public Hero.
+    city: (row.city as string | null) ?? undefined,
     courtLocations: rawLocations && typeof rawLocations === 'object' ? rawLocations : {},
     categories: (row.categories as string[] | null | undefined) ?? [],
     ownerId: (row.owner_id as string | null) ?? undefined,
@@ -450,8 +452,8 @@ export class TournamentService {
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         const result = await pool.query(
-          `INSERT INTO tournaments (name, slug, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority, finals_court, match_durations_by_category)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+          `INSERT INTO tournaments (name, slug, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority, finals_court, match_durations_by_category, city)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
            RETURNING *`,
           [
             data.name,
@@ -485,6 +487,9 @@ export class TournamentService {
             categoryPriority,
             finalsCourt,
             JSON.stringify(matchDurationsByCategory),
+            // mig 031 — tournament locality. Falsy → NULL so the
+            // Hero falls back to courts[0].
+            data.city?.trim() || null,
           ],
         );
         row = result.rows[0];
@@ -587,6 +592,11 @@ export class TournamentService {
       teamsCount: 'teams_count',
       format: 'format',
       courts: 'courts',
+      // mig 031 — tournament locality (e.g. "Armenia, Quindío").
+      // Empty string is normalised to NULL in the value branch below
+      // so clearing the field from the admin form falls back to
+      // courts[0] in the Hero.
+      city: 'city',
       courtLocations: 'court_locations',
       categories: 'categories',
       enrollmentDeadline: 'enrollment_deadline',
@@ -661,6 +671,14 @@ export class TournamentService {
           // Empty / whitespace / null = "Sin preferencia" → NULL in DB.
           // Otherwise keep the raw string so the bracket materializer
           // can compare it directly against tournaments.courts entries.
+          stored =
+            typeof rawValue === 'string' && rawValue.trim() !== ''
+              ? rawValue.trim()
+              : null;
+        } else if (key === 'city') {
+          // Same empty-to-null pattern: clearing the locality from the
+          // admin form sets it to NULL so the Hero falls back to
+          // `courts[0]` instead of rendering an empty location pill.
           stored =
             typeof rawValue === 'string' && rawValue.trim() !== ''
               ? rawValue.trim()

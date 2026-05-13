@@ -22,6 +22,13 @@ export interface Tournament {
   teamsCount: number;   // 2-32
   format: 'groups' | 'knockout' | 'groups+knockout' | 'league';
   courts: string[];
+  /**
+   * Tournament locality (mig 031). Shown in the public Hero as the
+   * "place" of the event — e.g. "Armenia, Quindío". When unset the
+   * Hero falls back to `courts[0]`, preserving legacy behaviour for
+   * older tournaments without the field populated.
+   */
+  city?: string;
   /** Mapa opcional { nombreCancha: ubicación } (dirección o descripción). */
   courtLocations?: Record<string, string>;
   /**
@@ -303,6 +310,13 @@ export interface CreateTournamentDto {
   teamsCount: number;     // 2-32
   format: 'groups' | 'knockout' | 'groups+knockout' | 'league';
   courts: string[];
+  /**
+   * Locality of the tournament (mig 031). Free-text, max 160 chars.
+   * Shown in the public Hero — e.g. "Armenia, Quindío". Optional;
+   * passing null or an empty string leaves it unset and the Hero
+   * falls back to `courts[0]`.
+   */
+  city?: string | null;
   /** Mapa opcional { nombreCancha: ubicación } (dirección o descripción). */
   courtLocations?: Record<string, string>;
   /**

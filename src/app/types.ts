@@ -141,6 +141,13 @@ export interface Tournament {
   teamsCount: number;
   format: 'groups' | 'knockout' | 'groups+knockout' | 'league';
   courts: string[];
+  /**
+   * Locality del torneo (mig 031). Aparece en el Hero público como el
+   * "lugar" del evento (ej. "Armenia, Quindío"). Cuando está vacío el
+   * Hero cae al primer court como fallback para no romper la línea
+   * con el icono de pin.
+   */
+  city?: string;
   /** Mapa opcional { nombreCancha: ubicación } (dirección o referencia). */
   courtLocations?: Record<string, string>;
   /**
