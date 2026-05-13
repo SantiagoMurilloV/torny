@@ -533,16 +533,22 @@ export async function pushDebug(
     validateUUID(id, 'ID de torneo');
     const pool = (await import('../config/database')).getPool();
 
+    // mig 028 — club captains authenticate against the `clubs`
+    // table directly (clubs.username + clubs.password_hash), not
+    // through the regular users table. The JWT's `userId` for a
+    // captain IS the club id, so push_subscriptions.club_id links
+    // straight back here.
     const result = await pool.query<{
       club_id: string;
       club_name: string;
+      club_username: string;
       subscription_count: number;
       last_used_at: Date | null;
-      captain_username: string | null;
     }>(
       `SELECT
          c.id AS club_id,
          c.name AS club_name,
+         c.username AS club_username,
          (
            SELECT COUNT(*)::int FROM push_subscriptions ps
             WHERE ps.club_id = c.id
@@ -550,14 +556,12 @@ export async function pushDebug(
          (
            SELECT MAX(ps.last_used_at) FROM push_subscriptions ps
             WHERE ps.club_id = c.id
-         ) AS last_used_at,
-         u.username AS captain_username
+         ) AS last_used_at
        FROM tournament_teams tt
        JOIN teams t ON t.id = tt.team_id
        JOIN clubs c ON c.id = t.club_id
-       LEFT JOIN users u ON u.club_id = c.id AND u.role = 'club_captain'
        WHERE tt.tournament_id = $1
-       GROUP BY c.id, c.name, u.username
+       GROUP BY c.id, c.name, c.username
        ORDER BY c.name`,
       [id],
     );
@@ -565,12 +569,12 @@ export async function pushDebug(
     const clubs = result.rows.map((r) => ({
       clubId: r.club_id,
       clubName: r.club_name,
+      clubUsername: r.club_username,
       subscriptionCount: r.subscription_count,
       lastUsedAt:
         r.last_used_at instanceof Date
           ? r.last_used_at.toISOString()
           : r.last_used_at,
-      captainUsername: r.captain_username,
     }));
 
     const summary = {
