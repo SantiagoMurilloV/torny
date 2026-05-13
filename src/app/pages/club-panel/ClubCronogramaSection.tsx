@@ -3,27 +3,9 @@ import { CalendarDays, Loader2, Send } from 'lucide-react';
 import type { Match, Team, Tournament } from '../../types';
 import { api } from '../../services/api';
 import { CronogramaTab as PublicCronograma } from '../tournament-detail/tabs/CronogramaTab';
-import { categoryOfMatch } from '../../lib/phase';
 import { getErrorMessage } from '../../lib/errors';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
-
-/**
- * Palette mirroring `CronogramaTab` (public + admin). Reusing the
- * SAME palette + indexing rule keeps category colours stable across
- * surfaces — a captain looking at "Infantil Femenino" sees the same
- * blue tile they saw on the public site this morning.
- */
-const CATEGORY_COLORS = [
-  { bg: 'bg-blue-100', border: 'border-blue-400', text: 'text-blue-800' },
-  { bg: 'bg-red-100', border: 'border-red-400', text: 'text-red-800' },
-  { bg: 'bg-green-100', border: 'border-green-400', text: 'text-green-800' },
-  { bg: 'bg-purple-100', border: 'border-purple-400', text: 'text-purple-800' },
-  { bg: 'bg-orange-100', border: 'border-orange-400', text: 'text-orange-800' },
-  { bg: 'bg-pink-100', border: 'border-pink-400', text: 'text-pink-800' },
-  { bg: 'bg-teal-100', border: 'border-teal-400', text: 'text-teal-800' },
-  { bg: 'bg-yellow-100', border: 'border-yellow-400', text: 'text-yellow-800' },
-];
 
 interface ClubCronogramaSectionProps {
   tournaments: Tournament[];
@@ -138,25 +120,6 @@ export function ClubCronogramaSection({
     [matches, clubTeamIds],
   );
 
-  // Categories present in the club's filtered matches, sorted
-  // alphabetically. Same indexing as CronogramaTab so the legend's
-  // swatches line up with the cards (Infantil Femenino is always
-  // the same blue across the screen).
-  const categoriesWithColors = useMemo(() => {
-    const set = new Set<string>();
-    for (const m of clubMatches) {
-      const cat = categoryOfMatch(m);
-      if (cat) set.add(cat);
-    }
-    const sorted = Array.from(set).sort((a, b) =>
-      a.localeCompare(b, 'es', { sensitivity: 'base' }),
-    );
-    return sorted.map((cat, idx) => ({
-      category: cat,
-      color: CATEGORY_COLORS[idx % CATEGORY_COLORS.length],
-    }));
-  }, [clubMatches]);
-
   // ── Empty states ───────────────────────────────────────────────
 
   if (publishedTournaments.length === 0) {
@@ -204,11 +167,11 @@ export function ClubCronogramaSection({
         </div>
       )}
 
-      {/* Colour legend — maps each colour swatch to a category. Empty
-          when the club has zero matches in this torneo. */}
-      {categoriesWithColors.length > 0 && (
-        <CategoryLegend items={categoriesWithColors} />
-      )}
+      {/* Colour legend retirada (2026-05-13) — el cronograma público
+          embebido más abajo ya muestra los chips de categoría
+          activos como filtro pill arriba del grid, así que una
+          segunda leyenda arriba duplicaba la información y comía
+          espacio vertical en mobile (el público vive en celular). */}
 
       {loading ? (
         <div className="py-12 flex items-center justify-center">
@@ -234,41 +197,6 @@ export function ClubCronogramaSection({
         </div>
       ) : null}
     </section>
-  );
-}
-
-/**
- * Compact legend mapping each swatch to a category. Two columns on
- * mobile, four on sm+ so the legend never eats more than ~80px of
- * vertical real estate.
- */
-function CategoryLegend({
-  items,
-}: {
-  items: Array<{ category: string; color: (typeof CATEGORY_COLORS)[0] }>;
-}) {
-  return (
-    <div className="bg-white border border-black/10 rounded-sm p-3 sm:p-4">
-      <div
-        className="text-[10px] font-bold uppercase text-black/55 mb-2"
-        style={{ ...FONT, letterSpacing: '0.08em' }}
-      >
-        Referencia de colores
-      </div>
-      <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-3 gap-y-1.5">
-        {items.map(({ category, color }) => (
-          <li key={category} className="flex items-center gap-2 min-w-0">
-            <span
-              className={`inline-block w-3 h-3 rounded-sm flex-shrink-0 border ${color.bg} ${color.border}`}
-              aria-hidden="true"
-            />
-            <span className="text-xs text-black/75 truncate" title={category}>
-              {category}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 

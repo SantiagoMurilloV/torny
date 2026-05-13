@@ -285,12 +285,12 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
           so the spectator sees "12 partidos" right next to the day
           picker without scrolling. Hidden when the day has zero
           matches (the empty-state below explains that case better). */}
+      {/* El título "PROGRAMACIÓN" se removió (2026-05-13): el usuario
+          ya sabe que está en la pestaña Programación por la nav, y el
+          h2 robaba foco al contador + descripción que sí orientan. */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <Calendar className="w-5 h-5 text-black/60" aria-hidden="true" />
-          <h2 className="text-xl font-bold" style={FONT}>
-            PROGRAMACIÓN
-          </h2>
           {matchCount > 0 && (
             <span
               className="inline-flex items-center px-2 py-0.5 rounded-sm bg-black text-white text-xs font-bold tabular-nums"
@@ -480,15 +480,19 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
 
             {/* Time labels — centered both axes on mobile so the
                 hour reads as a clean anchor for its row. Tabular nums
-                keep digit widths uniform across rows. Last row drops
-                border-b so it doesn't double up with the wrapper's
-                bottom edge. */}
+                keep digit widths uniform across rows. Cada celda
+                lleva un border sutil completo (no solo bottom + right)
+                para que la columna de horas se lea como una banda
+                rítmica al costado de la grilla, especialmente en
+                mobile donde el padding es chico. Background gris
+                muy claro hace contraste con las cards de partidos
+                sin pelear contra los colores de categoría. */}
             {times.map((time, rowIdx) => (
               <div
                 key={`time-${time}`}
-                className={`sticky left-0 z-10 bg-white ${
-                  rowIdx === times.length - 1 ? '' : 'border-b'
-                } border-r border-black/10 px-0.5 py-0.5 sm:px-2 sm:py-2 text-[9px] sm:text-xs font-bold text-black/70 tabular-nums text-center sm:text-left flex items-center justify-center sm:justify-start`}
+                className={`sticky left-0 z-10 bg-black/[0.04] border border-black/15 ${
+                  rowIdx === times.length - 1 ? '' : 'border-b-0'
+                } px-0.5 py-0.5 sm:px-2 sm:py-2 text-[9px] sm:text-xs font-bold text-black/75 tabular-nums text-center sm:text-left flex items-center justify-center sm:justify-start`}
                 style={{ gridRow: rowIdx + 2, gridColumn: 1, ...FONT }}
               >
                 {time}
