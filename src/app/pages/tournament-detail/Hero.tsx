@@ -24,14 +24,18 @@ const HERO_IMG =
 export function Hero({
   tournament,
   matchesCount,
-  liveMatchesCount,
   enrolledCount,
 }: {
   tournament: Tournament;
   matchesCount: number;
-  liveMatchesCount: number;
   enrolledCount: number;
 }) {
+  // "Jugadoras" replaces the old "En vivo" counter (2026-05-13). The
+  // live-matches count was almost always 0 outside game day, which
+  // made the slot read as empty in the hero; "jugadoras" is the
+  // single most-asked stat by visitors and stays meaningful from the
+  // moment the parent-registration flow opens.
+  const playersCount = tournament.playersCount ?? 0;
   const { scrollY } = useScroll();
   const opacity = useTransform(scrollY, [0, 200], [1, 0]);
   const scale = useTransform(scrollY, [0, 300], [1, 1.15]);
@@ -103,7 +107,7 @@ export function Hero({
             >
               <Stat label="Equipos" value={enrolledCount || tournament.teamsCount} />
               <Stat label="Partidos" value={matchesCount} />
-              <Stat label="En vivo" value={liveMatchesCount} />
+              <Stat label="Jugadoras" value={playersCount} />
               <Stat label="Canchas" value={tournament.courts.length} />
             </motion.div>
 
@@ -120,10 +124,18 @@ export function Hero({
                   {format(tournament.endDate, 'd MMM yyyy', { locale: es })}
                 </span>
               </div>
-              {tournament.courts[0] && (
+              {(tournament.city || tournament.courts[0]) && (
                 <div className="flex items-center gap-2 text-xs sm:text-sm min-w-0">
                   <MapPin className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate">{tournament.courts[0]}</span>
+                  {/* Prefer the tournament's `city` (e.g. "Armenia,
+                      Quindío") as the locality label — it reads
+                      better than a court name like "INEM Cancha 1"
+                      and is what the public expects. Fall back to
+                      the first court when no city has been set so
+                      legacy tournaments don't show blank. */}
+                  <span className="truncate">
+                    {tournament.city ?? tournament.courts[0]}
+                  </span>
                 </div>
               )}
             </motion.div>

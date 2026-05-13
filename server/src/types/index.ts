@@ -142,11 +142,13 @@ export interface Tournament {
    * `teamsCount` cap so the numbers reflect reality.
    *   · enrolledCount → COUNT(tournament_teams WHERE tournament_id = id)
    *   · matchesCount  → COUNT(matches          WHERE tournament_id = id)
+   *   · playersCount  → COUNT(DISTINCT players whose team is enrolled)
    * Optional because internal helpers / writes still mapRow off bare
    * tournaments rows that don't carry the counts.
    */
   enrolledCount?: number;
   matchesCount?: number;
+  playersCount?: number;
   createdAt?: string;
   updatedAt?: string;
 }

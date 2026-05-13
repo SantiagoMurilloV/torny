@@ -102,8 +102,6 @@ export function TournamentDetail() {
     );
   }
 
-  const liveMatches = matches.filter((m) => m.status === 'live');
-
   const tabs: TabDescriptor[] = [
     // Cronograma is the entry point — spectators see the day's
     // schedule the moment they open the tournament. Counter shows the
@@ -132,7 +130,6 @@ export function TournamentDetail() {
       <Hero
         tournament={tournament}
         matchesCount={matches.length}
-        liveMatchesCount={liveMatches.length}
         enrolledCount={enrolledTeams.length}
       />
 

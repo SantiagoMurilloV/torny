@@ -66,6 +66,7 @@ function mapRow(row: Record<string, unknown>): Tournament {
   // internal helpers) so the public API always exposes a number.
   const enrolledRaw = row.enrolled_count;
   const matchesRaw = row.matches_count;
+  const playersRaw = row.players_count;
   return {
     id: row.id as string,
     name: row.name as string,
@@ -172,6 +173,12 @@ function mapRow(row: Record<string, unknown>): Tournament {
         : matchesRaw != null
           ? Number(matchesRaw)
           : undefined,
+    playersCount:
+      typeof playersRaw === 'number'
+        ? playersRaw
+        : playersRaw != null
+          ? Number(playersRaw)
+          : undefined,
     createdAt: row.created_at as string | undefined,
     updatedAt: row.updated_at as string | undefined,
   };
@@ -255,19 +262,31 @@ export class TournamentService {
    */
   /**
    * SELECT clause used by every public-facing tournament read. We
-   * decorate each row with two correlated counts so the home cards and
+   * decorate each row with three correlated counts so the home cards and
    * the detail hero can show real enrollment + scheduled-matches
-   * numbers instead of the configured cap (`teams_count`).
+   * + roster numbers instead of the configured cap (`teams_count`).
    *   · enrolled_count → equipos efectivamente inscritos (tournament_teams)
    *   · matches_count  → partidos generados (matches)
-   * Both stay cheap because tournament_teams.tournament_id and
-   * matches.tournament_id are indexed.
+   *   · players_count  → jugadoras inscritas en los teams enrolled.
+   *                       Cuenta cada player UNA vez incluso si el
+   *                       team está enrolled en varios torneos
+   *                       (DISTINCT por p.id) — relevante cuando el
+   *                       mismo team participa en más de un torneo
+   *                       del mismo admin.
+   * Indices used: tournament_teams.tournament_id, matches.tournament_id,
+   * players.team_id — todos ya existen.
    */
   private static readonly LIST_SELECT = `
     SELECT
       t.*,
       (SELECT COUNT(*)::int FROM tournament_teams tt WHERE tt.tournament_id = t.id) AS enrolled_count,
-      (SELECT COUNT(*)::int FROM matches m WHERE m.tournament_id = t.id) AS matches_count
+      (SELECT COUNT(*)::int FROM matches m WHERE m.tournament_id = t.id) AS matches_count,
+      (
+        SELECT COUNT(DISTINCT p.id)::int
+          FROM players p
+          JOIN tournament_teams tt2 ON tt2.team_id = p.team_id
+         WHERE tt2.tournament_id = t.id
+      ) AS players_count
     FROM tournaments t
   `;
 

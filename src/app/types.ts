@@ -233,6 +233,11 @@ export interface Tournament {
    */
   enrolledCount?: number;
   matchesCount?: number;
+  /** Total jugadoras inscritas en los teams enrolled (DISTINCT por
+   *  jugadora). Reemplaza "En vivo" en el Hero público desde
+   *  2026-05-13 — métrica más útil para visitantes que el contador
+   *  transiente de partidos en curso. */
+  playersCount?: number;
 }
 
 export interface BracketMatch {
