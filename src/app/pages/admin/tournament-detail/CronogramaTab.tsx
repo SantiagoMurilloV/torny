@@ -1414,6 +1414,21 @@ function MatchCard({
             <div className="max-h-60 overflow-y-auto">
               {days.map((d) => {
                 const isCurrent = d === currentDay;
+                // Highlight out-of-range days (matches landed past
+                // the tournament's endDate). Same amber pill as the
+                // top day-picker so the visual cue is consistent.
+                const startIso = tournament
+                  ? (tournament.startDate instanceof Date
+                      ? tournament.startDate.toISOString().slice(0, 10)
+                      : String(tournament.startDate ?? '').slice(0, 10))
+                  : '';
+                const endIso = tournament
+                  ? (tournament.endDate instanceof Date
+                      ? tournament.endDate.toISOString().slice(0, 10)
+                      : String(tournament.endDate ?? '').slice(0, 10))
+                  : startIso;
+                const outsideRange =
+                  !!startIso && (d < startIso || d > (endIso || startIso));
                 return (
                   <button
                     key={d}
@@ -1423,11 +1438,22 @@ function MatchCard({
                       setDayPickerOpen(false);
                       if (!isCurrent) onMoveToDay(match, d);
                     }}
-                    className="w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between"
+                    className="w-full text-left px-2 py-1.5 text-sm rounded-sm hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between gap-2"
                   >
-                    <span>{formatDayLabel(d)}</span>
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <span className="truncate">{formatDayLabel(d)}</span>
+                      {outsideRange && (
+                        <span
+                          className="inline-flex items-center px-1 py-0.5 rounded-sm bg-amber-100 text-amber-800 text-[8px] font-bold uppercase tracking-wider flex-shrink-0"
+                          style={FONT}
+                          title="Fuera del rango oficial"
+                        >
+                          Fuera
+                        </span>
+                      )}
+                    </span>
                     {isCurrent && (
-                      <span className="text-[9px] text-black/40 uppercase">
+                      <span className="text-[9px] text-black/40 uppercase flex-shrink-0">
                         Actual
                       </span>
                     )}
