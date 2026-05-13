@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { Match, Tournament } from '../../../types';
 import { TeamAvatar } from '../../../components/TeamAvatar';
 import { getMatchDurationMinutes, addMinutesToHHMM } from '../../../lib/matchDuration';
+import { categoryOfMatch, phaseLabelOnly } from '../../../lib/phase';
 import {
   Select,
   SelectContent,
@@ -243,11 +244,15 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
     [timesForDay, selectedDay],
   );
 
+  // Match → category. Reads from both `group` (round-robin matches)
+  // and `phase` (bracket fixtures), falling back to the legacy
+  // "General" bucket only when neither encoding produces a real
+  // category — this keeps the admin grid's color coding aligned with
+  // the public cronograma + makes sure materialised bracket matches
+  // share the same hue as the rest of their category.
   const getMatchCategory = (m: Match): string => {
-    if (m.group) {
-      return m.group.includes('|') ? m.group.split('|')[0] : 'General';
-    }
-    return 'General';
+    const cat = categoryOfMatch(m);
+    return cat || 'General';
   };
 
   const categories = useMemo<string[]>(() => {
@@ -1177,9 +1182,17 @@ function MatchCard({
   }), [match, isInFlight]);
 
   const opacity = isDragging || isInFlight ? 'opacity-40' : 'opacity-100';
+  // Slot label = round-robin letter ("A") OR bracket phase name
+  // ("Cuartos · Oro", "Final"). Without the phase fallback the
+  // materialised bracket fixtures rendered with no badge in the
+  // admin cronograma — admins couldn't tell at a glance whether a
+  // card was a Cuartos or a Semifinal slot.
   const groupLabel = match.group?.includes('|')
     ? match.group.split('|').slice(1).join('|')
-    : match.group || '';
+    : '';
+  const phaseLabel = match.phase ? phaseLabelOnly(match.phase) : '';
+  const isBracketLabel = !groupLabel && phaseLabel && phaseLabel !== 'grupos';
+  const slotLabel = groupLabel || (isBracketLabel ? phaseLabel : '');
   // Per-category duration + end-time for the badge. Falls back to the
   // global default when no tournament is supplied (orphans banner) so
   // we still surface something useful.
@@ -1201,10 +1214,23 @@ function MatchCard({
         >
           <GripVertical className="w-3 h-3" />
         </span>
-        {groupLabel && (
-          <span className={`text-[9px] font-bold ${color.text}`} style={FONT}>
-            {groupLabel}
-          </span>
+        {slotLabel && (
+          // Bracket-stage phase labels get a pill outline so they
+          // stand out as "this is Cuartos/Semi/Final"; round-robin
+          // letters keep the quiet inline label.
+          isBracketLabel ? (
+            <span
+              className={`${color.text} ${color.border} text-[9px] font-bold uppercase tracking-wider border bg-white/70 px-1.5 py-0.5 rounded-sm truncate`}
+              style={FONT}
+              title={slotLabel}
+            >
+              {slotLabel}
+            </span>
+          ) : (
+            <span className={`text-[9px] font-bold ${color.text}`} style={FONT}>
+              {slotLabel}
+            </span>
+          )
         )}
         {match.score && (
           <span className="ml-auto text-[10px] font-bold tabular-nums text-black/70">
