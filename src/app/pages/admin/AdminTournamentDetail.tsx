@@ -23,6 +23,7 @@ import {
 import { InfoTab } from './tournament-detail/InfoTab';
 import { TeamsTab } from './tournament-detail/TeamsTab';
 import { AdminClubs } from './AdminClubs';
+import { AdminJudges } from './AdminJudges';
 import { FixturesTab } from './tournament-detail/FixturesTab';
 import { MatchesTab } from './tournament-detail/MatchesTab';
 import { CronogramaTab } from './tournament-detail/CronogramaTab';
@@ -41,6 +42,7 @@ const VALID_TABS = [
   'info',
   'teams',
   'clubs',
+  'judges',
   'fixtures',
   'matches',
   'cronograma',
@@ -53,6 +55,7 @@ const SECTION_TITLE: Record<TabId, string> = {
   info: 'Ajustes generales',
   teams: 'Inscripción equipos y plantel',
   clubs: 'Clubes',
+  judges: 'Jueces',
   fixtures: 'Cruces',
   matches: 'Partidos',
   cronograma: 'Programación',
@@ -522,6 +525,15 @@ export function AdminTournamentDetail() {
               needed — captains see ALL their clubes regardless of
               which torneo they entered from. */}
           <AdminClubs />
+        </TabsContent>
+
+        <TabsContent value="judges">
+          {/* Same wrapping pattern as Clubes — the AdminJudges page
+              is reused inside the tournament tab. Backend already
+              scopes judges to those created by this admin (`users.
+              created_by`); a future iteration could add a
+              tournament-specific assignment table to filter further. */}
+          <AdminJudges />
         </TabsContent>
 
         <TabsContent value="fixtures">

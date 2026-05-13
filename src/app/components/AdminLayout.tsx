@@ -47,6 +47,12 @@ const TOURNAMENT_TABS = [
   // de clubes del admin — el contexto del torneo da el "para qué"
   // sin filtrarlos por inscripción.
   { id: 'clubs', label: 'Clubes', icon: Building2 },
+  // Jueces — mismo razonamiento que Clubes: el admin siempre
+  // gestiona jueces para un torneo en curso, así que vivir
+  // top-level era contraintuitivo. La página interna sigue
+  // mostrando los jueces creados por este admin (scoped por
+  // `users.created_by`).
+  { id: 'judges', label: 'Jueces', icon: UserCog },
   { id: 'fixtures', label: 'Cruces', icon: Shuffle },
   { id: 'matches', label: 'Partidos', icon: Swords },
   { id: 'cronograma', label: 'Programación', icon: Calendar },
@@ -153,12 +159,11 @@ export function AdminLayout() {
   // rarely useful once you're working inside a single torneo.
   const flatItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
-    { icon: UserCog, label: 'Jueces', path: '/admin/judges' },
-    // "Clubs" se movió a TOURNAMENT_TABS (debajo de "Equipos
-    // inscritos") por pedido del product owner — el admin
-    // siempre llega a clubes desde el contexto de un torneo, y
-    // tener el item top-level era ruido. La ruta /admin/clubs
-    // sigue activa por compatibilidad con deep links viejos.
+    // "Jueces" y "Clubs" se movieron a TOURNAMENT_TABS por pedido
+    // del product owner — el admin siempre los administra en el
+    // contexto de un torneo, y tener los items top-level era
+    // ruido. Las rutas /admin/judges y /admin/clubs siguen activas
+    // por compatibilidad con deep links viejos.
     { icon: Settings, label: 'Configuración', path: '/admin/settings' },
   ];
 
