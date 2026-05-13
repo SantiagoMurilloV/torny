@@ -14,6 +14,7 @@ import {
   getMatchDurationMinutes,
   addMinutesToHHMM,
 } from '../../../lib/matchDuration';
+import { categoryOfMatch, phaseLabelOnly } from '../../../lib/phase';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
@@ -154,16 +155,16 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDay, dailySchedules, minDuration, slotStride, matches]);
 
-  // Match → category. Returns the real division name when the group
-  // encodes one ("Benjamín Femenino|A"), otherwise empty string. The
-  // legacy "General" fallback was leaking into the category dropdown
-  // and the colour legend as a phantom option — we now keep those
-  // matches uncategorised and exclude the empty bucket from the
-  // filter list below.
-  const getMatchCategory = (m: Match): string => {
-    if (m.group && m.group.includes('|')) return m.group.split('|')[0];
-    return '';
-  };
+  // Match → category. Reads from BOTH `group` (round-robin matches
+  // encode it as "Benjamín Femenino|A") AND `phase` (bracket matches
+  // encode it as "Cuartos · Oro|Benjamín Femenino"). Without the
+  // phase lookup the materialised bracket fixtures fell into the
+  // uncoloured/uncategorised bucket and read as a different family
+  // than the round-robin matches of the same category — visually
+  // disconnected when a parent looked at "what's my daughter playing
+  // today". Returns '' when no category can be derived; those matches
+  // stay out of the dropdown + legend.
+  const getMatchCategory = (m: Match): string => categoryOfMatch(m);
 
   const categories = useMemo<string[]>(() => {
     const cats = new Set<string>();
@@ -613,9 +614,20 @@ function PublicMatchCard({
   tournament,
   onClick,
 }: PublicMatchCardProps) {
+  // Choose the slot label depending on the match type:
+  //   · Round-robin (has `group` with pipe): "A", "B", "C…" — the
+  //     group letter the round-robin generator persists.
+  //   · Bracket match (no group, phase = "Cuartos · Oro|Cat"): the
+  //     phase name itself ("Cuartos · Oro", "Semifinal", "Final",
+  //     "Tercer puesto") so the spectator instantly knows which
+  //     knockout round they're looking at.
+  //   · Legacy / no encoding: empty string, label is hidden.
   const groupLabel = match.group?.includes('|')
     ? match.group.split('|').slice(1).join('|')
-    : match.group || '';
+    : '';
+  const phaseLabel = match.phase ? phaseLabelOnly(match.phase) : '';
+  const isBracketLabel = !groupLabel && phaseLabel && phaseLabel !== 'grupos';
+  const slotLabel = groupLabel || (isBracketLabel ? phaseLabel : '');
   const durationMin = getMatchDurationMinutes(match, tournament);
   const endTime = addMinutesToHHMM(match.time ?? '', durationMin);
   const isLive = match.status === 'live';
@@ -629,13 +641,28 @@ function PublicMatchCard({
       } border rounded-sm sm:rounded-md px-1 py-0.5 sm:px-2 sm:py-1.5 text-left w-full transition-all hover:shadow-md sm:hover:-translate-y-0.5 h-full flex flex-col`}
     >
       <div className="flex items-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1">
-        {groupLabel && (
-          <span
-            className={`text-[8px] sm:text-[9px] font-bold ${color.text} truncate`}
-            style={FONT}
-          >
-            {groupLabel}
-          </span>
+        {slotLabel && (
+          // Bracket-stage matches get a stronger pill (filled with the
+          // category colour) so the parent reads "this is Cuartos /
+          // Final" at a glance — the round-robin letter ("A") stays
+          // as a quieter inline label since groups are typically the
+          // default state of the schedule.
+          isBracketLabel ? (
+            <span
+              className={`${color.text} ${color.border} text-[8px] sm:text-[9px] font-bold uppercase tracking-wider border bg-white/70 px-1 py-px sm:px-1.5 sm:py-0.5 rounded-sm truncate`}
+              style={FONT}
+              title={slotLabel}
+            >
+              {slotLabel}
+            </span>
+          ) : (
+            <span
+              className={`text-[8px] sm:text-[9px] font-bold ${color.text} truncate`}
+              style={FONT}
+            >
+              {slotLabel}
+            </span>
+          )
         )}
         {isLive && (
           <span
