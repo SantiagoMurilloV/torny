@@ -508,6 +508,85 @@ export async function sendScheduleToClubs(
 }
 
 /**
+ * Diagnostic report — does each enrolled club have an active push
+ * subscription on record? Built after the 2026-05-13 admin question
+ * "¿cómo sé que SÍ les va a llegar?". Returns one row per enrolled
+ * club with:
+ *   · subscriptionCount → number of devices currently registered
+ *                          for push under this club's clubId
+ *   · lastUsedAt        → most recent successful dispatch (NULL if
+ *                          no push has been sent through this sub)
+ *   · captainSeen       → last_login of the club's captain user
+ *                          (helps distinguish "no captain ever
+ *                          logged in" from "logged in but didn't
+ *                          accept push permission")
+ *
+ * Owner-gated. Read-only.
+ */
+export async function pushDebug(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    validateUUID(id, 'ID de torneo');
+    const pool = (await import('../config/database')).getPool();
+
+    const result = await pool.query<{
+      club_id: string;
+      club_name: string;
+      subscription_count: number;
+      last_used_at: Date | null;
+      captain_username: string | null;
+    }>(
+      `SELECT
+         c.id AS club_id,
+         c.name AS club_name,
+         (
+           SELECT COUNT(*)::int FROM push_subscriptions ps
+            WHERE ps.club_id = c.id
+         ) AS subscription_count,
+         (
+           SELECT MAX(ps.last_used_at) FROM push_subscriptions ps
+            WHERE ps.club_id = c.id
+         ) AS last_used_at,
+         u.username AS captain_username
+       FROM tournament_teams tt
+       JOIN teams t ON t.id = tt.team_id
+       JOIN clubs c ON c.id = t.club_id
+       LEFT JOIN users u ON u.club_id = c.id AND u.role = 'club_captain'
+       WHERE tt.tournament_id = $1
+       GROUP BY c.id, c.name, u.username
+       ORDER BY c.name`,
+      [id],
+    );
+
+    const clubs = result.rows.map((r) => ({
+      clubId: r.club_id,
+      clubName: r.club_name,
+      subscriptionCount: r.subscription_count,
+      lastUsedAt:
+        r.last_used_at instanceof Date
+          ? r.last_used_at.toISOString()
+          : r.last_used_at,
+      captainUsername: r.captain_username,
+    }));
+
+    const summary = {
+      totalClubs: clubs.length,
+      clubsWithSubscriptions: clubs.filter((c) => c.subscriptionCount > 0).length,
+      clubsWithoutSubscriptions: clubs.filter((c) => c.subscriptionCount === 0).length,
+      totalSubscriptions: clubs.reduce((sum, c) => sum + c.subscriptionCount, 0),
+    };
+
+    res.json({ tournamentId: id, summary, clubs });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * Send a free-form push notification to every club enrolled in this
  * tournament. Differs from `sendScheduleToClubs` in two ways:
  *   · accepts a custom `title` + `body` (anything the admin wants

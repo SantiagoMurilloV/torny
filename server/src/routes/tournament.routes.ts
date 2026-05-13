@@ -16,6 +16,7 @@ import {
   cleanByeMatches,
   sendScheduleToClubs,
   notifyClubs,
+  pushDebug,
   getBracket,
   getEnrolledTeams,
   enrollTeam,
@@ -84,6 +85,10 @@ router.post(
 // title/body to every club's captain. Doesn't touch the schedule
 // timestamp; meant for reminders + announcements.
 router.post('/:id/notify-clubs', requireTournamentAccess, notifyClubs);
+// Diagnostic — count push subscriptions per enrolled club so the
+// admin can verify that captains actually accepted the prompt
+// before relying on the broadcast. Read-only.
+router.get('/:id/push-debug', requireTournamentAccess, pushDebug);
 router.get('/:id/bracket', cacheGet(15, { swrSeconds: 60 }), getBracket);
 
 // Team enrollment — list is public (spectators see who's playing); the
