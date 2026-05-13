@@ -508,6 +508,98 @@ export async function sendScheduleToClubs(
 }
 
 /**
+ * Send a free-form push notification to every club enrolled in this
+ * tournament. Differs from `sendScheduleToClubs` in two ways:
+ *   · accepts a custom `title` + `body` (anything the admin wants
+ *     to say — reminders, schedule rumours, motivational nudges,
+ *     etc.) instead of the hard-coded "Programación cargada" copy;
+ *   · does NOT stamp `schedule_sent_to_clubs_at`. The publish
+ *     state of the schedule is a separate concern; this endpoint
+ *     is for one-off broadcasts.
+ *
+ * Owner-gated by `requireTournamentAccess` at the route layer.
+ * Idempotent enough (admins re-firing it is fine — each fan-out
+ * uses a unique tag derived from a timestamp so the device doesn't
+ * collapse them into a single visible notification).
+ *
+ * Required body: `{ title: string, body: string, url?: string }`.
+ * The URL defaults to `/club-panel` so a tap lands the captain on
+ * the right page; admins can override it (e.g. `/torneo/<slug>`
+ * for a public-detail deeplink).
+ */
+export async function notifyClubs(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    validateUUID(id, 'ID de torneo');
+    const { title, body, url } = (req.body ?? {}) as {
+      title?: string;
+      body?: string;
+      url?: string;
+    };
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      throw new ValidationError('title es obligatorio');
+    }
+    if (!body || typeof body !== 'string' || !body.trim()) {
+      throw new ValidationError('body es obligatorio');
+    }
+    const finalUrl =
+      typeof url === 'string' && url.trim() !== '' ? url.trim() : '/club-panel';
+
+    const pool = (await import('../config/database')).getPool();
+    const tournRes = await pool.query<{ id: string; name: string }>(
+      'SELECT id, name FROM tournaments WHERE id = $1',
+      [id],
+    );
+    if (tournRes.rows.length === 0) {
+      throw new ValidationError('Torneo no encontrado');
+    }
+
+    const clubsRes = await pool.query<{ id: string; name: string }>(
+      `SELECT DISTINCT c.id, c.name
+         FROM tournament_teams tt
+         JOIN teams t ON t.id = tt.team_id
+         JOIN clubs c ON c.id = t.club_id
+        WHERE tt.tournament_id = $1`,
+      [id],
+    );
+
+    const pushService = (await import('../services/push.service')).pushService;
+    // Single timestamp per dispatch so all clubs get the SAME unique
+    // tag — preserves the "this is a fan-out" identity but lets the
+    // OS replace an older same-tag notif with the newer one if a
+    // captain has multiple devices subscribed.
+    const tag = `tournament-${id}-broadcast-${Date.now()}`;
+    const notified: Array<{ clubId: string; clubName: string }> = [];
+    for (const c of clubsRes.rows) {
+      try {
+        await pushService.sendToClub(c.id, {
+          title: title.trim(),
+          body: body.trim(),
+          url: finalUrl,
+          tag,
+        });
+        notified.push({ clubId: c.id, clubName: c.name });
+      } catch (err) {
+        console.warn(`[notifyClubs] push failed for club ${c.id}:`, err);
+      }
+    }
+
+    res.json({
+      tournamentId: id,
+      tournamentName: tournRes.rows[0].name,
+      clubsNotified: notified.length,
+      clubs: notified,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * Force-recalculate and persist the standings for a tournament, then re-
  * resolve any bracket slots that reference group positions so the knockout
  * bracket stays in sync with the freshly computed table. Used by the admin

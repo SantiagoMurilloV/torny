@@ -15,6 +15,7 @@ import {
   bulkMoveDate,
   cleanByeMatches,
   sendScheduleToClubs,
+  notifyClubs,
   getBracket,
   getEnrolledTeams,
   enrollTeam,
@@ -79,6 +80,10 @@ router.post(
   requireTournamentAccess,
   sendScheduleToClubs,
 );
+// Free-form broadcast to enrolled clubs — admin sends custom
+// title/body to every club's captain. Doesn't touch the schedule
+// timestamp; meant for reminders + announcements.
+router.post('/:id/notify-clubs', requireTournamentAccess, notifyClubs);
 router.get('/:id/bracket', cacheGet(15, { swrSeconds: 60 }), getBracket);
 
 // Team enrollment — list is public (spectators see who's playing); the
