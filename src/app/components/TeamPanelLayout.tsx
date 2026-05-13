@@ -1,6 +1,7 @@
 import { Outlet, useNavigate } from 'react-router';
 import { LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { NotificationBell } from './NotificationBell';
 
 /**
  * TeamPanelLayout — shell for the `team_captain` role. Captains log in with
@@ -50,15 +51,24 @@ export function TeamPanelLayout() {
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-black/5 hover:bg-black/10 border border-black/10 rounded-sm text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors"
-            style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">Cerrar sesión</span>
-          </button>
+          {/* Bell + logout. Bell sits LEFT of the logout button so
+              tapping logout by accident from muscle memory doesn't
+              also fire the permission prompt. Captains see the bell
+              every time they enter the panel, even before they grant
+              push permission, which is the whole point of the
+              affordance. */}
+          <div className="flex items-center gap-2">
+            <NotificationBell size="md" variant="club" />
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-black/5 hover:bg-black/10 border border-black/10 rounded-sm text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors"
+              style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Cerrar sesión</span>
+            </button>
+          </div>
         </div>
       </header>
       <main className="flex-1">
