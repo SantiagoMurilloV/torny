@@ -1193,6 +1193,14 @@ function MatchCard({
   const phaseLabel = match.phase ? phaseLabelOnly(match.phase) : '';
   const isBracketLabel = !groupLabel && phaseLabel && phaseLabel !== 'grupos';
   const slotLabel = groupLabel || (isBracketLabel ? phaseLabel : '');
+  // Bracket fixture is "unresolved" when its team slots still point at
+  // the placeholder team the transformer hands out for null IDs
+  // ("name === '—'"). The admin sees the phase label + colour but
+  // not the half-empty matchup data — same treatment as the public
+  // cronograma.
+  const isUnresolved =
+    isBracketLabel &&
+    (match.team1.name === '—' || match.team2.name === '—');
   // Per-category duration + end-time for the badge. Falls back to the
   // global default when no tournament is supplied (orphans banner) so
   // we still surface something useful.
@@ -1303,8 +1311,16 @@ function MatchCard({
           centered between the header and the footer instead of
           glueing to the top with a giant blank space below. For
           single-row cards the wrapper has minimal extra height so the
-          centering is invisible — content stays compact. */}
-      <div className="flex-1 flex flex-col justify-center gap-1.5">
+          centering is invisible — content stays compact. When the
+          fixture is an unresolved bracket placeholder we blur the
+          rows so the admin doesn't read the half-empty matchup as
+          real data. */}
+      <div
+        className={`flex-1 flex flex-col justify-center gap-1.5 ${
+          isUnresolved ? 'blur-[1.5px] opacity-50 select-none pointer-events-none' : ''
+        }`}
+        aria-hidden={isUnresolved || undefined}
+      >
         <div className="flex items-center gap-1.5">
           <TeamAvatar team={match.team1} size="xs" />
           <span className="text-[11px] font-medium text-black/85 truncate flex-1 min-w-0">

@@ -628,6 +628,15 @@ function PublicMatchCard({
   const phaseLabel = match.phase ? phaseLabelOnly(match.phase) : '';
   const isBracketLabel = !groupLabel && phaseLabel && phaseLabel !== 'grupos';
   const slotLabel = groupLabel || (isBracketLabel ? phaseLabel : '');
+  // A bracket fixture is "unresolved" while it's waiting on a previous
+  // round's winner — the materialiser persists those matches with
+  // null team1/team2 ids and the transformer's `resolveTeam` returns
+  // a placeholder with `name: '—'`. We use that as the sentinel here
+  // and blur the team rows so the spectator doesn't try to read a
+  // half-empty card.
+  const isUnresolved =
+    isBracketLabel &&
+    (match.team1.name === '—' || match.team2.name === '—');
   const durationMin = getMatchDurationMinutes(match, tournament);
   const endTime = addMinutesToHHMM(match.time ?? '', durationMin);
   const isLive = match.status === 'live';
@@ -681,8 +690,17 @@ function PublicMatchCard({
       {/* Teams — tight on mobile (gap-0.5, xs avatar, text-[9px]) so a
           2-row card fits inside a 44px-tall cell. Desktop keeps the
           original spacing. Truncate is the safety net for long club
-          names; the spectator can tap to drill in for the full text. */}
-      <div className="flex-1 flex flex-col justify-center gap-0.5 sm:gap-1.5">
+          names; the spectator can tap to drill in for the full text.
+          When the matchup is still waiting on a previous round's
+          result (`isUnresolved`) the rows render blurred + opaque so
+          the bracket placeholder text doesn't compete with real
+          fixtures for attention. */}
+      <div
+        className={`flex-1 flex flex-col justify-center gap-0.5 sm:gap-1.5 ${
+          isUnresolved ? 'blur-[1.5px] opacity-50 select-none pointer-events-none' : ''
+        }`}
+        aria-hidden={isUnresolved || undefined}
+      >
         <div className="flex items-center gap-1 sm:gap-1.5">
           <TeamAvatar team={match.team1} size="xs" />
           <span className="text-[9px] sm:text-[11px] font-medium text-black/85 truncate flex-1 min-w-0 leading-tight">
