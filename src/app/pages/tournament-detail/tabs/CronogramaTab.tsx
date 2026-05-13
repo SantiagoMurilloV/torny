@@ -154,14 +154,23 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDay, dailySchedules, minDuration, slotStride, matches]);
 
+  // Match → category. Returns the real division name when the group
+  // encodes one ("Benjamín Femenino|A"), otherwise empty string. The
+  // legacy "General" fallback was leaking into the category dropdown
+  // and the colour legend as a phantom option — we now keep those
+  // matches uncategorised and exclude the empty bucket from the
+  // filter list below.
   const getMatchCategory = (m: Match): string => {
-    if (m.group) return m.group.includes('|') ? m.group.split('|')[0] : 'General';
-    return 'General';
+    if (m.group && m.group.includes('|')) return m.group.split('|')[0];
+    return '';
   };
 
   const categories = useMemo<string[]>(() => {
     const cats = new Set<string>();
-    for (const m of matches) cats.add(getMatchCategory(m));
+    for (const m of matches) {
+      const c = getMatchCategory(m);
+      if (c) cats.add(c);
+    }
     return [...cats].sort();
   }, [matches]);
 

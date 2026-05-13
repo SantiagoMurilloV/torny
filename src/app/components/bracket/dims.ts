@@ -22,19 +22,24 @@ export const DIMENSIONS = {
     MAX_NAME_CHARS: 22,
   },
   mobile: {
-    MATCH_W: 200,
-    MATCH_H: 80,
-    COL_GAP: 36,
-    ROW_GAP: 14,
-    HEADER_H: 48,
-    TEAM_COLOR_RAIL_W: 4,
-    AVATAR_SIZE: 22,
-    TEAM_NAME_FONT: 12,
-    TEAM_INITIALS_FONT: 10,
-    SCORE_FONT: 18,
-    ROUND_LABEL_FONT: 11,
-    ROUND_COUNT_FONT: 9,
-    MAX_NAME_CHARS: 14,
+    // Aggressively compact so a 3-round bracket fits in a 360-400px
+    // viewport (plus the wrapper escapes the parent's px-6 padding,
+    // gaining ~48px more). 4+ rounds still scroll horizontally but
+    // each card now occupies ~58% of the previous mobile footprint
+    // (200→116 wide, 80→60 tall).
+    MATCH_W: 116,
+    MATCH_H: 60,
+    COL_GAP: 18,
+    ROW_GAP: 10,
+    HEADER_H: 38,
+    TEAM_COLOR_RAIL_W: 3,
+    AVATAR_SIZE: 18,
+    TEAM_NAME_FONT: 10,
+    TEAM_INITIALS_FONT: 8,
+    SCORE_FONT: 14,
+    ROUND_LABEL_FONT: 9,
+    ROUND_COUNT_FONT: 8,
+    MAX_NAME_CHARS: 10,
   },
 } as const;
 
