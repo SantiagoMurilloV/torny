@@ -42,7 +42,7 @@
   <rect x="40" y="236" width="420" height="3" rx="1.5" fill="#E31E24"></rect>
 
 
-  <text x="250" y="378" font-family="&#39;Arial Black&#39;,&#39;Impact&#39;,&#39;Haettenschweiler&#39;,sans-serif" font-weight="900" font-size="116" letter-spacing="-1" text-anchor="middle" dominant-baseline="auto" fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>
+  <text x="250" y="378" font-family="&#39;Archivo Black&#39;,&#39;Arial Black&#39;,&#39;Impact&#39;,&#39;Haettenschweiler&#39;,sans-serif" font-weight="900" font-size="116" letter-spacing="8" text-anchor="middle" dominant-baseline="auto" fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>
 
 
   <rect x="40" y="404" width="420" height="0.75" rx="0.5" fill="#FFFFFF" opacity="0.10"></rect>
