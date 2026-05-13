@@ -4,6 +4,7 @@ import { RefreshCw, Trophy, ArrowLeft } from 'lucide-react';
 import { useTournamentData } from './tournament-detail/useTournamentData';
 import { Header } from './tournament-detail/Header';
 import { Hero } from './tournament-detail/Hero';
+import { SponsorsCarousel } from './tournament-detail/SponsorsCarousel';
 import { TabNav } from './tournament-detail/TabNav';
 import { Footer } from './tournament-detail/Footer';
 import { TeamsTab } from './tournament-detail/tabs/TeamsTab';
@@ -127,6 +128,13 @@ export function TournamentDetail() {
         matchesCount={matches.length}
         enrolledCount={enrolledTeams.length}
       />
+
+      {/* Sponsors marquee — lives at the page layer (not inside any
+          tab) so it stays visible while the visitor switches between
+          Programación / Equipos / Cruces / Info. Auto-hides when
+          the torneo has zero sponsors so the white strip doesn't
+          show on tournaments without curated logos. */}
+      <SponsorsCarousel tournamentId={tournament.id} />
 
       <TabNav tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 
