@@ -628,15 +628,17 @@ function PublicMatchCard({
   const phaseLabel = match.phase ? phaseLabelOnly(match.phase) : '';
   const isBracketLabel = !groupLabel && phaseLabel && phaseLabel !== 'grupos';
   const slotLabel = groupLabel || (isBracketLabel ? phaseLabel : '');
-  // A bracket fixture is "unresolved" while it's waiting on a previous
-  // round's winner — the materialiser persists those matches with
-  // null team1/team2 ids and the transformer's `resolveTeam` returns
-  // a placeholder with `name: '—'`. We use that as the sentinel here
-  // and blur the team rows so the spectator doesn't try to read a
-  // half-empty card.
-  const isUnresolved =
-    isBracketLabel &&
-    (match.team1.name === '—' || match.team2.name === '—');
+  // A bracket fixture is "unresolved" until it's actually being
+  // played. The materialiser pre-fills team1/team2 with hypothetical
+  // seeds (1°A vs 2°B → the eventual winners of those groups) but
+  // those matchups aren't real yet — they assume the group phase
+  // will close in seed order. Showing them now misleads spectators
+  // into thinking "my team plays Spike on Saturday" when the actual
+  // opponent depends on standings still in flux. So: every bracket
+  // card in `upcoming` state hides its teams + score behind a heavy
+  // blur. Only `live` and `completed` matches reveal the content,
+  // because by then the actual teams are confirmed.
+  const isUnresolved = isBracketLabel && match.status === 'upcoming';
   const durationMin = getMatchDurationMinutes(match, tournament);
   const endTime = addMinutesToHHMM(match.time ?? '', durationMin);
   const isLive = match.status === 'live';
@@ -681,7 +683,7 @@ function PublicMatchCard({
             En vivo
           </span>
         )}
-        {match.score && (
+        {match.score && !isUnresolved && (
           <span className="ml-auto text-[9px] sm:text-[10px] font-bold tabular-nums text-black/70">
             {match.score.team1}-{match.score.team2}
           </span>
@@ -691,13 +693,14 @@ function PublicMatchCard({
           2-row card fits inside a 44px-tall cell. Desktop keeps the
           original spacing. Truncate is the safety net for long club
           names; the spectator can tap to drill in for the full text.
-          When the matchup is still waiting on a previous round's
-          result (`isUnresolved`) the rows render blurred + opaque so
-          the bracket placeholder text doesn't compete with real
-          fixtures for attention. */}
+          Unresolved bracket fixtures hide the hypothetical matchup
+          behind a heavy blur (3px + 30% opacity) so the layout stays
+          while the text becomes effectively unreadable — the card
+          reads as "Cuartos · Oro, equipos por definir" instead of
+          publishing the seed-based guess. */}
       <div
         className={`flex-1 flex flex-col justify-center gap-0.5 sm:gap-1.5 ${
-          isUnresolved ? 'blur-[1.5px] opacity-50 select-none pointer-events-none' : ''
+          isUnresolved ? 'blur-[3px] opacity-30 select-none pointer-events-none' : ''
         }`}
         aria-hidden={isUnresolved || undefined}
       >

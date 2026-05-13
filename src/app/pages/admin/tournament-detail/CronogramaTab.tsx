@@ -1193,14 +1193,14 @@ function MatchCard({
   const phaseLabel = match.phase ? phaseLabelOnly(match.phase) : '';
   const isBracketLabel = !groupLabel && phaseLabel && phaseLabel !== 'grupos';
   const slotLabel = groupLabel || (isBracketLabel ? phaseLabel : '');
-  // Bracket fixture is "unresolved" when its team slots still point at
-  // the placeholder team the transformer hands out for null IDs
-  // ("name === '—'"). The admin sees the phase label + colour but
-  // not the half-empty matchup data — same treatment as the public
-  // cronograma.
-  const isUnresolved =
-    isBracketLabel &&
-    (match.team1.name === '—' || match.team2.name === '—');
+  // Bracket fixture is "unresolved" until it's actually live or
+  // completed. While `upcoming` the matchup is just a seed-based
+  // guess (1°A vs 2°B), so even when the placeholder team objects
+  // have names, those names don't represent guaranteed opponents.
+  // The card hides them behind a strong blur and shows only the
+  // phase label + category colour — same treatment as the public
+  // cronograma so admin + spectator views stay consistent.
+  const isUnresolved = isBracketLabel && match.status === 'upcoming';
   // Per-category duration + end-time for the badge. Falls back to the
   // global default when no tournament is supplied (orphans banner) so
   // we still surface something useful.
@@ -1240,7 +1240,7 @@ function MatchCard({
             </span>
           )
         )}
-        {match.score && (
+        {match.score && !isUnresolved && (
           <span className="ml-auto text-[10px] font-bold tabular-nums text-black/70">
             {match.score.team1}-{match.score.team2}
           </span>
@@ -1317,7 +1317,7 @@ function MatchCard({
           real data. */}
       <div
         className={`flex-1 flex flex-col justify-center gap-1.5 ${
-          isUnresolved ? 'blur-[1.5px] opacity-50 select-none pointer-events-none' : ''
+          isUnresolved ? 'blur-[3px] opacity-30 select-none pointer-events-none' : ''
         }`}
         aria-hidden={isUnresolved || undefined}
       >
