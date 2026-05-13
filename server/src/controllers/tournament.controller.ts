@@ -78,6 +78,45 @@ export async function getMatches(req: Request, res: Response, next: NextFunction
   try {
     const id = req.params.id as string;
     validateUUID(id, 'ID de torneo');
+
+    // Self-healing materialization pass: if the torneo already has a
+    // bracket but its slots were never persisted into `matches`
+    // (e.g. tournaments created before mig 030 dropped the NOT NULL
+    // on team1_id/team2_id, OR a manual generateBracketCrossings
+    // that ran before the materializer was wired), force the
+    // materializer here so the admin's cronograma shows every
+    // future slot (cuartos / semis / final / 3er puesto) and can be
+    // scheduled end-to-end. Idempotent: `bracketGenerator.materialize…`
+    // skips slots already linked via `bracket_match_id` and only
+    // inserts new rows for missing ones, so calling it on every
+    // admin GET is cheap (one indexed COUNT + zero writes on the
+    // steady state).
+    //
+    // Best-effort: any failure (transient DB hiccup, schema drift on
+    // an older deploy) MUST NOT block the response — the admin
+    // needs to see whatever matches DO exist, even when the
+    // materializer is unhappy. Failures are logged for the operator.
+    //
+    // Public visitors land here via the cache hot-path before the
+    // controller runs (the cacheGet middleware sits before this in
+    // tournament.routes.ts), so this side-effect only fires for
+    // requests that carry an Authorization header. We further narrow
+    // it to admin / super_admin: judges fetch this endpoint on every
+    // referee-panel tick and don't need (or have any business
+    // triggering) bracket materialization — the admin that created
+    // the torneo is the right actor.
+    const caller = optionalUser(req);
+    if (caller && (caller.role === 'admin' || caller.role === 'super_admin')) {
+      try {
+        await bracketGenerator.materializePendingBracketMatches(id);
+      } catch (err) {
+        console.warn(
+          `[tournament.getMatches] materialize on read failed for ${id}:`,
+          err,
+        );
+      }
+    }
+
     const matches = await tournamentService.getMatches(id);
     res.json(matches);
   } catch (error) {

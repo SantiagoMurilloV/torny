@@ -201,8 +201,12 @@ export interface TeamCredentialsReceipt {
 export interface Match {
   id: string;           // UUID
   tournamentId: string; // FK
-  team1Id: string;      // FK
-  team2Id: string;      // FK
+  // NULLABLE since mig 030: bracket slots that depend on an upstream
+  // round materialize with team ids unresolved until `advanceWinner`
+  // writes them back. The admin's cronograma renders these slots
+  // blurred so the placeholder isn't misread as a real matchup.
+  team1Id: string | null; // FK (NULL = upstream round pending)
+  team2Id: string | null; // FK (NULL = upstream round pending)
   date: string;         // ISO date
   time: string;
   court: string;

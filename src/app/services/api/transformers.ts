@@ -90,7 +90,19 @@ export async function ensureTeamsCached(): Promise<void> {
  * AND the team isn't in `teamsCache` — but the rendered output is
  * always safe.
  */
-function resolveTeam(id: string): Team {
+function resolveTeam(id: string | null | undefined): Team {
+  // `null` is the legitimate "bracket slot waiting on an upstream
+  // round" case (mig 030). Pass it straight to the placeholder
+  // branch so the cronograma can still render the cartica with the
+  // em-dash + blur instead of crashing on a non-string id.
+  if (!id) {
+    return {
+      id: '',
+      name: '—',
+      initials: '—',
+      colors: { primary: '#E5E7EB', secondary: '#F3F4F6' },
+    };
+  }
   const cached = teamsCache.get(id);
   if (cached) return cached;
   return {

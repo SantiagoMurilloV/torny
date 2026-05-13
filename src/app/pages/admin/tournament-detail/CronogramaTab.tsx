@@ -423,6 +423,30 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
     });
   }, []);
 
+  // Match count + bracket-presence indicator per day. The day picker
+  // surfaces both so the admin knows where the bracket fixtures live
+  // before having to scroll through the schedule day-by-day. Without
+  // this it was easy to miss that cuartos/semis/final were already
+  // materialized on later days — the dropdown showed only weekday
+  // labels with no hint at where the action was.
+  const dayStats = useMemo<Map<string, { total: number; bracket: number }>>(
+    () => {
+      const map = new Map<string, { total: number; bracket: number }>();
+      for (const m of matches) {
+        const iso = toIso(m.date);
+        const entry = map.get(iso) ?? { total: 0, bracket: 0 };
+        entry.total += 1;
+        const phaseLabel = m.phase ? phaseLabelOnly(m.phase) : '';
+        if (phaseLabel && phaseLabel !== 'grupos' && !m.group) {
+          entry.bracket += 1;
+        }
+        map.set(iso, entry);
+      }
+      return map;
+    },
+    [matches],
+  );
+
   const handleDrop = useCallback(
     async (dragged: Match, destCourt: string, destTime: string) => {
       // Same slot drop → no-op.
@@ -508,7 +532,19 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
             const t2 = m.team2.id;
             const d1 = dragged.team1.id;
             const d2 = dragged.team2.id;
-            return t1 === d1 || t1 === d2 || t2 === d1 || t2 === d2;
+            // Bracket slots not yet resolved have `team.id === ''`
+            // (placeholder shape returned by `resolveTeam(null)`).
+            // Treating those as a real team would make two unresolved
+            // cuartos collide on a phantom "same team" check (both
+            // have `''` on both sides → `'' === ''` always wins). Skip
+            // the match when either dragged side is unresolved, and
+            // ignore matches in the candidate set whose team id is
+            // also empty.
+            const valid = (id: string) => id !== '';
+            return (
+              (valid(d1) && (t1 === d1 || t2 === d1)) ||
+              (valid(d2) && (t1 === d2 || t2 === d2))
+            );
           })
         : null;
 
@@ -552,10 +588,19 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
         }
 
         // 4) Clean move — destination empty and no team conflict.
+        //
+        // Only re-send team ids when they're actually resolved.
+        // Bracket slots pending an upstream round carry the `''`
+        // placeholder (resolveTeam(null) → id: ''), and forwarding
+        // that empty string as a real id makes `match.service.update`
+        // do a `SELECT id FROM teams WHERE id = ''` and 404. Letting
+        // the payload omit the field tells the backend "keep whatever
+        // team1_id / team2_id was already there" (which is NULL for
+        // an unresolved slot — exactly what we want).
         const updated = await api.updateMatch(dragged.id, {
           tournamentId: dragged.tournamentId,
-          team1Id: dragged.team1.id,
-          team2Id: dragged.team2.id,
+          ...(dragged.team1.id ? { team1Id: dragged.team1.id } : {}),
+          ...(dragged.team2.id ? { team2Id: dragged.team2.id } : {}),
           date: selectedDay,
           time: destTime,
           court: destCourt,
@@ -624,20 +669,38 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
       // Existing matches on the target day, indexed by occupancy and
       // by team-time. Includes ALL categories — backend will reject
       // cross-team conflicts regardless of the active filter.
+      //
+      // Bracket slots whose teams aren't resolved yet carry the
+      // placeholder `team.id === ''`. Skipping them when building
+      // `teamTimes` is essential: otherwise every unresolved slot
+      // pollutes the `''` bucket with its time, and dragging another
+      // unresolved cuartos to that day collides falsely against its
+      // own kind. Two unresolved slots are NOT the same team — they
+      // just both happen to read as the "—" placeholder.
       const occupied = new Set<string>();
       const teamTimes = new Map<string, Set<string>>(); // teamId → Set<time>
+      const isResolved = (id: string) => id !== '';
       for (const m of matches) {
         if (m.id === dragged.id) continue;
         if (toIso(m.date) !== targetDay) continue;
         occupied.add(`${m.court}|${m.time}`);
         for (const tid of [m.team1.id, m.team2.id]) {
+          if (!isResolved(tid)) continue;
           const s = teamTimes.get(tid) ?? new Set<string>();
           s.add(m.time);
           teamTimes.set(tid, s);
         }
       }
-      const t1Times = teamTimes.get(dragged.team1.id) ?? new Set<string>();
-      const t2Times = teamTimes.get(dragged.team2.id) ?? new Set<string>();
+      // Same guard on the dragged side — if either team is still a
+      // placeholder, treat its "already plays at time X" set as
+      // empty. The backend's per-match conflict check (slot + court +
+      // resolved teams) still catches real collisions on save.
+      const t1Times = isResolved(dragged.team1.id)
+        ? (teamTimes.get(dragged.team1.id) ?? new Set<string>())
+        : new Set<string>();
+      const t2Times = isResolved(dragged.team2.id)
+        ? (teamTimes.get(dragged.team2.id) ?? new Set<string>())
+        : new Set<string>();
 
       let chosen: { court: string; time: string } | null = null;
       outer: for (const time of slots) {
@@ -662,10 +725,16 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
 
       markInFlight([dragged.id], true);
       try {
+        // Same placeholder guard as the in-day drop above: don't
+        // forward `team.id === ''` to the backend, otherwise the
+        // `SELECT id FROM teams WHERE id = ''` returns zero rows and
+        // the admin sees "Equipo 1 no encontrado". Omitting the
+        // field tells the service to keep whatever was already
+        // stored (NULL for unresolved bracket slots).
         const updated = await api.updateMatch(dragged.id, {
           tournamentId: dragged.tournamentId,
-          team1Id: dragged.team1.id,
-          team2Id: dragged.team2.id,
+          ...(dragged.team1.id ? { team1Id: dragged.team1.id } : {}),
+          ...(dragged.team2.id ? { team2Id: dragged.team2.id } : {}),
           date: targetDay,
           time: chosen.time,
           court: chosen.court,
@@ -757,15 +826,37 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
             Día
           </span>
           <Select value={selectedDay} onValueChange={setSelectedDay}>
-            <SelectTrigger className="w-full sm:w-[220px]">
+            <SelectTrigger className="w-full sm:w-[260px]">
               <SelectValue placeholder="Elegí un día" />
             </SelectTrigger>
             <SelectContent>
-              {days.map((d) => (
-                <SelectItem key={d} value={d}>
-                  {formatDayLabel(d)}
-                </SelectItem>
-              ))}
+              {days.map((d) => {
+                const stats = dayStats.get(d) ?? { total: 0, bracket: 0 };
+                return (
+                  <SelectItem key={d} value={d}>
+                    <span className="flex items-center gap-2 w-full">
+                      <span>{formatDayLabel(d)}</span>
+                      {stats.total > 0 && (
+                        <span className="text-[10px] font-bold text-black/55 tabular-nums">
+                          · {stats.total}
+                        </span>
+                      )}
+                      {/* Pill rojo cuando el día tiene matches del
+                          bracket (cuartos/semis/final/3°). El admin ve
+                          de un vistazo dónde está la eliminatoria sin
+                          tener que abrir cada día. */}
+                      {stats.bracket > 0 && (
+                        <span
+                          className="ml-auto inline-flex items-center px-1.5 py-0.5 rounded-sm bg-spk-red/15 text-spk-red text-[9px] font-bold uppercase tracking-wider"
+                          style={FONT}
+                        >
+                          {stats.bracket} cruce{stats.bracket === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </span>
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>

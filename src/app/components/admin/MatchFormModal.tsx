@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
-import { Match } from '../../types';
+import { Match, Team } from '../../types';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { ApiError } from '../../services/api';
@@ -42,12 +42,21 @@ function validate(formData: {
     errors.tournamentId = 'Selecciona un torneo';
   }
 
-  if (!formData.team1Id) {
-    errors.team1Id = 'Selecciona el equipo 1';
-  }
+  // Allow saving an "unresolved" slot: both team ids empty → it's a
+  // bracket placeholder waiting for the upstream round, and the
+  // admin should be able to reprogram its date / hour / court
+  // without picking equipos. The cronograma + parent handlers strip
+  // the empty ids before they hit the wire so the server keeps
+  // team_id = NULL.
+  const isUnresolvedSlot = !formData.team1Id && !formData.team2Id;
 
-  if (!formData.team2Id) {
-    errors.team2Id = 'Selecciona el equipo 2';
+  if (!isUnresolvedSlot) {
+    if (!formData.team1Id) {
+      errors.team1Id = 'Selecciona el equipo 1';
+    }
+    if (!formData.team2Id) {
+      errors.team2Id = 'Selecciona el equipo 2';
+    }
   }
 
   if (formData.team1Id && formData.team2Id && formData.team1Id === formData.team2Id) {
@@ -149,8 +158,25 @@ export function MatchFormModal({ isOpen, onClose, onSubmit, match }: MatchFormMo
     setErrors({});
     setSubmitting(true);
 
-    const team1 = teams.find(t => t.id === formData.team1Id);
-    const team2 = teams.find(t => t.id === formData.team2Id);
+    // Both fields empty is the legitimate "unresolved bracket slot"
+    // case (matches mig 030). For that path, synthesize the same
+    // placeholder shape that `resolveTeam(null)` returns so the
+    // downstream Match object stays a valid React tree (callers
+    // already use the empty-string id as the signal to omit the
+    // field on the wire).
+    const isUnresolvedSlot = !formData.team1Id && !formData.team2Id;
+    const placeholderTeam: Team = {
+      id: '',
+      name: '—',
+      initials: '—',
+      colors: { primary: '#E5E7EB', secondary: '#F3F4F6' },
+    };
+    const team1 = isUnresolvedSlot
+      ? placeholderTeam
+      : teams.find((t) => t.id === formData.team1Id);
+    const team2 = isUnresolvedSlot
+      ? placeholderTeam
+      : teams.find((t) => t.id === formData.team2Id);
 
     if (!team1 || !team2) {
       setErrors({ teams: 'Por favor selecciona ambos equipos' });

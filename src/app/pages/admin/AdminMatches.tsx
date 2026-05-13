@@ -71,10 +71,14 @@ export function AdminMatches() {
 
   const handleSubmit = async (match: Match) => {
     if (editingMatch) {
+      // Drop team ids when they're still the unresolved-slot
+      // placeholder (`''` from resolveTeam(null)) — same reasoning
+      // as MatchesTab.handleEditSubmit. The server keeps the
+      // existing NULL team_id and just reschedules the slot.
       const dto: UpdateMatchDto = {
         tournamentId: match.tournamentId,
-        team1Id: match.team1.id,
-        team2Id: match.team2.id,
+        ...(match.team1.id ? { team1Id: match.team1.id } : {}),
+        ...(match.team2.id ? { team2Id: match.team2.id } : {}),
         date: match.date.toISOString().split('T')[0],
         time: match.time,
         court: match.court,

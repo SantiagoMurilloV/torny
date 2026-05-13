@@ -81,8 +81,12 @@ function mapRow(row: Record<string, unknown>): Match {
   return {
     id: row.id as string,
     tournamentId: row.tournament_id as string,
-    team1Id: row.team1_id as string,
-    team2Id: row.team2_id as string,
+    // team1_id / team2_id are now nullable for bracket slots that
+    // haven't been resolved yet (mig 030). Keep the cast honest so
+    // downstream code remembers to handle the placeholder case
+    // instead of crashing on `team1Id.length` etc.
+    team1Id: (row.team1_id as string | null) ?? null,
+    team2Id: (row.team2_id as string | null) ?? null,
     date: row.date as string,
     time: row.time as string,
     court: row.court as string,
@@ -211,7 +215,18 @@ export class MatchService {
       const mergedTeam2 = data.team2Id ?? existing.team2Id;
       const mergedTournament = data.tournamentId ?? existing.tournamentId;
 
-      if (mergedTeam1 === mergedTeam2) {
+      // Only reject `team1 === team2` when BOTH ends are resolved.
+      // Since mig 030 the cronograma materializes bracket slots whose
+      // teams aren't known yet, so both `mergedTeam1` and `mergedTeam2`
+      // can legitimately be `null` — and `null === null` is `true`,
+      // which used to crash the drag-and-drop with "Los dos equipos
+      // deben ser diferentes" the moment the admin tried to reschedule
+      // an unresolved cuartos/semi/final.
+      if (
+        mergedTeam1 !== null &&
+        mergedTeam2 !== null &&
+        mergedTeam1 === mergedTeam2
+      ) {
         throw new ValidationError('Los dos equipos deben ser diferentes');
       }
 
@@ -222,13 +237,18 @@ export class MatchService {
           throw new NotFoundError('Torneo');
         }
       }
-      if (data.team1Id !== undefined) {
+      // Skip the team-exists check when the slot is intentionally
+      // unresolved (mergedTeamX === null). Without this guard, the
+      // `SELECT id FROM teams WHERE id = NULL` query returns zero rows
+      // and the admin would see "Equipo 1 no encontrado" on any drag
+      // that touched a bracket placeholder.
+      if (data.team1Id !== undefined && mergedTeam1 !== null) {
         const t1Check = await pool.query('SELECT id FROM teams WHERE id = $1', [mergedTeam1]);
         if (t1Check.rows.length === 0) {
           throw new NotFoundError('Equipo 1');
         }
       }
-      if (data.team2Id !== undefined) {
+      if (data.team2Id !== undefined && mergedTeam2 !== null) {
         const t2Check = await pool.query('SELECT id FROM teams WHERE id = $1', [mergedTeam2]);
         if (t2Check.rows.length === 0) {
           throw new NotFoundError('Equipo 2');
@@ -309,12 +329,18 @@ export class MatchService {
         ],
       );
       if (conflictRes.rows.length > 0) {
+        // Compare team-vs-team only when BOTH sides are resolved.
+        // Without the `!== null` guard, two unresolved bracket slots
+        // sharing a court+time would be reported as a (false) team
+        // collision instead of a court collision, because
+        // `null === null` is true and the SQL row's team_id is also
+        // null when materialized but unresolved.
         const teamConflict = conflictRes.rows.find(
           (r) =>
-            r.team1_id === mergedTeam1 ||
-            r.team1_id === mergedTeam2 ||
-            r.team2_id === mergedTeam1 ||
-            r.team2_id === mergedTeam2,
+            (mergedTeam1 !== null &&
+              (r.team1_id === mergedTeam1 || r.team2_id === mergedTeam1)) ||
+            (mergedTeam2 !== null &&
+              (r.team1_id === mergedTeam2 || r.team2_id === mergedTeam2)),
         );
         if (teamConflict) {
           const labelA = teamConflict.team1_name ?? 'Equipo 1';

@@ -88,8 +88,13 @@ export interface BackendSetScore {
 export interface BackendMatch {
   id: string;
   tournamentId: string;
-  team1Id: string;
-  team2Id: string;
+  // NULLABLE since mig 030: bracket slots that the materializer
+  // pre-creates while the upstream round (grupos / cuartos / semis)
+  // is still in flux. The admin's cronograma renders these
+  // placeholders blurred and the `resolveTeam` helper returns a
+  // neutral em-dash card when the id is null.
+  team1Id: string | null;
+  team2Id: string | null;
   date: string;
   time: string;
   court: string;
