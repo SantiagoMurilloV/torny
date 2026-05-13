@@ -272,15 +272,6 @@ function RoundColumn({
       >
         {round.label.toUpperCase()}
       </text>
-      <text
-        x={x + MATCH_W / 2}
-        y={HEADER_H - 6}
-        textAnchor="middle"
-        className="fill-black/40 font-bold uppercase"
-        style={{ ...FONT, letterSpacing: '0.14em', fontSize: dims.ROUND_COUNT_FONT }}
-      >
-        {matchCount} {matchCount === 1 ? 'Partido' : 'Partidos'}
-      </text>
 
       {round.matches.map((match, mIdx) => {
         const centerY = HEADER_H + slotH * mIdx + slotH / 2;
