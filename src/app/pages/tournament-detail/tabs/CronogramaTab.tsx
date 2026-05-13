@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, Search, Timer, X } from 'lucide-react';
 import type { Match, Tournament } from '../../../types';
 import { TeamAvatar } from '../../../components/TeamAvatar';
@@ -15,6 +16,7 @@ import {
   addMinutesToHHMM,
 } from '../../../lib/matchDuration';
 import { categoryOfMatch, phaseLabelOnly } from '../../../lib/phase';
+import { useIsMobile } from '../../../components/ui/use-mobile';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
@@ -60,6 +62,11 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [search, setSearch] = useState('');
+  // Mobile-only "magnifying glass" overlay. Tapping a card on a phone
+  // expands it into a centred modal with the rest of the grid dimmed;
+  // desktop never sets this (hover does the affordance there).
+  const [focusedMatch, setFocusedMatch] = useState<Match | null>(null);
+  const isMobile = useIsMobile();
 
   const toIso = (d: Date | string): string => {
     if (d instanceof Date) return d.toISOString().slice(0, 10);
@@ -567,7 +574,14 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
                               CATEGORY_COLORS[0]
                             }
                             tournament={tournament}
-                            onClick={() => navigate(`/match/${m.id}`)}
+                            // Mobile → opens the magnifying-glass
+                            // overlay. Desktop → no-op (the hover
+                            // animation is the affordance, no
+                            // navigation; spectators looking on a
+                            // big screen don't need a tap target).
+                            onClick={
+                              isMobile ? () => setFocusedMatch(m) : undefined
+                            }
                           />
                         ))}
                       </div>
@@ -587,6 +601,32 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
             : 'Aún no hay partidos programados para este día.'}
         </div>
       )}
+
+      {/* Mobile-only magnifying-glass overlay. Tapping a card on a
+          phone pulls it out of the grid into a centred modal with the
+          rest of the page dimmed + blurred — the equivalent of a
+          fixture stand-up that lets the spectator read all the
+          metadata (full team names, score, court, time, duration)
+          without leaving the cronograma. Tapping the backdrop or the
+          close button dismisses. */}
+      <AnimatePresence>
+        {focusedMatch && (
+          <FocusedMatchOverlay
+            match={focusedMatch}
+            color={
+              categoryColorMap.get(getMatchCategory(focusedMatch)) ??
+              CATEGORY_COLORS[0]
+            }
+            tournament={tournament}
+            onClose={() => setFocusedMatch(null)}
+            onOpenDetail={() => {
+              const id = focusedMatch.id;
+              setFocusedMatch(null);
+              navigate(`/match/${id}`);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -595,7 +635,11 @@ interface PublicMatchCardProps {
   match: Match;
   color: typeof CATEGORY_COLORS[0];
   tournament: Tournament;
-  onClick: () => void;
+  /** Optional click handler. Desktop passes `undefined` so the card is
+   *  non-interactive (hover animation is the affordance, no
+   *  navigation). Mobile passes a callback that opens the
+   *  magnifying-glass overlay. */
+  onClick?: () => void;
 }
 
 /**
@@ -605,8 +649,11 @@ interface PublicMatchCardProps {
  *   · both teams (avatar + name)
  *   · duration + end-time badge so "60' → 09:00" is always visible
  *
- * The whole card is clickable so phone users can tap to drill into
- * the match detail page.
+ * Desktop: the card renders as a `<div>` (non-interactive) with a
+ * subtle hover lift + shadow on mouse-over so spectators get visual
+ * feedback without misleading them into thinking the card navigates.
+ * Mobile: rendered as a `<button>` that fires the parent-supplied
+ * `onClick` to open the focus overlay.
  */
 function PublicMatchCard({
   match,
@@ -614,6 +661,7 @@ function PublicMatchCard({
   tournament,
   onClick,
 }: PublicMatchCardProps) {
+  const isInteractive = typeof onClick === 'function';
   // Choose the slot label depending on the match type:
   //   · Round-robin (has `group` with pipe): "A", "B", "C…" — the
   //     group letter the round-robin generator persists.
@@ -644,12 +692,36 @@ function PublicMatchCard({
   const isLive = match.status === 'live';
 
   return (
-    <button
-      type="button"
+    // Render as <button> only when the parent supplied an onClick
+    // (mobile path). On desktop the card is a non-interactive <div>
+    // so accidental clicks don't trigger navigation — the hover lift
+    // + shadow still telegraph the card is "alive". Both variants
+    // share the same visual classes so the layout never shifts.
+    <motion.div
+      role={isInteractive ? 'button' : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
       onClick={onClick}
+      onKeyDown={
+        isInteractive
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
+      whileHover={{
+        y: -3,
+        scale: 1.02,
+        transition: { type: 'spring', stiffness: 360, damping: 22 },
+      }}
+      whileTap={isInteractive ? { scale: 0.98 } : undefined}
       className={`${color.bg} ${color.border} ${
         isLive ? 'ring-2 ring-spk-red/70' : ''
-      } border rounded-sm sm:rounded-md px-1 py-0.5 sm:px-2 sm:py-1.5 text-left w-full transition-all hover:shadow-md sm:hover:-translate-y-0.5 h-full flex flex-col`}
+      } border rounded-sm sm:rounded-md px-1 py-0.5 sm:px-2 sm:py-1.5 text-left w-full h-full flex flex-col hover:shadow-lg ${
+        isInteractive ? 'cursor-pointer' : 'cursor-default'
+      } outline-none focus-visible:ring-2 focus-visible:ring-spk-red`}
     >
       <div className="flex items-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1">
         {slotLabel && (
@@ -734,7 +806,193 @@ function PublicMatchCard({
           <span className="opacity-60 tabular-nums">{durationMin}&prime;</span>
         </div>
       )}
-    </button>
+    </motion.div>
+  );
+}
+
+interface FocusedMatchOverlayProps {
+  match: Match;
+  color: typeof CATEGORY_COLORS[0];
+  tournament: Tournament;
+  onClose: () => void;
+  onOpenDetail: () => void;
+}
+
+/**
+ * Mobile-only magnifier — pulls the tapped match card out of the
+ * crowded cronograma grid into a centred modal. Backdrop is dimmed
+ * + blurred so the rest of the page falls away visually; the
+ * focused card reads with full team names (no truncate), bigger
+ * avatars, score in tabular-nums, court + time + duration metadata,
+ * and a "Ver detalle" button that navigates to the match-detail
+ * page if the spectator wants the full match view.
+ *
+ * Wrapped in framer-motion AnimatePresence so the open/close
+ * transitions feel like a true zoom-in lupa (scale + fade).
+ */
+function FocusedMatchOverlay({
+  match,
+  color,
+  tournament,
+  onClose,
+  onOpenDetail,
+}: FocusedMatchOverlayProps) {
+  const groupLabel = match.group?.includes('|')
+    ? match.group.split('|').slice(1).join('|')
+    : '';
+  const phaseLabel = match.phase ? phaseLabelOnly(match.phase) : '';
+  const isBracketLabel = !groupLabel && phaseLabel && phaseLabel !== 'grupos';
+  const slotLabel = groupLabel || (isBracketLabel ? phaseLabel : '');
+  const isUnresolved = isBracketLabel && match.status === 'upcoming';
+  const durationMin = getMatchDurationMinutes(match, tournament);
+  const endTime = addMinutesToHHMM(match.time ?? '', durationMin);
+  const isLive = match.status === 'live';
+  const isCompleted = match.status === 'completed';
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-sm"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Detalle del partido"
+    >
+      <motion.div
+        initial={{ scale: 0.82, opacity: 0, y: 12 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 8 }}
+        transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+        onClick={(e) => e.stopPropagation()}
+        className={`${color.bg} ${color.border} border-2 rounded-md w-full max-w-sm shadow-2xl p-4 sm:p-5 flex flex-col gap-4 relative`}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Cerrar"
+          className="absolute top-2 right-2 w-7 h-7 rounded-sm bg-white/70 hover:bg-white flex items-center justify-center text-black/70"
+        >
+          <X className="w-4 h-4" />
+        </button>
+
+        {/* Header — slot label + status */}
+        <div className="flex items-center gap-2 flex-wrap pr-8">
+          {slotLabel && (
+            <span
+              className={`${color.text} ${color.border} text-[10px] font-bold uppercase tracking-wider border bg-white/80 px-2 py-0.5 rounded-sm`}
+              style={FONT}
+            >
+              {slotLabel}
+            </span>
+          )}
+          {isLive && (
+            <span
+              className="text-[10px] font-bold uppercase text-white bg-spk-red px-2 py-0.5 rounded-sm tracking-wider"
+              style={FONT}
+            >
+              En vivo
+            </span>
+          )}
+          {isCompleted && (
+            <span
+              className="text-[10px] font-bold uppercase text-white bg-black/70 px-2 py-0.5 rounded-sm tracking-wider"
+              style={FONT}
+            >
+              Finalizado
+            </span>
+          )}
+        </div>
+
+        {/* Teams + score. When the match is an unresolved bracket
+            fixture (upcoming bracket card) we hide the seed-based
+            guess behind a blur so the spectator gets the "por
+            definir" signal even in the focused view. */}
+        <div
+          className={`flex flex-col gap-3 ${
+            isUnresolved ? 'blur-[3px] opacity-40 select-none' : ''
+          }`}
+          aria-hidden={isUnresolved || undefined}
+        >
+          <div className="flex items-center gap-3">
+            <TeamAvatar team={match.team1} size="md" />
+            <span
+              className="flex-1 min-w-0 text-base font-bold text-black/85 leading-tight"
+              style={FONT}
+            >
+              {match.team1.name}
+            </span>
+            {match.score && (
+              <span className="text-3xl font-black tabular-nums text-black/85">
+                {match.score.team1}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            <TeamAvatar team={match.team2} size="md" />
+            <span
+              className="flex-1 min-w-0 text-base font-bold text-black/85 leading-tight"
+              style={FONT}
+            >
+              {match.team2.name}
+            </span>
+            {match.score && (
+              <span className="text-3xl font-black tabular-nums text-black/85">
+                {match.score.team2}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {isUnresolved && (
+          <div
+            className="text-[11px] uppercase tracking-[0.16em] text-black/55 text-center"
+            style={FONT}
+          >
+            Equipos por definir
+          </div>
+        )}
+
+        {/* Metadata strip — court · time → end · duration */}
+        <div
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-bold uppercase tracking-wider text-black/65 pt-2 border-t border-black/15"
+          style={FONT}
+        >
+          {match.court && (
+            <span className="inline-flex items-center gap-1">
+              {match.court}
+            </span>
+          )}
+          {match.time && (
+            <span className="inline-flex items-center gap-1 tabular-nums">
+              <Timer className="w-3 h-3" aria-hidden="true" />
+              {match.time}
+              {endTime && ` → ${endTime}`}
+            </span>
+          )}
+          {durationMin > 0 && (
+            <span className="tabular-nums">{durationMin}&prime;</span>
+          )}
+        </div>
+
+        {/* Ver detalle CTA — navigates to /match/:id with a hand-off
+            transition. Hidden when the fixture is unresolved (the
+            match-detail page would just show the same placeholder
+            data, no value-add). */}
+        {!isUnresolved && (
+          <button
+            type="button"
+            onClick={onOpenDetail}
+            className="w-full bg-black text-white text-xs font-bold uppercase tracking-wider py-2 rounded-sm hover:bg-spk-red transition-colors"
+            style={FONT}
+          >
+            Ver detalle
+          </button>
+        )}
+      </motion.div>
+    </motion.div>
   );
 }
 
