@@ -76,8 +76,12 @@ export default defineConfig({
 
   server: {
     proxy: {
+      // Backend lives on 3001 (server/src/index.ts: `const PORT = ... : 3001;`).
+      // Vite proxies /api/* to it so dev frontend at :5173 can reach the
+      // Express server without CORS gymnastics. If you change the backend
+      // PORT env var, update this target too.
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
     },

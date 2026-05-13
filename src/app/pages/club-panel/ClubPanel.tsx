@@ -416,7 +416,7 @@ function TabBar({ active, onChange, counts }: TabBarProps) {
     },
     {
       key: 'cronograma',
-      label: 'Cronograma',
+      label: 'Programación',
       icon: <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />,
     },
   ];
@@ -756,7 +756,7 @@ function CronogramaPlaceholder() {
           className="text-xs font-bold uppercase text-black/50 border-b border-black/10 pb-1.5"
           style={{ ...FONT, letterSpacing: '0.08em' }}
         >
-          Cronograma del club
+          Programación del club
         </h2>
       </header>
       <div className="relative overflow-hidden bg-gradient-to-br from-spk-black to-[#1a1a1a] text-white rounded-sm p-5">

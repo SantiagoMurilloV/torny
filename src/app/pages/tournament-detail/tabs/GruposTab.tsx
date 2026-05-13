@@ -5,7 +5,13 @@ import type { Match, StandingsRow } from '../../../types';
 import { GroupMatrix } from '../../../components/GroupMatrix';
 import { StandingsTable } from '../../../components/StandingsTable';
 import { categoryOfGroupName } from '../../../lib/phase';
-import { CategoryFilterBar } from '../CategoryFilterBar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../components/ui/select';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
@@ -51,12 +57,29 @@ export function GruposTab({
       animate={{ opacity: 1, y: 0 }}
       className="space-y-4 sm:space-y-6"
     >
-      {hasGroups && (
-        <CategoryFilterBar
-          categories={categories}
-          value={categoryFilter}
-          onChange={setCategoryFilter}
-        />
+      {/* Category dropdown — only renders when there are 2+ categories
+          to choose from, otherwise the page already shows everything
+          relevant and the filter is dead weight. Matches the dropdown
+          style used in Cruces and Clasificación for consistency. */}
+      {hasGroups && categories.length > 1 && (
+        <div>
+          <Select
+            value={categoryFilter}
+            onValueChange={(v) => setCategoryFilter(v as string | 'all')}
+          >
+            <SelectTrigger className="w-full sm:w-[220px]">
+              <SelectValue placeholder="Categoría" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las categorías</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       )}
       {hasGroups ? (
         <GroupedByCategory

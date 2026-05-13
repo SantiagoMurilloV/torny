@@ -41,7 +41,7 @@ const TOURNAMENT_TABS = [
   { id: 'teams', label: 'Equipos inscritos', icon: UsersIcon },
   { id: 'fixtures', label: 'Cruces', icon: Shuffle },
   { id: 'matches', label: 'Partidos', icon: Swords },
-  { id: 'cronograma', label: 'Cronograma', icon: Calendar },
+  { id: 'cronograma', label: 'Programación', icon: Calendar },
 ] as const;
 
 export function AdminLayout() {

@@ -108,7 +108,7 @@ export function TournamentDetail() {
     // Cronograma is the entry point — spectators see the day's
     // schedule the moment they open the tournament. Counter shows the
     // total scheduled across all days so they know the size at a glance.
-    { id: 'cronograma', label: 'Cronograma', count: matches.length },
+    { id: 'cronograma', label: 'Programación', count: matches.length },
     {
       id: 'teams',
       label: 'Equipos',

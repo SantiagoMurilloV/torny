@@ -2,8 +2,6 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, X, ChevronDown } from 'lucide-react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import type { Match, Tournament } from '../../../types';
 import { MatchCard } from '../../../components/MatchCard';
 import {
@@ -16,7 +14,13 @@ import {
   PHASE_BUCKET_LABELS,
   type PhaseBucket,
 } from '../../../lib/phase';
-import { CategoryFilterBar } from '../CategoryFilterBar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../../../components/ui/select';
 
 /**
  * Resolve the category of a match across the two encoding shapes the
@@ -134,42 +138,71 @@ export function MatchesTab({
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6 sm:space-y-8"
     >
-      <div className="space-y-3 sm:space-y-4">
-        {/* Search — compact on mobile, expanded on desktop. */}
-        <div className="relative w-full sm:max-w-xl">
-          <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-black/40" />
+      <div className="space-y-2">
+        {/* Search — single subtle input matching the rest of the
+            public tabs (Programación, Equipos). Hairline border,
+            text-sm, py-2 — the previous bg-black/5 + chunky padding
+            stood out from the page's visual language. */}
+        <div className="relative">
+          <Search
+            className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-black/40 pointer-events-none"
+            aria-hidden="true"
+          />
           <input
             type="text"
-            placeholder="Buscar por equipo..."
+            placeholder="Buscar por equipo…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full pl-9 sm:pl-11 pr-3 sm:pr-4 py-2.5 sm:py-3 bg-black/5 border border-black/10 rounded-sm text-sm sm:text-base focus:outline-none focus:border-black/40 transition-colors placeholder:text-black/40"
+            aria-label="Buscar partido por equipo"
+            className="w-full pl-9 pr-9 py-2 text-sm rounded-sm border border-spk-hairline focus:border-spk-red focus:ring-2 focus:ring-spk-red/20 outline-none bg-white"
           />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              aria-label="Limpiar búsqueda"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-black/40 hover:text-black rounded-sm"
+            >
+              <X className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          )}
         </div>
 
-        {/* Phase pills — 5 fixed buckets covering tournament progression. */}
-        <div className="flex flex-wrap gap-1.5 sm:gap-2">
-          <PhasePill
-            active={phaseFilter === 'all'}
-            onClick={() => setPhaseFilter('all')}
-            label="Todas las fases"
-          />
-          {PHASE_BUCKETS.map((b) => (
-            <PhasePill
-              key={b}
-              active={phaseFilter === b}
-              onClick={() => setPhaseFilter(b)}
-              label={PHASE_BUCKET_LABELS[b]}
-            />
-          ))}
+        {/* Two dropdowns side-by-side under the search — 50/50 grid
+            keeps both filters visible without the previous pill grid
+            (5 phase pills + N category pills wrapping into 2-3 rows
+            ate half the screen on a phone). */}
+        <div className="grid grid-cols-2 gap-2">
+          <Select
+            value={phaseFilter}
+            onValueChange={(v) => setPhaseFilter(v as PhaseBucket | 'all')}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Fase" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las fases</SelectItem>
+              {PHASE_BUCKETS.map((b) => (
+                <SelectItem key={b} value={b}>
+                  {PHASE_BUCKET_LABELS[b]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Categoría" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas las categorías</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat}>
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-
-        {/* Category pills — dynamic, hidden when there's only one. */}
-        <CategoryFilterBar
-          categories={categories}
-          value={categoryFilter}
-          onChange={setCategoryFilter}
-        />
 
         {hasActiveFilters && (
           <motion.div
@@ -249,32 +282,6 @@ export function MatchesTab({
         </div>
       )}
     </motion.div>
-  );
-}
-
-// ── Pills ──────────────────────────────────────────────────────────
-
-function PhasePill({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <motion.button
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.97 }}
-      onClick={onClick}
-      className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-sm text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors ${
-        active ? 'bg-spk-red text-white' : 'bg-black/5 text-black/70 hover:bg-black/10'
-      }`}
-      style={FONT}
-    >
-      {label}
-    </motion.button>
   );
 }
 
