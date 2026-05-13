@@ -25,6 +25,8 @@ import { TeamsTab } from './tournament-detail/TeamsTab';
 import { FixturesTab } from './tournament-detail/FixturesTab';
 import { MatchesTab } from './tournament-detail/MatchesTab';
 import { CronogramaTab } from './tournament-detail/CronogramaTab';
+import { SponsorsTab } from './tournament-detail/SponsorsTab';
+import { NotificationsTab } from './tournament-detail/NotificationsTab';
 import { getErrorMessage } from '../../lib/errors';
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -34,7 +36,15 @@ const FORMAT_LABELS: Record<string, string> = {
   league: 'Liga (Todos contra Todos)',
 };
 
-const VALID_TABS = ['info', 'teams', 'fixtures', 'matches', 'cronograma'] as const;
+const VALID_TABS = [
+  'info',
+  'teams',
+  'fixtures',
+  'matches',
+  'cronograma',
+  'sponsors',
+  'notifications',
+] as const;
 type TabId = (typeof VALID_TABS)[number];
 
 const SECTION_TITLE: Record<TabId, string> = {
@@ -43,6 +53,8 @@ const SECTION_TITLE: Record<TabId, string> = {
   fixtures: 'Cruces',
   matches: 'Partidos',
   cronograma: 'Programación',
+  sponsors: 'Patrocinadores',
+  notifications: 'Notificaciones',
 };
 
 /**
@@ -547,6 +559,19 @@ export function AdminTournamentDetail() {
                   return prev.map((m) => byId.get(m.id) ?? m);
                 });
               }}
+            />
+          )}
+        </TabsContent>
+
+        <TabsContent value="sponsors">
+          {tournament && <SponsorsTab tournamentId={tournament.id} />}
+        </TabsContent>
+
+        <TabsContent value="notifications">
+          {tournament && (
+            <NotificationsTab
+              tournamentId={tournament.id}
+              tournamentName={tournament.name}
             />
           )}
         </TabsContent>

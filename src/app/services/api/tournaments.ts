@@ -6,6 +6,7 @@ import type {
   StandingsRow,
   BracketMatch,
   FixtureResult,
+  TournamentSponsor,
 } from '../../types';
 import type {
   BackendTournament,
@@ -151,6 +152,90 @@ export const tournamentsApi = {
   }> {
     return request(`/tournaments/${id}/repair-conflicts`, {
       method: 'POST',
+    });
+  },
+
+  /**
+   * Free-form push notification to every enrolled club. Body
+   * shape: `{ title, body, url? }`. Admins use it for one-off
+   * reminders / announcements that should reach club captains
+   * (not the public stream).
+   */
+  async notifyClubs(
+    id: string,
+    payload: { title: string; body: string; url?: string },
+  ): Promise<{
+    tournamentId: string;
+    tournamentName: string;
+    clubsNotified: number;
+    clubs: Array<{ clubId: string; clubName: string }>;
+  }> {
+    return request(`/tournaments/${id}/notify-clubs`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * Free-form push to EVERY subscriber (public spectators + club
+   * captains). For tournament-wide announcements.
+   */
+  async notifyAll(
+    id: string,
+    payload: { title: string; body: string; url?: string },
+  ): Promise<{
+    tournamentId: string;
+    tournamentName: string;
+    totalSubscriptions: number;
+  }> {
+    return request(`/tournaments/${id}/notify-all`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  // ── Sponsors (mig 033) ──────────────────────────────────────────
+
+  async listSponsors(id: string): Promise<TournamentSponsor[]> {
+    return request(`/tournaments/${id}/sponsors`);
+  },
+
+  async createSponsor(
+    id: string,
+    payload: { name?: string | null; logo: string; link?: string | null },
+  ): Promise<TournamentSponsor> {
+    return request(`/tournaments/${id}/sponsors`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateSponsor(
+    id: string,
+    sponsorId: string,
+    payload: Partial<{
+      name: string | null;
+      logo: string;
+      link: string | null;
+      displayOrder: number;
+    }>,
+  ): Promise<TournamentSponsor> {
+    return request(`/tournaments/${id}/sponsors/${sponsorId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteSponsor(id: string, sponsorId: string): Promise<void> {
+    await request(`/tournaments/${id}/sponsors/${sponsorId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async reorderSponsors(id: string, orderedIds: string[]): Promise<TournamentSponsor[]> {
+    return request(`/tournaments/${id}/sponsors/reorder`, {
+      method: 'POST',
+      body: JSON.stringify({ orderedIds }),
     });
   },
 

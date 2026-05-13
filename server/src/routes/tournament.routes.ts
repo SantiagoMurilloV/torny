@@ -16,6 +16,7 @@ import {
   cleanByeMatches,
   sendScheduleToClubs,
   notifyClubs,
+  notifyAll,
   pushDebug,
   getBracket,
   getEnrolledTeams,
@@ -85,10 +86,34 @@ router.post(
 // title/body to every club's captain. Doesn't touch the schedule
 // timestamp; meant for reminders + announcements.
 router.post('/:id/notify-clubs', requireTournamentAccess, notifyClubs);
+// Free-form broadcast to every push subscriber (public + clubs).
+// Owner-gated. Same body shape as notify-clubs.
+router.post('/:id/notify-all', requireTournamentAccess, notifyAll);
 // Diagnostic — count push subscriptions per enrolled club so the
 // admin can verify that captains actually accepted the prompt
 // before relying on the broadcast. Read-only.
 router.get('/:id/push-debug', requireTournamentAccess, pushDebug);
+
+// Sponsors (mig 033) — list is public so the Hero can paint the
+// strip; mutations are owner-gated.
+import * as sponsorCtrl from '../controllers/sponsor.controller';
+router.get('/:id/sponsors', sponsorCtrl.list);
+router.post('/:id/sponsors', requireTournamentAccess, sponsorCtrl.create);
+router.put(
+  '/:id/sponsors/:sponsorId',
+  requireTournamentAccess,
+  sponsorCtrl.update,
+);
+router.delete(
+  '/:id/sponsors/:sponsorId',
+  requireTournamentAccess,
+  sponsorCtrl.remove,
+);
+router.post(
+  '/:id/sponsors/reorder',
+  requireTournamentAccess,
+  sponsorCtrl.reorder,
+);
 router.get('/:id/bracket', cacheGet(15, { swrSeconds: 60 }), getBracket);
 
 // Team enrollment — list is public (spectators see who's playing); the

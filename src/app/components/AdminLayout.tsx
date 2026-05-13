@@ -15,6 +15,8 @@ import {
   Swords,
   Calendar,
   Building2,
+  Award,
+  Bell,
 } from 'lucide-react';
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -43,6 +45,8 @@ const TOURNAMENT_TABS = [
   { id: 'fixtures', label: 'Cruces', icon: Shuffle },
   { id: 'matches', label: 'Partidos', icon: Swords },
   { id: 'cronograma', label: 'Programación', icon: Calendar },
+  { id: 'sponsors', label: 'Patrocinadores', icon: Award },
+  { id: 'notifications', label: 'Notificaciones', icon: Bell },
 ] as const;
 
 export function AdminLayout() {

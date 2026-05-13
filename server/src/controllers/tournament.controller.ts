@@ -683,6 +683,79 @@ export async function notifyClubs(
 }
 
 /**
+ * Free-form broadcast to EVERY subscriber (public spectators +
+ * captains). Same shape as `notifyClubs` but uses `sendToAll`
+ * under the hood — admins use this for tournament-wide
+ * announcements (postponed games, weather, etc.) that everyone
+ * watching the event should see, not just the clubes.
+ *
+ * Required body: `{ title: string, body: string, url?: string }`.
+ * Owner-gated by `requireTournamentAccess` at the route.
+ */
+export async function notifyAll(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    validateUUID(id, 'ID de torneo');
+    const { title, body, url } = (req.body ?? {}) as {
+      title?: string;
+      body?: string;
+      url?: string;
+    };
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      throw new ValidationError('title es obligatorio');
+    }
+    if (!body || typeof body !== 'string' || !body.trim()) {
+      throw new ValidationError('body es obligatorio');
+    }
+    const finalUrl =
+      typeof url === 'string' && url.trim() !== '' ? url.trim() : `/torneo`;
+
+    const pool = (await import('../config/database')).getPool();
+    const tournRes = await pool.query<{ id: string; name: string; slug: string | null }>(
+      'SELECT id, name, slug FROM tournaments WHERE id = $1',
+      [id],
+    );
+    if (tournRes.rows.length === 0) {
+      throw new ValidationError('Torneo no encontrado');
+    }
+    const tournament = tournRes.rows[0];
+
+    // Count active push subscriptions so the response gives the
+    // admin a realistic "alcance estimado". Doesn't gate the send —
+    // sendToAll loops over the table anyway.
+    const countRes = await pool.query<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM push_subscriptions`,
+    );
+    const totalSubscriptions = countRes.rows[0]?.count ?? 0;
+
+    const pushService = (await import('../services/push.service')).pushService;
+    const tag = `tournament-${id}-all-${Date.now()}`;
+    try {
+      await pushService.sendToAll({
+        title: title.trim(),
+        body: body.trim(),
+        url: tournament.slug ? `/torneo/${tournament.slug}` : finalUrl,
+        tag,
+      });
+    } catch (err) {
+      console.warn('[notifyAll] dispatch failed', err);
+    }
+
+    res.json({
+      tournamentId: id,
+      tournamentName: tournament.name,
+      totalSubscriptions,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * Force-recalculate and persist the standings for a tournament, then re-
  * resolve any bracket slots that reference group positions so the knockout
  * bracket stays in sync with the freshly computed table. Used by the admin

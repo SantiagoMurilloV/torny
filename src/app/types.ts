@@ -274,3 +274,19 @@ export interface FixtureResult {
   bracketMatches: BracketMatch[];
   generatedAt: string;
 }
+
+/**
+ * Tournament sponsor (mig 033). The admin curates these from the
+ * "Patrocinadores" tab; logos render in the public Hero / Info
+ * strip. Logo is a base64 data URL or http(s) URL.
+ */
+export interface TournamentSponsor {
+  id: string;
+  tournamentId: string;
+  name: string | null;
+  logo: string;
+  link: string | null;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
