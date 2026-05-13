@@ -41,6 +41,12 @@ export interface BackendTournament {
   /** mig 031 — locality shown in the public Hero. Optional; the Hero
    *  falls back to `courts[0]` when null. */
   city?: string;
+  /**
+   * mig 032 — wall-clock when the admin clicked "Enviar programación
+   * a clubes". NULL → not published yet; the club panel's cronograma
+   * view stays gated behind an empty-state.
+   */
+  scheduleSentToClubsAt?: string | null;
   courtLocations?: Record<string, string>;
   categories?: string[];
   ownerId?: string;

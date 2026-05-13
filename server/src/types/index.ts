@@ -156,6 +156,13 @@ export interface Tournament {
   enrolledCount?: number;
   matchesCount?: number;
   playersCount?: number;
+  /**
+   * ISO timestamp set when the admin pressed "Enviar programación a
+   * clubes" (mig 032). NULL → no enviada todavía. The club panel
+   * uses this flag to gate its own cronograma view + the per-club
+   * push notifications fired by the same endpoint.
+   */
+  scheduleSentToClubsAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

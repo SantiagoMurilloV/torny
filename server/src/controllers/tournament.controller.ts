@@ -414,6 +414,100 @@ export async function bulkMoveDate(
 }
 
 /**
+ * Publish the tournament schedule to every enrolled club. Stamps
+ * `schedule_sent_to_clubs_at` (mig 032) and fires a push notification
+ * to each distinct club whose team participates in this torneo, so
+ * the club-captain panel unlocks its read-only Cronograma view and
+ * the captain learns about it without polling.
+ *
+ * Gated by `requireTournamentAccess` (admin/super_admin owner of the
+ * torneo). Idempotent: calling it twice updates the timestamp + re-
+ * fires the notification, so the admin can resend after a schedule
+ * edit without an extra "force" flag.
+ *
+ * Best-effort push: a missing VAPID config or a transient web-push
+ * 5xx must not roll back the timestamp update — the schedule is
+ * still considered "published" and the next club captain to log in
+ * will see it.
+ */
+export async function sendScheduleToClubs(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    validateUUID(id, 'ID de torneo');
+    const pool = (await import('../config/database')).getPool();
+
+    // 1) Stamp the timestamp first so the club-panel cronograma
+    //    unlocks even if the push leg later fails.
+    const stampRes = await pool.query<{
+      id: string;
+      name: string;
+      schedule_sent_to_clubs_at: Date | string | null;
+    }>(
+      `UPDATE tournaments
+          SET schedule_sent_to_clubs_at = NOW(),
+              updated_at = NOW()
+        WHERE id = $1
+       RETURNING id, name, schedule_sent_to_clubs_at`,
+      [id],
+    );
+    if (stampRes.rows.length === 0) {
+      throw new ValidationError('Torneo no encontrado');
+    }
+    const stamped = stampRes.rows[0];
+
+    // 2) Discover every distinct club with an enrolled team in this
+    //    torneo. Skip teams with no club_id (legacy / unassigned).
+    const clubsRes = await pool.query<{ id: string; name: string }>(
+      `SELECT DISTINCT c.id, c.name
+         FROM tournament_teams tt
+         JOIN teams t ON t.id = tt.team_id
+         JOIN clubs c ON c.id = t.club_id
+        WHERE tt.tournament_id = $1`,
+      [id],
+    );
+
+    // 3) Fire a push per club. Best-effort: a failure on one club
+    //    must not block the rest, and the overall response is
+    //    success regardless (the timestamp is the source of truth).
+    const pushService = (await import('../services/push.service')).pushService;
+    const notified: Array<{ clubId: string; clubName: string }> = [];
+    for (const c of clubsRes.rows) {
+      try {
+        await pushService.sendToClub(c.id, {
+          title: 'Programación cargada',
+          body: `Ya podés ver el cronograma de ${stamped.name} en el panel del club.`,
+          url: '/club-panel',
+          tag: `schedule-${id}-${c.id}`,
+        });
+        notified.push({ clubId: c.id, clubName: c.name });
+      } catch (err) {
+        console.warn(
+          `[sendScheduleToClubs] push failed for club ${c.id}:`,
+          err,
+        );
+      }
+    }
+
+    res.json({
+      tournamentId: id,
+      tournamentName: stamped.name,
+      sentAt:
+        stamped.schedule_sent_to_clubs_at instanceof Date
+          ? stamped.schedule_sent_to_clubs_at.toISOString()
+          : stamped.schedule_sent_to_clubs_at,
+      clubsNotified: notified.length,
+      clubs: notified,
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
  * Force-recalculate and persist the standings for a tournament, then re-
  * resolve any bracket slots that reference group positions so the knockout
  * bracket stays in sync with the freshly computed table. Used by the admin

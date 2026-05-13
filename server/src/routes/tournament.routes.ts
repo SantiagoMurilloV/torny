@@ -14,6 +14,7 @@ import {
   recalculateStandings,
   bulkMoveDate,
   cleanByeMatches,
+  sendScheduleToClubs,
   getBracket,
   getEnrolledTeams,
   enrollTeam,
@@ -71,6 +72,13 @@ router.post('/:id/bulk-move-date', requireTournamentAccess, bulkMoveDate);
 // directo, no real game). Owner-gated. Safe: skips matches with
 // score, status != upcoming, or any team_id set.
 router.post('/:id/clean-bye-matches', requireTournamentAccess, cleanByeMatches);
+// Publish schedule → stamp tournaments.schedule_sent_to_clubs_at and
+// fire one push notification per enrolled club. Owner-gated.
+router.post(
+  '/:id/send-schedule-to-clubs',
+  requireTournamentAccess,
+  sendScheduleToClubs,
+);
 router.get('/:id/bracket', cacheGet(15, { swrSeconds: 60 }), getBracket);
 
 // Team enrollment — list is public (spectators see who's playing); the

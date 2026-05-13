@@ -152,6 +152,7 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
     format: t.format,
     courts: t.courts ?? [],
     city: t.city ?? undefined,
+    scheduleSentToClubsAt: t.scheduleSentToClubsAt ?? null,
     courtLocations: t.courtLocations ?? {},
     categories: t.categories ?? [],
     ownerId: t.ownerId,

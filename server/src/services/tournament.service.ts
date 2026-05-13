@@ -88,6 +88,11 @@ function mapRow(row: Record<string, unknown>): Tournament {
     courts: row.courts as string[],
     // mig 031 — tournament locality, shown in the public Hero.
     city: (row.city as string | null) ?? undefined,
+    // mig 032 — published-to-clubs timestamp.
+    scheduleSentToClubsAt:
+      row.schedule_sent_to_clubs_at instanceof Date
+        ? (row.schedule_sent_to_clubs_at as Date).toISOString()
+        : (row.schedule_sent_to_clubs_at as string | null) ?? null,
     courtLocations: rawLocations && typeof rawLocations === 'object' ? rawLocations : {},
     categories: (row.categories as string[] | null | undefined) ?? [],
     ownerId: (row.owner_id as string | null) ?? undefined,

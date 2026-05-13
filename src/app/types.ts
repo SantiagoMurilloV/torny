@@ -245,6 +245,13 @@ export interface Tournament {
    *  2026-05-13 — métrica más útil para visitantes que el contador
    *  transiente de partidos en curso. */
   playersCount?: number;
+  /**
+   * ISO timestamp set cuando el admin presionó "Enviar programación
+   * a clubes" (mig 032). NULL → no enviada todavía. El club panel
+   * usa esto para gatillar la vista de cronograma + recibe el push
+   * que dispara este mismo endpoint.
+   */
+  scheduleSentToClubsAt?: string | null;
 }
 
 export interface BracketMatch {

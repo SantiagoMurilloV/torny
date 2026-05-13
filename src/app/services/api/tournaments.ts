@@ -154,6 +154,25 @@ export const tournamentsApi = {
     });
   },
 
+  /**
+   * Publish the tournament schedule to every enrolled club. The
+   * backend stamps `schedule_sent_to_clubs_at` and pushes a
+   * notification to every distinct club whose team is enrolled.
+   * Idempotent — calling it again updates the timestamp + re-fires
+   * the push, so the admin can resend after a schedule edit.
+   */
+  async sendScheduleToClubs(id: string): Promise<{
+    tournamentId: string;
+    tournamentName: string;
+    sentAt: string | null;
+    clubsNotified: number;
+    clubs: Array<{ clubId: string; clubName: string }>;
+  }> {
+    return request(`/tournaments/${id}/send-schedule-to-clubs`, {
+      method: 'POST',
+    });
+  },
+
   // ── Enrolment ───────────────────────────────────────────────────
 
   async getEnrolledTeams(tournamentId: string): Promise<Team[]> {

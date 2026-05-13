@@ -23,6 +23,7 @@ import { TeamAvatar } from '../../components/TeamAvatar';
 import { getErrorMessage } from '../../lib/errors';
 import { ParentRegistrationLinkModal } from './ParentRegistrationLinkModal';
 import { ClubPushPermissionGate } from './ClubPushPermissionGate';
+import { ClubCronogramaSection } from './ClubCronogramaSection';
 
 /**
  * The /clubs/me/teams endpoint hydrates each team with its current
@@ -353,8 +354,13 @@ export function ClubPanel() {
               </section>
             )}
 
-            {/* ── Cronograma (placeholder) ───────────────────────── */}
-            {activeTab === 'cronograma' && <CronogramaPlaceholder />}
+            {/* ── Cronograma — programación publicada por torneo ── */}
+            {activeTab === 'cronograma' && (
+              <ClubCronogramaSection
+                tournaments={tournaments}
+                clubTeams={teams}
+              />
+            )}
           </>
         )}
       </div>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { AlertTriangle, Calendar, CalendarDays, GripVertical, Loader2, Timer } from 'lucide-react';
+import { AlertTriangle, Calendar, CalendarDays, GripVertical, Loader2, Send, Timer } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Match, Tournament } from '../../../types';
 import { TeamAvatar } from '../../../components/TeamAvatar';
@@ -30,6 +30,7 @@ import {
 } from '../../../components/ui/alert-dialog';
 import { api } from '../../../services/api';
 import { getErrorMessage } from '../../../lib/errors';
+import { ConfirmDialog } from '../../../components/ConfirmDialog';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
@@ -109,6 +110,12 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
   const [conflictAlert, setConflictAlert] = useState<
     { title: string; body: string } | null
   >(null);
+  // "Enviar programación a clubes" flow: a confirm dialog gates the
+  // POST so the admin doesn't fire push notifications by accident.
+  // `sending` disables the button while the request is in flight so
+  // a double-click can't trigger two pushes.
+  const [sendScheduleOpen, setSendScheduleOpen] = useState(false);
+  const [sendingSchedule, setSendingSchedule] = useState(false);
 
   const markInFlight = useCallback((ids: string[], on: boolean) => {
     setInFlight((prev) => {
@@ -470,6 +477,38 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
     [matches],
   );
 
+  /**
+   * Publish the tournament schedule to every enrolled club. The
+   * backend stamps `schedule_sent_to_clubs_at` and fires one push
+   * notification per distinct club. Idempotent — calling it again
+   * just refreshes the timestamp + re-notifies.
+   *
+   * Throws on failure so the ConfirmDialog stays open and the user
+   * can retry. The catch chains a friendly toast so the failure
+   * mode is visible without a stack trace.
+   */
+  const handleSendSchedule = useCallback(async () => {
+    if (sendingSchedule) return;
+    setSendingSchedule(true);
+    try {
+      const result = await api.sendScheduleToClubs(tournament.id);
+      const n = result.clubsNotified ?? 0;
+      toast.success(
+        n === 0
+          ? 'Programación marcada como enviada (sin clubes con notificaciones activas).'
+          : `Programación enviada a ${n} ${n === 1 ? 'club' : 'clubes'}.`,
+      );
+      setSendScheduleOpen(false);
+    } catch (err) {
+      toast.error(
+        getErrorMessage(err, 'No se pudo enviar la programación'),
+      );
+      throw err;
+    } finally {
+      setSendingSchedule(false);
+    }
+  }, [tournament.id, sendingSchedule]);
+
   const handleDrop = useCallback(
     async (dragged: Match, destCourt: string, destTime: string) => {
       // Same slot drop → no-op.
@@ -825,13 +864,57 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
             {visibleMatchCount}{' '}
             {visibleMatchCount === 1 ? 'partido' : 'partidos'}
           </span>
+          {/* "Programación enviada" pill — mig 032. Painted as soon
+              as `tournament.scheduleSentToClubsAt` is non-null so the
+              admin sees at a glance whether clubes ya recibieron la
+              programación o no. Resending updates the timestamp pero
+              la pill se mantiene. */}
+          {tournament.scheduleSentToClubsAt && (
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-sm bg-green-100 text-green-800 text-[10px] font-bold uppercase tracking-wider"
+              style={FONT}
+              title={`Última envío: ${new Date(
+                tournament.scheduleSentToClubsAt,
+              ).toLocaleString('es-CO')}`}
+            >
+              Enviada a clubes
+            </span>
+          )}
         </div>
-        <span className="text-xs text-black/50">
-          Arrastrá para mover, soltá en una celda ocupada para intercambiar.
-          Para cambiar de día, tocá el ícono de calendario en la cartica del
-          partido.
-        </span>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* "Enviar programación a clubes" — gated by a confirm
+              dialog so a misclick can't dispatch push notifications
+              to every club. After confirmation the backend stamps
+              the tournament and fires one push per distinct enrolled
+              club. */}
+          <button
+            type="button"
+            onClick={() => setSendScheduleOpen(true)}
+            disabled={sendingSchedule || visibleMatchCount === 0}
+            className="inline-flex items-center gap-2 px-3 py-2 bg-spk-red hover:bg-spk-red-dark text-white text-sm font-bold rounded-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ ...FONT, letterSpacing: '0.04em' }}
+            title={
+              tournament.scheduleSentToClubsAt
+                ? 'Reenviar programación a los clubes'
+                : 'Enviar programación a los clubes'
+            }
+          >
+            {sendingSchedule ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+            <span className="uppercase">
+              {tournament.scheduleSentToClubsAt ? 'Reenviar a clubes' : 'Enviar a clubes'}
+            </span>
+          </button>
+        </div>
       </div>
+      <span className="block text-xs text-black/50">
+        Arrastrá para mover, soltá en una celda ocupada para intercambiar.
+        Para cambiar de día, tocá el ícono de calendario en la cartica del
+        partido.
+      </span>
 
       {/* Filters — two dropdowns in ONE row, always side by side.
           On mobile the labels collapse to icons (Día → calendar icon
@@ -1103,6 +1186,35 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* "Enviar programación a clubes" confirm flow. The dialog
+          spells out the side effects (push notifications + the
+          club panel unlocks) so the admin can't mis-fire by accident.
+          Throws from `onConfirm` keep the dialog open on failure. */}
+      <ConfirmDialog
+        open={sendScheduleOpen}
+        onOpenChange={(open) => {
+          if (!open && !sendingSchedule) setSendScheduleOpen(false);
+        }}
+        title={
+          tournament.scheduleSentToClubsAt
+            ? '¿Reenviar la programación?'
+            : '¿Enviar la programación a los clubes?'
+        }
+        description={
+          tournament.scheduleSentToClubsAt
+            ? 'Vamos a actualizar la fecha de envío y a notificar de nuevo a cada club inscrito. ' +
+              'Los capitanes recibirán una notificación push y verán la programación actualizada en su panel.'
+            : 'Vamos a marcar la programación como publicada y a notificar a cada club inscrito. ' +
+              'Los capitanes recibirán una notificación push y desde su panel del club van a poder ver el cronograma de sus equipos en formato horario.'
+        }
+        confirmLabel={
+          tournament.scheduleSentToClubsAt ? 'Reenviar' : 'Enviar'
+        }
+        variant="default"
+        loading={sendingSchedule}
+        onConfirm={handleSendSchedule}
+      />
     </div>
   );
 }
