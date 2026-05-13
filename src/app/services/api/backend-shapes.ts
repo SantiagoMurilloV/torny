@@ -68,6 +68,12 @@ export interface BackendTournament {
   /** Real counts decorated by the LIST_SELECT in tournament.service. */
   enrolledCount?: number;
   matchesCount?: number;
+  /** Total players inscritos en todos los teams enrolled. Replace
+   *  "En vivo" en el Hero público desde 2026-05-13 — el público
+   *  prefiere ver el tamaño del torneo (cuántas jugadoras) en lugar
+   *  del contador transiente de partidos en curso (0 casi siempre
+   *  hasta que arranca el día). */
+  playersCount?: number;
 }
 
 export interface BackendEnrolledTeam {

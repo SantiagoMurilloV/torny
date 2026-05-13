@@ -177,6 +177,7 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
     matchDurationsByCategory: t.matchDurationsByCategory ?? {},
     enrolledCount: t.enrolledCount,
     matchesCount: t.matchesCount,
+    playersCount: t.playersCount,
   };
 }
 
