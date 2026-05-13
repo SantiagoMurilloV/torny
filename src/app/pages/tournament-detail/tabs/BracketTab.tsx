@@ -91,7 +91,13 @@ export function BracketTab({
       </div>
       {hasBracket ? (
         visible.length > 0 ? (
-          <Bracket matches={visible} />
+          // Break out of the parent's px-6 padding on mobile so the
+          // bracket SVG has the full viewport width to lay out its
+          // rounds (gains ~48px = a third of a match card). Desktop
+          // stays untouched.
+          <div className="-mx-6 sm:mx-0 px-3 sm:px-0">
+            <Bracket matches={visible} />
+          </div>
         ) : (
           <div className="text-center py-16 text-black/60 text-sm">
             No hay partidos de cruces en esta categoría todavía.

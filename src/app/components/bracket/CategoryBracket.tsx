@@ -95,10 +95,13 @@ export function CategoryBracket({
       )}
 
       <div
-        className="overflow-x-auto pb-4 sm:pb-6 rounded-sm"
+        // Edge-to-edge on mobile (-mx-6 escapes the parent's px-6
+        // padding from TournamentDetail, gaining ~48px of horizontal
+        // breathing room so a 3-round bracket fits without scroll).
+        // Desktop keeps the bordered card with its own gutter.
+        className="overflow-x-auto pb-4 sm:pb-6 rounded-none sm:rounded-sm -mx-6 sm:mx-0 border-y sm:border border-black/10"
         style={{
           background: 'linear-gradient(180deg, #F8F9FB 0%, #FFFFFF 100%)',
-          border: '1px solid rgba(0,0,0,0.06)',
         }}
       >
         <div style={{ minWidth: totalW, width: totalW }}>
