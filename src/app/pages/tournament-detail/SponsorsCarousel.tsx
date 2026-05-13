@@ -96,28 +96,14 @@ export function SponsorsCarousel({ tournamentId }: { tournamentId: string }) {
       className="bg-white border-y border-black/[0.06] overflow-hidden"
     >
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 md:px-12 py-3 sm:py-4">
-        {/* Label "Patrocinadores" retirado (2026-05-13) — el contexto
-            visual (logos de marca corriendo en un strip) ya es
-            suficiente; el rótulo le robaba ancho útil al marquee y
-            quedaba flotando solo en mobile. */}
+        {/* Label "Patrocinadores" retirado — el contexto visual ya
+            es suficiente y el rótulo robaba ancho útil al marquee
+            (especialmente en mobile). */}
         <div className="flex items-center gap-3">
           <div className="relative flex-1 overflow-hidden">
             <div
-              className="flex items-center gap-8 sm:gap-12"
-              style={{
-                animation: `spk-marquee ${durationSec}s linear infinite`,
-                // The translateX(-50%) target lives in the @keyframes
-                // below — declared once globally so multiple
-                // carousels (rare, but possible) share a single rule.
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.animationPlayState =
-                  'paused';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.animationPlayState =
-                  'running';
-              }}
+              className="spk-sponsors-track flex items-center gap-8 sm:gap-12"
+              style={{ animationDuration: `${durationSec}s` }}
             >
               {looped.map((s, idx) => (
                 <SponsorLogo key={`${s.id}-${idx}`} sponsor={s} />
@@ -127,20 +113,42 @@ export function SponsorsCarousel({ tournamentId }: { tournamentId: string }) {
         </div>
       </div>
 
-      {/* Keyframe rule injected once. Tailwind doesn't have a
-          built-in marquee, and writing it as a <style> tag keeps
-          the dep graph clean (no new tailwind plugin). The
-          translate target is -50% because the strip is two copies
-          of the same list — so when the first copy reaches the
-          end, the second copy is already in the exact same place. */}
+      {/* Marquee keyframes + pause-on-hover. Two important details
+          for mobile / PWA where the previous version froze:
+            1. `prefers-reduced-motion` no longer kills the animation
+               entirely. iOS has that flag on by default for many
+               users which silently disabled the marquee. The
+               sponsor strip is decorative AND was explicitly asked
+               to "always animate", so we override the system hint
+               in this single component — the rest of the app's
+               reduced-motion handling stays intact.
+            2. The pause-on-hover lives in CSS inside
+               `@media (hover: hover) and (pointer: fine)`. Touch
+               devices don't match that query, so they never enter
+               the paused state. The old onMouseEnter handler set
+               animation-play-state:paused on tap (mobile fires
+               mouseenter on touch) and never restored it because
+               mouseleave never fired on touch — leaving the strip
+               stuck. CSS-only hover dodges the trap. */}
       <style>{`
         @keyframes spk-marquee {
           from { transform: translateX(0); }
           to   { transform: translateX(-50%); }
         }
-        @media (prefers-reduced-motion: reduce) {
-          [aria-label="Patrocinadores del torneo"] [style*="spk-marquee"] {
-            animation: none !important;
+        .spk-sponsors-track {
+          animation-name: spk-marquee;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
+          /* Helps mobile WebKit / Chromium promote the element to
+             its own layer, making the animation buttery on phones
+             where the main thread is busy with the rest of the
+             public page. */
+          will-change: transform;
+          transform: translateZ(0);
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .spk-sponsors-track:hover {
+            animation-play-state: paused;
           }
         }
       `}</style>
