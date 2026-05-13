@@ -429,9 +429,14 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
           viewport edges already act as the visual boundary; desktop
           keeps the original rounded card look. CSS variables shrink
           the track sizes so cards stay readable but pack tightly. */}
+      {/* Mobile time column widened from 32px → 50px (2026-05-13) so
+          "08:00" reads without clipping. The previous 32px sat right
+          on the edge of the rasterised digit width once the new
+          full-border style ate 2px of padding, and the column was
+          showing up as half-visible on phones. */}
       <div
         className="bg-white border-y sm:border border-black/10 rounded-none sm:rounded-lg overflow-hidden -mx-6 sm:mx-0
-          [--tl-time:32px] [--tl-court:78px] [--tl-row:40px]
+          [--tl-time:50px] [--tl-court:78px] [--tl-row:40px]
           sm:[--tl-time:60px] sm:[--tl-court:180px] sm:[--tl-row:72px]"
       >
         <div className="overflow-x-auto">
@@ -490,9 +495,9 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
             {times.map((time, rowIdx) => (
               <div
                 key={`time-${time}`}
-                className={`sticky left-0 z-10 bg-black/[0.04] border border-black/15 ${
-                  rowIdx === times.length - 1 ? '' : 'border-b-0'
-                } px-0.5 py-0.5 sm:px-2 sm:py-2 text-[9px] sm:text-xs font-bold text-black/75 tabular-nums text-center sm:text-left flex items-center justify-center sm:justify-start`}
+                className={`sticky left-0 z-10 bg-black/[0.04] border-r border-black/15 ${
+                  rowIdx === times.length - 1 ? '' : 'border-b border-black/10'
+                } px-1.5 py-0.5 sm:px-2 sm:py-2 text-[10px] sm:text-xs font-bold text-black/75 tabular-nums text-center sm:text-left flex items-center justify-center sm:justify-start`}
                 style={{ gridRow: rowIdx + 2, gridColumn: 1, ...FONT }}
               >
                 {time}

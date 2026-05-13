@@ -128,19 +128,12 @@ export function ClubCronogramaSection({
 
   return (
     <section className="space-y-4">
-      <header className="space-y-2">
-        <h2
-          className="text-xs font-bold uppercase text-black/50 border-b border-black/10 pb-1.5"
-          style={{ ...FONT, letterSpacing: '0.08em' }}
-        >
-          Programación del club
-        </h2>
-        <p className="text-xs text-black/55 leading-relaxed">
-          El cronograma se carga apenas el organizador del torneo lo
-          envía. Vas a ver únicamente los partidos de tus equipos —
-          mismos colores por categoría que en la página pública.
-        </p>
-      </header>
+      {/* Header "Programación del club" + descripción retirados
+          (2026-05-13): la pestaña ya está rotulada con el botón
+          de navegación, y el componente público embebido más
+          abajo ya muestra el contador de partidos y la descripción
+          contextual ("Mirá los partidos por día y cancha…"). Doble
+          encabezado robaba dos pantallas de scroll en mobile. */}
 
       {/* Tournament picker — chips when several published torneos
           coexist, otherwise omitted to keep the panel quiet. */}
