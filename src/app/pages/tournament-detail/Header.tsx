@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
-import { ArrowLeft, Bell } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { TornyTrophy } from '../../components/brand/TornyTrophy';
+import { NotificationBell } from '../../components/NotificationBell';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
@@ -10,15 +11,17 @@ const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
  * Fixed top-of-page chrome for the public tournament-detail view.
  * Shows the Torny mark + a back button + the follow CTA. The
  * backdrop darkens as the user scrolls past the hero.
+ *
+ * The follow button used to be a decorative local-state toggle. It
+ * now drives a real Web Push subscription via NotificationBell so a
+ * spectator who taps "Bell" actually receives the same `sendToAll`
+ * notifications that the match.service fires on score / status
+ * changes — same flow as the club captain's bell in the panel.
  */
 export function Header({
   tournamentName,
-  isFollowing,
-  onToggleFollow,
 }: {
   tournamentName: string;
-  isFollowing: boolean;
-  onToggleFollow: () => void;
 }) {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
@@ -79,20 +82,7 @@ export function Header({
               {tournamentName}
             </motion.div>
 
-            <motion.button
-              onClick={onToggleFollow}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-sm transition-colors ${
-                isFollowing ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'
-              }`}
-              aria-label={isFollowing ? 'Dejar de seguir' : 'Seguir torneo'}
-            >
-              <Bell className={`w-4 h-4 ${isFollowing ? 'fill-current' : ''}`} />
-              <span className="hidden md:inline text-sm font-medium">
-                {isFollowing ? 'Siguiendo' : 'Seguir'}
-              </span>
-            </motion.button>
+            <NotificationBell variant="public" theme="dark" />
           </div>
         </div>
       </div>

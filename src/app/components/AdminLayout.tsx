@@ -24,6 +24,7 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useIdleTimeout, useActivePresence } from '../hooks/useIdleTimeout';
 import { IdleWarningDialog } from './admin/IdleWarningDialog';
+import { NotificationBell } from './NotificationBell';
 import { isAdmin } from '../lib/roles';
 
 // Idle auto-logout — admin only. Judges deliberately stay on the
@@ -428,20 +429,30 @@ export function AdminLayout() {
               </div>
             </div>
           </div>
-          <motion.button
-            onClick={handleLogout}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-spk-red text-white hover:bg-spk-red/90 rounded-sm transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            <span
-              className="font-bold uppercase tracking-wider text-sm"
-              style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+          {/* Bell + logout row. The bell lives next to the logout
+              button so the club captain can flip notifications
+              without leaving the sidebar. The bell's visual state
+              (red when subscribed, gray when not) is the captain's
+              quick check that pushes are armed. */}
+          <div className="flex items-center gap-2">
+            {user?.role === 'club_captain' && (
+              <NotificationBell size="md" variant="club" />
+            )}
+            <motion.button
+              onClick={handleLogout}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-spk-red text-white hover:bg-spk-red/90 rounded-sm transition-colors"
             >
-              Cerrar Sesión
-            </span>
-          </motion.button>
+              <LogOut className="w-4 h-4" />
+              <span
+                className="font-bold uppercase tracking-wider text-sm"
+                style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+              >
+                Cerrar Sesión
+              </span>
+            </motion.button>
+          </div>
         </div>
       </aside>
 

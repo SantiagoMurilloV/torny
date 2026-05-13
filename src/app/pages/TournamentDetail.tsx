@@ -31,7 +31,6 @@ export function TournamentDetail() {
   // day's schedule. Hits "today" if it's inside the tournament range,
   // otherwise the start date (handled inside CronogramaTab).
   const [activeTab, setActiveTab] = useState<TabId>('cronograma');
-  const [isFollowing, setIsFollowing] = useState(false);
 
   const {
     tournament,
@@ -121,11 +120,7 @@ export function TournamentDetail() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Header
-        tournamentName={tournament.name}
-        isFollowing={isFollowing}
-        onToggleFollow={() => setIsFollowing((v) => !v)}
-      />
+      <Header tournamentName={tournament.name} />
 
       <Hero
         tournament={tournament}
