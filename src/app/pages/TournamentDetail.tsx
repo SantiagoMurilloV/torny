@@ -133,8 +133,15 @@ export function TournamentDetail() {
           tab) so it stays visible while the visitor switches between
           Programación / Equipos / Cruces / Info. Auto-hides when
           the torneo has zero sponsors so the white strip doesn't
-          show on tournaments without curated logos. */}
-      <SponsorsCarousel tournamentId={tournament.id} />
+          show on tournaments without curated logos.
+          The admin tunes the loop speed from Patrocinadores tab
+          (mig 034); we forward `sponsorsSpeedSeconds` as the
+          override and the component falls back to its algorithmic
+          default when the field is null. */}
+      <SponsorsCarousel
+        tournamentId={tournament.id}
+        speedSeconds={tournament.sponsorsSpeedSeconds ?? null}
+      />
 
       <TabNav tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
 

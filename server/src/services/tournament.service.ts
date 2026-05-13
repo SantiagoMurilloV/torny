@@ -93,6 +93,11 @@ function mapRow(row: Record<string, unknown>): Tournament {
       row.schedule_sent_to_clubs_at instanceof Date
         ? (row.schedule_sent_to_clubs_at as Date).toISOString()
         : (row.schedule_sent_to_clubs_at as string | null) ?? null,
+    // mig 034 — sponsors carousel speed (seconds per loop).
+    sponsorsSpeedSeconds:
+      typeof row.sponsors_speed_seconds === 'number'
+        ? row.sponsors_speed_seconds
+        : (row.sponsors_speed_seconds as number | null) ?? null,
     courtLocations: rawLocations && typeof rawLocations === 'object' ? rawLocations : {},
     categories: (row.categories as string[] | null | undefined) ?? [],
     ownerId: (row.owner_id as string | null) ?? undefined,
@@ -602,6 +607,8 @@ export class TournamentService {
       // so clearing the field from the admin form falls back to
       // courts[0] in the Hero.
       city: 'city',
+      // mig 034 — sponsors carousel speed.
+      sponsorsSpeedSeconds: 'sponsors_speed_seconds',
       courtLocations: 'court_locations',
       categories: 'categories',
       enrollmentDeadline: 'enrollment_deadline',
@@ -688,6 +695,14 @@ export class TournamentService {
             typeof rawValue === 'string' && rawValue.trim() !== ''
               ? rawValue.trim()
               : null;
+        } else if (key === 'sponsorsSpeedSeconds') {
+          // Clamp to the CHECK range. NULL passes through so the
+          // admin can clear the override.
+          if (rawValue === null || rawValue === undefined) {
+            stored = null;
+          } else {
+            stored = clampInt(rawValue as number, 10, 300, 40);
+          }
         } else if (key === 'matchDurationsByCategory') {
           // jsonb object keyed by category. Same sanitisation as the
           // INSERT path: drop non-numeric / out-of-range entries so the

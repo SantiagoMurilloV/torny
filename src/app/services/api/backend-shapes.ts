@@ -47,6 +47,9 @@ export interface BackendTournament {
    * view stays gated behind an empty-state.
    */
   scheduleSentToClubsAt?: string | null;
+  /** mig 034 — sponsors carousel speed (seconds per loop). NULL =
+   *  use FE fallback. Range enforced server-side: 10..300. */
+  sponsorsSpeedSeconds?: number | null;
   courtLocations?: Record<string, string>;
   categories?: string[];
   ownerId?: string;

@@ -252,6 +252,12 @@ export interface Tournament {
    * que dispara este mismo endpoint.
    */
   scheduleSentToClubsAt?: string | null;
+  /**
+   * Segundos para una vuelta completa del carrusel de
+   * patrocinadores (mig 034). 10-300. NULL → el carrusel usa el
+   * fallback algorítmico (longitud del strip × 2.5s).
+   */
+  sponsorsSpeedSeconds?: number | null;
 }
 
 export interface BracketMatch {

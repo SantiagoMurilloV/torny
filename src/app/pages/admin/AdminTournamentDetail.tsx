@@ -564,7 +564,14 @@ export function AdminTournamentDetail() {
         </TabsContent>
 
         <TabsContent value="sponsors">
-          {tournament && <SponsorsTab tournamentId={tournament.id} />}
+          {tournament && (
+            <SponsorsTab
+              tournament={tournament}
+              onTournamentUpdated={(updated) =>
+                setTournament((prev) => (prev ? { ...prev, ...updated } : prev))
+              }
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="notifications">

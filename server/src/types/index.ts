@@ -163,6 +163,12 @@ export interface Tournament {
    * push notifications fired by the same endpoint.
    */
   scheduleSentToClubsAt?: string | null;
+  /**
+   * Seconds for a full loop of the public sponsors carousel
+   * (mig 034). 10-300 inclusive. Defaults to 40 server-side.
+   * NULL → use the FE's algorithmic fallback (looped.length × 2.5).
+   */
+  sponsorsSpeedSeconds?: number | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -367,6 +373,11 @@ export interface CreateTournamentDto {
    * not present fall back to `matchDurationMinutes`.
    */
   matchDurationsByCategory?: Record<string, number> | null;
+  /**
+   * mig 034 — admin-tunable speed for the public sponsors carousel.
+   * 10-300 seconds per loop. NULL clears it (uses FE fallback).
+   */
+  sponsorsSpeedSeconds?: number | null;
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

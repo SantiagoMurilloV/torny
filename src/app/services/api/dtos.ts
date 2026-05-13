@@ -71,6 +71,14 @@ export interface CreateTournamentDto {
    * PATCH. Categories not present fall back to `matchDurationMinutes`.
    */
   matchDurationsByCategory?: Record<string, number> | null;
+  /**
+   * mig 034 — admin-tunable seconds per loop of the public sponsors
+   * carousel. Range 10..300; NULL clears the override (FE falls
+   * back to length-based algorithm).
+   */
+  sponsorsSpeedSeconds?: number | null;
+  /** mig 031 — torney locality string ("Armenia, Quindío"). */
+  city?: string | null;
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

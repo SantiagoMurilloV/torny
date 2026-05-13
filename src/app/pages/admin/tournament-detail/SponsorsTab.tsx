@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Award, Loader2, Plus, Trash2, Upload, ExternalLink } from 'lucide-react';
+import { Award, Loader2, Plus, Trash2, ExternalLink, Gauge } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../../../services/api';
-import type { TournamentSponsor } from '../../../types';
+import type { Tournament, TournamentSponsor } from '../../../types';
 import { ConfirmDialog } from '../../../components/ConfirmDialog';
 import { compressLogoImage } from '../../../lib/compressImage';
 import { fileToDataUrl } from '../../../lib/fileToDataUrl';
@@ -29,7 +29,21 @@ const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
  *     two-step inline form so the captain doesn't have to fight
  *     a big create modal.
  */
-export function SponsorsTab({ tournamentId }: { tournamentId: string }) {
+export function SponsorsTab({
+  tournament,
+  onTournamentUpdated,
+}: {
+  /**
+   * Tournament hydrated from the parent. Used to read the current
+   * carousel speed so the slider can default to the persisted value
+   * AND to fan out the optimistic update back to the parent after
+   * a successful save so other places (the public SponsorsCarousel
+   * preview, the Info tab) reflect the change without a refetch.
+   */
+  tournament: Tournament;
+  onTournamentUpdated?: (next: Tournament) => void;
+}) {
+  const tournamentId = tournament.id;
   const [sponsors, setSponsors] = useState<TournamentSponsor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +51,38 @@ export function SponsorsTab({ tournamentId }: { tournamentId: string }) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Carousel speed — slider value mirrors `tournament.sponsorsSpeedSeconds`.
+  // Defaults to 40 (same as the DB column default) when null so the
+  // slider doesn't render at the leftmost position the first time
+  // the admin opens the tab. Saves on slider release, not on every
+  // tick, to avoid hammering the backend.
+  const [speed, setSpeed] = useState<number>(tournament.sponsorsSpeedSeconds ?? 40);
+  const [savingSpeed, setSavingSpeed] = useState(false);
+
+  useEffect(() => {
+    setSpeed(tournament.sponsorsSpeedSeconds ?? 40);
+  }, [tournament.sponsorsSpeedSeconds]);
+
+  const handleSpeedCommit = async (next: number) => {
+    if (savingSpeed) return;
+    if (next === (tournament.sponsorsSpeedSeconds ?? 40)) return;
+    setSavingSpeed(true);
+    try {
+      const updated = await api.updateTournament(tournament.id, {
+        sponsorsSpeedSeconds: next,
+      });
+      onTournamentUpdated?.(updated);
+      toast.success('Velocidad actualizada.');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'No se pudo actualizar la velocidad'));
+      // Revert the slider to the last known persisted value so the
+      // UI doesn't lie about what the server holds.
+      setSpeed(tournament.sponsorsSpeedSeconds ?? 40);
+    } finally {
+      setSavingSpeed(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -173,6 +219,55 @@ export function SponsorsTab({ tournamentId }: { tournamentId: string }) {
         el panel de cada club. Recomendado: PNG con fondo
         transparente, cuadrado o casi cuadrado.
       </p>
+
+      {/* Speed control. Slider has a wide range (10-300s per loop)
+          so the admin can dial it from "frenetic" to "almost
+          static". Saves on release (input onChange handles the
+          live value; onMouseUp/onTouchEnd commits to the API). */}
+      <div className="bg-black/[0.03] border border-black/10 rounded-sm p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <Gauge className="w-4 h-4 text-black/55" />
+          <label
+            htmlFor="sponsors-speed"
+            className="text-[11px] font-bold uppercase text-black/65"
+            style={{ ...FONT, letterSpacing: '0.06em' }}
+          >
+            Velocidad del carrusel
+          </label>
+          <span className="ml-auto inline-flex items-center gap-1 text-xs text-black/65 tabular-nums">
+            {savingSpeed ? (
+              <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+            ) : null}
+            {speed}s por vuelta
+          </span>
+        </div>
+        <input
+          id="sponsors-speed"
+          type="range"
+          min={10}
+          max={300}
+          step={5}
+          value={speed}
+          onChange={(e) => setSpeed(Number(e.target.value))}
+          onMouseUp={(e) => handleSpeedCommit(Number((e.target as HTMLInputElement).value))}
+          onTouchEnd={(e) => handleSpeedCommit(Number((e.target as HTMLInputElement).value))}
+          onKeyUp={(e) => {
+            // Save on Enter / Tab / arrow-key release so keyboard
+            // users get the same commit semantics as mouse/touch.
+            if (['Enter', 'Tab', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+              handleSpeedCommit(speed);
+            }
+          }}
+          disabled={savingSpeed}
+          className="w-full accent-spk-red"
+          aria-label="Velocidad del carrusel"
+        />
+        <div className="flex justify-between text-[10px] text-black/45 font-medium">
+          <span>Rápido (10s)</span>
+          <span>Normal (40s)</span>
+          <span>Lento (300s)</span>
+        </div>
+      </div>
 
       {sponsors.length === 0 ? (
         <div className="bg-black/[0.03] border border-dashed border-black/15 rounded-sm p-8 text-center">

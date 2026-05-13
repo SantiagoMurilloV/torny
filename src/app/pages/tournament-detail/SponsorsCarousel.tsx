@@ -28,7 +28,18 @@ const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
  * Mobile: the same animation runs at the same speed; logos are
  * smaller (h-10) so a phone fits ~5 per viewport.
  */
-export function SponsorsCarousel({ tournamentId }: { tournamentId: string }) {
+export function SponsorsCarousel({
+  tournamentId,
+  speedSeconds,
+}: {
+  tournamentId: string;
+  /**
+   * Override per-loop duration (seconds). Falls back to the
+   * algorithmic default when not provided / null. Admin-tunable
+   * from the "Patrocinadores" tab (mig 034).
+   */
+  speedSeconds?: number | null;
+}) {
   const [sponsors, setSponsors] = useState<TournamentSponsor[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -76,10 +87,16 @@ export function SponsorsCarousel({ tournamentId }: { tournamentId: string }) {
     return [...half, ...half];
   }, [sponsors]);
 
-  // Speed scaled to the FULL strip width: more elements → longer
-  // duration so the per-element speed stays roughly constant
-  // regardless of how many repeats `looped` ended up with.
-  const durationSec = Math.max(20, looped.length * 2.5);
+  // Speed override priority:
+  //   1. admin-tuned `speedSeconds` (clamped to 10..300 server-side
+  //      via mig 034's CHECK; we trust whatever lands here)
+  //   2. algorithmic fallback that scales with the strip width so
+  //      the per-element speed stays roughly constant regardless
+  //      of how many repeats `looped` ended up with.
+  const durationSec =
+    typeof speedSeconds === 'number' && speedSeconds > 0
+      ? speedSeconds
+      : Math.max(20, looped.length * 2.5);
 
   if (!loaded || sponsors.length === 0) {
     // Pre-load → keep a thin strip space-holder so the page doesn't
