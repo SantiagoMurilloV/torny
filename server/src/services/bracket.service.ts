@@ -924,10 +924,21 @@ export class BracketGenerator {
 
         const phase = bracketRoundToMatchPhase(round);
 
+        // ON CONFLICT DO NOTHING uses the partial unique index from
+        // mig 018 (`matches_bracket_match_id_unique` WHERE
+        // bracket_match_id IS NOT NULL). Two concurrent admin GETs
+        // can each try to materialize the same slot simultaneously
+        // (the controller fires this on every authed read); without
+        // the conflict guard the second writer crashes with 500 and
+        // leaves the cronograma half-rendered. With the guard the
+        // race is a no-op and both readers see the same row.
         await client.query(
           `INSERT INTO matches
              (tournament_id, team1_id, team2_id, date, time, court, status, phase, bracket_match_id)
-           VALUES ($1, $2, $3, $4, $5, $6, 'upcoming', $7, $8)`,
+           VALUES ($1, $2, $3, $4, $5, $6, 'upcoming', $7, $8)
+           ON CONFLICT (bracket_match_id)
+             WHERE bracket_match_id IS NOT NULL
+             DO NOTHING`,
           [tournamentId, team1Id, team2Id, dateStr, time, court, phase, bracketId],
         );
         matchesCreated++;
