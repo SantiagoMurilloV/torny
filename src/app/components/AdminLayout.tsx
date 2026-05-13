@@ -42,6 +42,11 @@ const IDLE_WARN_MS = 60 * 1000; // warn 60 s before the logout fires
 const TOURNAMENT_TABS = [
   { id: 'info', label: 'Ajustes generales', icon: Info },
   { id: 'teams', label: 'Equipos inscritos', icon: UsersIcon },
+  // Clubes ahora vive DENTRO del torneo (debajo de "Equipos") en
+  // lugar de en la nav top-level. Sigue mostrando la lista global
+  // de clubes del admin — el contexto del torneo da el "para qué"
+  // sin filtrarlos por inscripción.
+  { id: 'clubs', label: 'Clubes', icon: Building2 },
   { id: 'fixtures', label: 'Cruces', icon: Shuffle },
   { id: 'matches', label: 'Partidos', icon: Swords },
   { id: 'cronograma', label: 'Programación', icon: Calendar },
@@ -149,8 +154,11 @@ export function AdminLayout() {
   const flatItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
     { icon: UserCog, label: 'Jueces', path: '/admin/judges' },
-    // Clubs (mig 028) — un user/pass por club que ve TODOS sus equipos.
-    { icon: Building2, label: 'Clubs', path: '/admin/clubs' },
+    // "Clubs" se movió a TOURNAMENT_TABS (debajo de "Equipos
+    // inscritos") por pedido del product owner — el admin
+    // siempre llega a clubes desde el contexto de un torneo, y
+    // tener el item top-level era ruido. La ruta /admin/clubs
+    // sigue activa por compatibilidad con deep links viejos.
     { icon: Settings, label: 'Configuración', path: '/admin/settings' },
   ];
 

@@ -22,6 +22,7 @@ import {
 } from '../../lib/status';
 import { InfoTab } from './tournament-detail/InfoTab';
 import { TeamsTab } from './tournament-detail/TeamsTab';
+import { AdminClubs } from './AdminClubs';
 import { FixturesTab } from './tournament-detail/FixturesTab';
 import { MatchesTab } from './tournament-detail/MatchesTab';
 import { CronogramaTab } from './tournament-detail/CronogramaTab';
@@ -39,6 +40,7 @@ const FORMAT_LABELS: Record<string, string> = {
 const VALID_TABS = [
   'info',
   'teams',
+  'clubs',
   'fixtures',
   'matches',
   'cronograma',
@@ -50,6 +52,7 @@ type TabId = (typeof VALID_TABS)[number];
 const SECTION_TITLE: Record<TabId, string> = {
   info: 'Ajustes generales',
   teams: 'Inscripción equipos y plantel',
+  clubs: 'Clubes',
   fixtures: 'Cruces',
   matches: 'Partidos',
   cronograma: 'Programación',
@@ -510,6 +513,15 @@ export function AdminTournamentDetail() {
             onUnenroll={handleUnenroll}
             onTeamFormSubmit={handleTeamFormSubmit}
           />
+        </TabsContent>
+
+        <TabsContent value="clubs">
+          {/* Wraps the existing AdminClubs page so the admin
+              manages clubes from inside any torneo. The component
+              already scopes by owner_id, no per-tournament filter
+              needed — captains see ALL their clubes regardless of
+              which torneo they entered from. */}
+          <AdminClubs />
         </TabsContent>
 
         <TabsContent value="fixtures">
