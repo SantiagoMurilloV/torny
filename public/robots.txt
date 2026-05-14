@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# Bloquear rutas privadas para que no aparezcan en resultados
+Disallow: /admin
+Disallow: /super-admin
+Disallow: /judge
+Disallow: /team-panel
+Disallow: /club-panel
+
+Sitemap: https://www.torny.app/sitemap.xml
