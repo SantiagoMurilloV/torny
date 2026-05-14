@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B1746"/>
+      <stop offset="100%" stop-color="#00072E"/>
+    </linearGradient>
+    <radialGradient id="hotspot" cx="28%" cy="18%" r="55%">
+      <stop offset="0%" stop-color="#7BA8FF" stop-opacity="0.22"/>
+      <stop offset="60%" stop-color="#7BA8FF" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#7BA8FF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#hotspot)"/>
+  <rect x="60" y="216" width="392" height="6" rx="3" fill="#E31E24"/>
+  <text x="256" y="340" font-family="'Arial Black','Impact','Haettenschweiler',sans-serif" font-weight="900" font-size="108" letter-spacing="-1" text-anchor="middle" fill="#FFFFFF">TORN<tspan fill="#E31E24">Y</tspan></text>
+</svg>
