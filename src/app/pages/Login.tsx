@@ -237,7 +237,7 @@ export function Login() {
         {/* Foto épica de voleibol en fullscreen */}
         <img
           src="https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?auto=format&fit=crop&w=1400&q=85"
-          alt="Jugadora de voleibol en acción"
+          alt="Deportista en acción"
           className="absolute inset-0 w-full h-full object-cover"
           loading="eager"
           decoding="async"

@@ -33,7 +33,7 @@ export function HeroSection({
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black z-10" />
         <ImageWithFallback
           src={HERO_IMAGE}
-          alt="Volleyball action"
+          alt="Acción deportiva"
           className="w-full h-full object-cover opacity-60"
         />
         <motion.div
