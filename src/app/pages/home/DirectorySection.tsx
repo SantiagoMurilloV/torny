@@ -119,7 +119,9 @@ export function DirectorySection({
                 viewport={{ once: true }}
                 transition={{ delay: index * 0.08 }}
                 whileHover={{ y: -6 }}
-                onClick={() => navigate(`/tournament/${tournament.id}`)}
+                onClick={() =>
+                  navigate(`/tournament/${tournament.slug ?? tournament.id}`)
+                }
                 className="cursor-pointer"
               >
                 <TournamentCard tournament={tournament} />

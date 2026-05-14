@@ -263,7 +263,7 @@ export function EditUserModal({ isOpen, onClose, onSaved, user }: EditUserModalP
             <textarea
               value={adminNote}
               onChange={(e) => setAdminNote(e.target.value)}
-              placeholder='Ej: "cliente del torneo de voleibol, contraseña basada en su año"'
+              placeholder='Ej: "cliente del torneo X, contraseña basada en su año"'
               rows={2}
               className="w-full px-4 py-2 border-2 border-black/10 rounded-sm focus:outline-none focus:border-spk-red resize-y"
             />

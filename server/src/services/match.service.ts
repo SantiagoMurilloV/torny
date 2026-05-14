@@ -16,7 +16,7 @@ import { pushService, ensureReady as ensurePushReady } from './push.service';
 
 /**
  * Fire-and-forget helper that builds the two-team label used in push
- * titles. Falls back to "Partido de voley" when we couldn't join the team
+ * titles. Falls back to "Partido" when we couldn't join the team
  * rows (shouldn't happen but a push should never fail a match write).
  */
 async function matchHeadline(matchId: string): Promise<{ title: string; url: string }> {
@@ -32,7 +32,7 @@ async function matchHeadline(matchId: string): Promise<{ title: string; url: str
     [matchId],
   );
   if (result.rows.length === 0) {
-    return { title: 'Partido de voley', url: '/' };
+    return { title: 'Partido', url: '/' };
   }
   const row = result.rows[0];
   const team1 = (row.t1_name as string) || (row.t1_initials as string) || 'Equipo 1';

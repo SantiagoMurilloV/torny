@@ -3,6 +3,7 @@ import { getPool } from '../config/database';
 import { bracketGenerator } from '../services/bracket.service';
 import { cacheGet } from '../middleware/cache';
 import { requireTournamentAccess } from '../middleware/access';
+import { resolveTournamentSlug } from '../middleware/tournamentSlug';
 import {
   getAll,
   getById,
@@ -32,6 +33,22 @@ import {
 } from '../controllers/tournament.controller';
 
 const router = Router();
+
+// Every route below that takes `:id` accepts EITHER a tournament UUID
+// (legacy / admin / deep links) OR the human-readable slug used by
+// public URLs like /tournament/copa-nacional-2026. The param handler
+// rewrites `req.params.id` to the canonical UUID before any downstream
+// middleware (cacheGet, requireTournamentAccess, controllers) sees it,
+// so the rest of the file is oblivious to which form arrived.
+//
+// `router.param` runs after Express matches the route but before the
+// route handler chain, which is exactly the seam we need (cacheGet's
+// key derives from `req.originalUrl` so the slug variant still produces
+// a distinct cache entry — that's fine; the rewrite is just to keep the
+// SQL `WHERE id = $1` queries working).
+router.param('id', (req, res, next) => {
+  void resolveTournamentSlug(req, res, next);
+});
 
 // CRUD — public GETs go through the in-memory cache so a stadium full
 // of spectators sharing the same tournament view triggers one DB query

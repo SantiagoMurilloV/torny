@@ -27,7 +27,7 @@ export default defineConfig({
       manifest: {
         name: 'Torny — Sistema de Torneos',
         short_name: 'Torny',
-        description: 'Sistema completo de gestión de torneos deportivos para voleibol',
+        description: 'Plataforma para organizar torneos deportivos: inscripciones, programación, marcadores en vivo y estadísticas.',
         start_url: '/',
         display: 'standalone',
         background_color: '#000000',

@@ -233,7 +233,7 @@ export function CreateUserModal({ isOpen, onClose, onCreated, admins }: CreateUs
             <textarea
               value={form.adminNote ?? ''}
               onChange={(e) => setForm({ ...form, adminNote: e.target.value })}
-              placeholder='Ej: "cliente del torneo de voleibol, usa su año de nacimiento"'
+              placeholder='Ej: "cliente del torneo X, usa su año de nacimiento"'
               rows={2}
               className="w-full px-4 py-2 border-2 border-black/10 rounded-sm focus:outline-none focus:border-spk-red resize-y"
             />
