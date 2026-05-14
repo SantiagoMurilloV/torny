@@ -63,19 +63,33 @@ export function HomeHeader() {
             </div>
           </motion.div>
 
-          <motion.button
-            type="button"
-            onClick={() => navigate('/login')}
-            aria-label="Acceso administrador"
-            whileHover={{ scale: 1.15 }}
-            whileTap={{ scale: 0.9 }}
-            className="group relative h-10 w-10 rounded-full bg-white/5 border border-white/15 backdrop-blur-sm flex items-center justify-center outline-none transition-colors hover:bg-white/10 hover:border-spk-red/60 focus-visible:ring-2 focus-visible:ring-spk-red/50"
-          >
-            <span
-              aria-hidden="true"
-              className="h-2 w-2 rounded-full bg-spk-red transition-all duration-300 group-hover:h-2.5 group-hover:w-2.5 group-hover:shadow-[0_0_8px_rgba(220,38,38,0.7)]"
-            />
-          </motion.button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <motion.a
+              href="https://home.torny.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Sobre nosotros — abre torny.app"
+              whileHover={{ y: -1 }}
+              whileTap={{ scale: 0.96 }}
+              className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.14em] text-white/60 hover:text-white transition-colors outline-none focus-visible:text-white"
+              style={FONT}
+            >
+              Sobre nosotros
+            </motion.a>
+            <motion.button
+              type="button"
+              onClick={() => navigate('/login')}
+              aria-label="Acceso administrador"
+              whileHover={{ scale: 1.15 }}
+              whileTap={{ scale: 0.9 }}
+              className="group relative h-10 w-10 rounded-full bg-white/5 border border-white/15 backdrop-blur-sm flex items-center justify-center outline-none transition-colors hover:bg-white/10 hover:border-spk-red/60 focus-visible:ring-2 focus-visible:ring-spk-red/50"
+            >
+              <span
+                aria-hidden="true"
+                className="h-2 w-2 rounded-full bg-spk-red transition-all duration-300 group-hover:h-2.5 group-hover:w-2.5 group-hover:shadow-[0_0_8px_rgba(220,38,38,0.7)]"
+              />
+            </motion.button>
+          </div>
         </div>
       </div>
     </motion.header>
