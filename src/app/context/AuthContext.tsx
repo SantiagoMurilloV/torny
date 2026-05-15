@@ -20,6 +20,10 @@ interface AuthUser {
   /** Present when role is club_captain — display name of the club, used
    *  to title the panel without an extra round-trip. */
   clubName?: string;
+  /** Present when role is judge — the tournament the judge is assigned to (mig 036). */
+  assignedTournamentId?: string | null;
+  /** Present when role is judge — the court name the judge is assigned to (mig 036). */
+  assignedCourt?: string | null;
 }
 
 interface LoginResult {

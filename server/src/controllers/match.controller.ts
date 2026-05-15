@@ -14,6 +14,7 @@ export async function getAll(req: Request, res: Response, next: NextFunction): P
       const matches = await matchService.getAll({
         scope: 'judge',
         judgeCreatedBy: caller.createdBy,
+        assignedCourt: caller.assignedCourt ?? null,
       });
       res.json(matches);
       return;

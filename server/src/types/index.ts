@@ -469,6 +469,18 @@ export interface JwtPayload {
    */
   createdBy?: string | null;
   /**
+   * For judges: UUID of the tournament the judge is assigned to (mig 036).
+   * Null means no specific court assignment — falls back to legacy feed
+   * (all live matches from the admin's tournaments).
+   */
+  assignedTournamentId?: string | null;
+  /**
+   * For judges: the court name the judge is assigned to (mig 036).
+   * When set, the match feed is narrowed to live + scheduled matches on
+   * that court only. Null = no assignment (legacy feed).
+   */
+  assignedCourt?: string | null;
+  /**
    * For team_captain: the team's id (same as userId for captains, kept
    * as a named field so routes that already read `teamId` from params can
    * compare against `req.user.teamId` unambiguously).
@@ -502,6 +514,10 @@ export interface LoginResponse {
     /** Club display name — surfaced so the UI can title the panel
      *  with the club name without an extra round-trip. */
     clubName?: string;
+    /** For judges: assigned tournament id (mig 036). */
+    assignedTournamentId?: string | null;
+    /** For judges: assigned court name (mig 036). */
+    assignedCourt?: string | null;
   };
 }
 

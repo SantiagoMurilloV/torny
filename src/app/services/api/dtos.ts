@@ -172,6 +172,10 @@ export interface LoginResponse {
     role: string;
     /** Team id when role is team_captain. */
     teamId?: string;
+    /** For judges: assigned tournament id (mig 036). */
+    assignedTournamentId?: string | null;
+    /** For judges: assigned court name (mig 036). */
+    assignedCourt?: string | null;
   };
 }
 
@@ -180,6 +184,10 @@ export interface Judge {
   username: string;
   role: string;
   displayName?: string;
+  /** UUID of the tournament the judge is assigned to (mig 036). Null = not assigned. */
+  assignedTournamentId?: string | null;
+  /** Court name the judge is assigned to (mig 036). Null = not assigned. */
+  assignedCourt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

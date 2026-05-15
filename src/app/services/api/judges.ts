@@ -32,4 +32,14 @@ export const judgesApi = {
       body: JSON.stringify({ password }),
     });
   },
+
+  async updateJudge(
+    id: string,
+    data: { assignedTournamentId?: string | null; assignedCourt?: string | null },
+  ): Promise<Judge> {
+    return request<Judge>(`/users/judges/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
 };

@@ -185,19 +185,38 @@ function mapSetRow(row: Record<string, unknown>): SetScore {
  * Context used when listing matches. Public + super_admin see everything;
  * admins see matches of their own tournaments; judges see only LIVE
  * matches from tournaments owned by the admin that created them.
+ *
+ * When `assignedCourt` is set on a judge scope the feed is narrowed to
+ * that court (both live AND upcoming) so the judge can see the
+ * programación alongside the live matches. Without an assignment the
+ * legacy behaviour is preserved: only live, all courts.
  */
 export type MatchListScope =
   | { scope: 'all' }
   | { scope: 'owner'; ownerId: string }
-  | { scope: 'judge'; judgeCreatedBy: string };
+  | { scope: 'judge'; judgeCreatedBy: string; assignedCourt?: string | null };
 
 export class MatchService {
   async getAll(scope: MatchListScope = { scope: 'all' }): Promise<Match[]> {
     const pool = getPool();
     if (scope.scope === 'judge') {
-      // Judges see only live matches from tournaments owned by the admin
-      // who created them. The join with tournaments is how we enforce the
-      // cross-tenant isolation in a single query instead of two round-trips.
+      if (scope.assignedCourt) {
+        // Court-assigned judge: see live + upcoming matches on their court
+        // only, scoped to their creator admin's tournaments. This gives
+        // them both the live feed (to score) and the schedule (read-only).
+        const result = await pool.query(
+          `SELECT m.* FROM matches m
+           JOIN tournaments t ON m.tournament_id = t.id
+           WHERE t.owner_id = $1
+             AND m.court    = $2
+             AND m.status  IN ('live', 'upcoming')
+           ORDER BY m.date, m.time`,
+          [scope.judgeCreatedBy, scope.assignedCourt],
+        );
+        const matches = result.rows.map(mapRow);
+        return this.attachSets(matches);
+      }
+      // No court assigned — legacy behaviour: only live matches, all courts.
       const result = await pool.query(
         `SELECT m.* FROM matches m
          JOIN tournaments t ON m.tournament_id = t.id

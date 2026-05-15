@@ -55,7 +55,9 @@ export class AuthService {
     // we found, or a dummy hash if neither did, so timing stays constant
     // regardless of which table (if any) contained the username.
     const userResult = await pool.query(
-      'SELECT id, username, password_hash, role, created_by FROM users WHERE username = $1',
+      `SELECT id, username, password_hash, role, created_by,
+              assigned_tournament_id, assigned_court
+         FROM users WHERE username = $1`,
       [credentials.username],
     );
     const user = userResult.rows[0];
@@ -109,17 +111,27 @@ export class AuthService {
     }
 
     if (user) {
-      // `createdBy` goes into the token so judge-scoped queries (live
-      // match feed) don't have to hit the users table on every request.
+      // `createdBy`, `assignedCourt`, and `assignedTournamentId` go into
+      // the token so judge-scoped queries (match feed) don't have to hit
+      // the users table on every request. The token is issued at login time
+      // so a court re-assignment takes effect on the judge's next login.
       const payload = {
         userId: user.id,
         role: user.role,
         createdBy: user.created_by ?? null,
+        assignedTournamentId: user.assigned_tournament_id ?? null,
+        assignedCourt: user.assigned_court ?? null,
       };
       const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRATION });
       return {
         token,
-        user: { id: user.id, username: user.username, role: user.role },
+        user: {
+          id: user.id,
+          username: user.username,
+          role: user.role,
+          assignedTournamentId: user.assigned_tournament_id ?? null,
+          assignedCourt: user.assigned_court ?? null,
+        },
       };
     }
 
