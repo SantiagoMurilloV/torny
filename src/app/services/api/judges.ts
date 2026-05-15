@@ -15,6 +15,8 @@ export const judgesApi = {
     username: string;
     password: string;
     displayName?: string;
+    assignedTournamentId?: string | null;
+    assignedCourt?: string | null;
   }): Promise<Judge> {
     return request<Judge>('/users/judges', {
       method: 'POST',
@@ -26,8 +28,9 @@ export const judgesApi = {
     await request<void>(`/users/judges/${id}`, { method: 'DELETE' });
   },
 
-  async resetJudgePassword(id: string, password: string): Promise<void> {
-    await request<void>(`/users/judges/${id}/password`, {
+  /** Returns the updated judge including the new decrypted password. */
+  async resetJudgePassword(id: string, password: string): Promise<Judge> {
+    return request<Judge>(`/users/judges/${id}/password`, {
       method: 'POST',
       body: JSON.stringify({ password }),
     });

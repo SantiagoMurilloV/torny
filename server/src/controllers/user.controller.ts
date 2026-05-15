@@ -78,8 +78,8 @@ export async function resetJudgePassword(
     const id = req.params.id as string;
     validateUUID(id, 'ID de juez');
     const newPassword = (req.body as { password?: string }).password || '';
-    await userService.resetJudgePassword(id, newPassword);
-    res.status(204).send();
+    const judge = await userService.resetJudgePassword(id, newPassword);
+    res.json(judge);
   } catch (error) {
     next(error);
   }

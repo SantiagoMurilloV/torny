@@ -188,6 +188,12 @@ export interface Judge {
   assignedTournamentId?: string | null;
   /** Court name the judge is assigned to (mig 036). Null = not assigned. */
   assignedCourt?: string | null;
+  /**
+   * Decrypted plaintext password returned by the API when PLATFORM_RECOVERY_KEY
+   * is configured. Null when recovery is disabled. Used to show credentials
+   * in the admin judge list so the admin can share them at a glance.
+   */
+  password?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
