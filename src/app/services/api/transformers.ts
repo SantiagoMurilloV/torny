@@ -158,6 +158,8 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
     categories: t.categories ?? [],
     ownerId: t.ownerId,
     enrollmentDeadline: t.enrollmentDeadline,
+    registrationOpensAt: t.registrationOpensAt ?? null,
+    registrationClosesAt: t.registrationClosesAt ?? null,
     playersPerTeam: t.playersPerTeam,
     bracketMode: t.bracketMode ?? 'manual',
     goldClassifiersPerGroup: t.goldClassifiersPerGroup,

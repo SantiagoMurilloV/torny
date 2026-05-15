@@ -25,6 +25,10 @@ export interface CreateTournamentDto {
   categories?: string[];
   /** ISO yyyy-mm-dd; captain credentials stop working after this day. */
   enrollmentDeadline?: string | null;
+  /** mig 035 — ISO timestamp when the public registration link opens. NULL = open immediately. */
+  registrationOpensAt?: string | null;
+  /** mig 035 — ISO timestamp when the public registration link closes. NULL = midnight before startDate. */
+  registrationClosesAt?: string | null;
   /** Recommended roster cap (default 12). */
   playersPerTeam?: number;
   /** Bracket strategy — 'manual' = drag-pairs flow, 'divisions' = auto

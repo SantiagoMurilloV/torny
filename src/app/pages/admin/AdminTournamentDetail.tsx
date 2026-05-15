@@ -212,6 +212,11 @@ export function AdminTournamentDetail() {
       courtLocations: updated.courtLocations,
       categories: updated.categories,
       enrollmentDeadline: updated.enrollmentDeadline ?? null,
+      // mig 035 — registration window. null explicitly clears the column
+      // (back to legacy behaviour); undefined would leave it untouched
+      // on PATCH. The form always sends a value (ISO string or null).
+      registrationOpensAt: updated.registrationOpensAt ?? null,
+      registrationClosesAt: updated.registrationClosesAt ?? null,
       playersPerTeam: updated.playersPerTeam,
       bracketMode: updated.bracketMode,
       regulationText: updated.regulationText ?? null,

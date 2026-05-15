@@ -54,6 +54,10 @@ export interface BackendTournament {
   categories?: string[];
   ownerId?: string;
   enrollmentDeadline?: string;
+  /** mig 035 — ISO timestamp when the public registration link opens. */
+  registrationOpensAt?: string | null;
+  /** mig 035 — ISO timestamp when the public registration link closes. */
+  registrationClosesAt?: string | null;
   playersPerTeam?: number;
   /** 'manual' | 'divisions'. See Tournament.bracketMode. */
   bracketMode?: 'manual' | 'divisions';
