@@ -5,6 +5,7 @@ import { LiveBadge } from '../../components/LiveBadge';
 import { isJudge } from '../../lib/roles';
 import { useLiveScoring } from './referee-score/useLiveScoring';
 import { TeamScorePanel } from './referee-score/TeamScorePanel';
+import { RotationPanel } from './referee-score/RotationPanel';
 import { SetStrip } from './referee-score/SetStrip';
 import { SyncIndicator } from './referee-score/SyncIndicator';
 
@@ -108,27 +109,48 @@ export function RefereeScore() {
         scoreA={live.scoreA}
       />
 
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-[2px] bg-white/10">
-        <TeamScorePanel
-          team={match.team1}
-          score={live.scoreH}
-          sets={live.setsH}
-          setNumber={live.currentSetNumber}
-          serving={live.serving === 'home'}
-          onPlus={() => live.addPoint('home')}
-          onMinus={() => live.subtractPoint('home')}
-          onServe={() => live.setServing('home')}
-        />
-        <TeamScorePanel
-          team={match.team2}
-          score={live.scoreA}
-          sets={live.setsA}
-          setNumber={live.currentSetNumber}
-          serving={live.serving === 'away'}
-          onPlus={() => live.addPoint('away')}
-          onMinus={() => live.subtractPoint('away')}
-          onServe={() => live.setServing('away')}
-        />
+      <div className="flex-1 flex flex-col">
+        {/* Paneles de marcador */}
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-[2px] bg-white/10">
+          <TeamScorePanel
+            team={match.team1}
+            score={live.scoreH}
+            sets={live.setsH}
+            setNumber={live.currentSetNumber}
+            serving={live.serving === 'home'}
+            onPlus={() => live.addPoint('home')}
+            onMinus={() => live.subtractPoint('home')}
+            onServe={() => live.setServing('home')}
+          />
+          <TeamScorePanel
+            team={match.team2}
+            score={live.scoreA}
+            sets={live.setsA}
+            setNumber={live.currentSetNumber}
+            serving={live.serving === 'away'}
+            onPlus={() => live.addPoint('away')}
+            onMinus={() => live.subtractPoint('away')}
+            onServe={() => live.setServing('away')}
+          />
+        </div>
+
+        {/* Paneles de rotación (FIVB: grid 3×2 de posiciones) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-[2px] bg-white/10">
+          <div className="bg-spk-black">
+            <RotationPanel
+              teamColor={match.team1.colors.primary}
+              serving={live.serving === 'home'}
+              setNumber={live.currentSetNumber}
+            />
+          </div>
+          <div className="bg-spk-black">
+            <RotationPanel
+              teamColor={match.team2.colors.primary}
+              serving={live.serving === 'away'}
+              setNumber={live.currentSetNumber}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="px-4 md:px-6 py-3 bg-black/40 border-t border-white/10 flex flex-col md:flex-row md:items-center md:justify-between gap-3">

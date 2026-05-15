@@ -85,9 +85,22 @@ export interface PublicTournamentView {
    * through; at 00:00 of the start day it stops accepting.
    */
   isOpen: boolean;
-  /** Same idea as `isOpen` but exposed as the wire date so the
-   *  frontend can render "Las inscripciones cerraron el …". */
+  /**
+   * True when `registrationOpensAt` is set and is still in the future.
+   * The frontend renders a "todavía no abiertas" screen in this case.
+   */
+  notOpenYet: boolean;
+  /**
+   * ISO timestamp (or date) when the link closes. Equal to
+   * `registrationClosesAt` when set, otherwise `startDate`.
+   * Frontend renders "Las inscripciones cerraron el …".
+   */
   closedAt: string;
+  /**
+   * ISO timestamp when the link opens. Only present when
+   * `notOpenYet` is true so the frontend can show "Disponible desde …".
+   */
+  opensAt?: string;
   clubs: PublicClubSummary[];
 }
 
@@ -161,18 +174,39 @@ export async function getPublicView(slug: string): Promise<PublicTournamentView>
     });
   }
 
-  // ── Cutoff ───────────────────────────────────────────────────────
-  // The link closes at the midnight that opens the start day (so the
-  // day-of registration window is OFF — confirmed by the product
-  // owner). Compare as ISO date strings to dodge any timezone math;
-  // both sides are calendar days. `toIsoDate` is critical: without it
-  // `tournament.startDate` is a Date object at runtime and the `<`
-  // coerces it to ms while NaN'ing the left side, making every
-  // tournament look already-closed.
+  // ── Registration window ──────────────────────────────────────────
+  // Priority: explicit registrationOpensAt / registrationClosesAt fields
+  // (mig 035) take precedence over the legacy "close at start_date
+  // midnight" rule. Both are optional — when absent we fall back to the
+  // original behaviour so old tournaments keep working.
   const startIso = toIsoDate(tournament.startDate);
-  const endIso = toIsoDate(tournament.endDate);
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const isOpen = todayIso < startIso;
+  const endIso   = toIsoDate(tournament.endDate);
+  const nowMs    = Date.now();
+
+  // Opening gate
+  let notOpenYet = false;
+  let opensAt: string | undefined;
+  if (tournament.registrationOpensAt) {
+    const opensMs = new Date(tournament.registrationOpensAt).getTime();
+    if (nowMs < opensMs) {
+      notOpenYet = true;
+      opensAt    = tournament.registrationOpensAt;
+    }
+  }
+
+  // Closing gate
+  let isOpen: boolean;
+  let closedAt: string;
+  if (tournament.registrationClosesAt) {
+    const closesMs = new Date(tournament.registrationClosesAt).getTime();
+    isOpen   = !notOpenYet && nowMs < closesMs;
+    closedAt = tournament.registrationClosesAt;
+  } else {
+    // Legacy: compare ISO date strings (no timezone math).
+    const todayIso = new Date().toISOString().slice(0, 10);
+    isOpen   = !notOpenYet && todayIso < startIso;
+    closedAt = startIso;
+  }
 
   return {
     tournament: {
@@ -188,7 +222,9 @@ export async function getPublicView(slug: string): Promise<PublicTournamentView>
       playersPerTeam,
     },
     isOpen,
-    closedAt: startIso,
+    notOpenYet,
+    opensAt,
+    closedAt,
     clubs: Array.from(clubsMap.values()),
   };
 }
@@ -220,12 +256,35 @@ export async function registerPlayer(
   // Hydrate the tournament + sanity-check the cutoff. Same Date-vs-
   // string coercion gotcha as `getPublicView` (see toIsoDate's docs).
   const tournament = await tournamentService.getBySlug(slug);
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const startIso = toIsoDate(tournament.startDate);
-  if (todayIso >= startIso) {
-    throw new ValidationError(
-      'Las inscripciones para este torneo cerraron el día antes del inicio',
-    );
+  const nowMs = Date.now();
+
+  // Opening gate check (mig 035)
+  if (tournament.registrationOpensAt) {
+    const opensMs = new Date(tournament.registrationOpensAt).getTime();
+    if (nowMs < opensMs) {
+      throw new ValidationError(
+        'Las inscripciones para este torneo aún no han comenzado',
+      );
+    }
+  }
+
+  // Closing gate check (mig 035)
+  if (tournament.registrationClosesAt) {
+    const closesMs = new Date(tournament.registrationClosesAt).getTime();
+    if (nowMs >= closesMs) {
+      throw new ValidationError(
+        'Las inscripciones para este torneo han cerrado',
+      );
+    }
+  } else {
+    // Legacy: close at midnight of startDate
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const startIso = toIsoDate(tournament.startDate);
+    if (todayIso >= startIso) {
+      throw new ValidationError(
+        'Las inscripciones para este torneo cerraron el día antes del inicio',
+      );
+    }
   }
 
   const pool = getPool();

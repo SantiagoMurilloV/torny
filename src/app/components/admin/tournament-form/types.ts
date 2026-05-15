@@ -47,6 +47,16 @@ export interface TournamentFormState {
   courts: CourtEntry[];
   categories: string[];
   enrollmentDeadline: string;
+  /**
+   * datetime-local value ("YYYY-MM-DDTHH:MM") for when the public
+   * registration link opens. Empty = open immediately (legacy).
+   */
+  registrationOpensAt: string;
+  /**
+   * datetime-local value ("YYYY-MM-DDTHH:MM") for when the public
+   * registration link closes. Empty = close at midnight of startDate (legacy).
+   */
+  registrationClosesAt: string;
   playersPerTeam: number;
   bracketMode: BracketMode;
   /** Divisions-only: top N of each group go to Oro. */
@@ -119,6 +129,8 @@ export function emptyForm(): TournamentFormState {
     courts: [...DEFAULT_COURTS],
     categories: [],
     enrollmentDeadline: '',
+    registrationOpensAt: '',
+    registrationClosesAt: '',
     playersPerTeam: 12,
     bracketMode: 'manual',
     goldClassifiersPerGroup: 2,

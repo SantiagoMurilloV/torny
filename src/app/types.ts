@@ -161,6 +161,10 @@ export interface Tournament {
   ownerId?: string;
   /** ISO yyyy-mm-dd date; captain credentials stop working after this day. */
   enrollmentDeadline?: string;
+  /** ISO timestamp when the public registration link opens (mig 035). */
+  registrationOpensAt?: string | null;
+  /** ISO timestamp when the public registration link closes (mig 035). */
+  registrationClosesAt?: string | null;
   /** Recommended roster cap per team. Default 12. */
   playersPerTeam?: number;
   /**

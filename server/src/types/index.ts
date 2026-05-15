@@ -50,6 +50,18 @@ export interface Tournament {
    */
   enrollmentDeadline?: string;
   /**
+   * ISO timestamp when the public parent-registration link becomes active
+   * (migration 035). NULL means open immediately (legacy behaviour).
+   */
+  registrationOpensAt?: string | null;
+  /**
+   * ISO timestamp when the public parent-registration link closes
+   * (migration 035). NULL means close at midnight of start_date
+   * (legacy behaviour). When set, the admin can pick a specific time of
+   * day instead of being locked to the end-of-day-before cutoff.
+   */
+  registrationClosesAt?: string | null;
+  /**
    * Recommended roster cap per team (defaults to 12). Only used by the
    * captain panel to show "N / max" — it's advisory, no enforcement
    * at create time so a team can exceed if the admin allows.
@@ -339,6 +351,10 @@ export interface CreateTournamentDto {
   categories?: string[];
   /** ISO date; captain credentials stop working after this day. */
   enrollmentDeadline?: string | null;
+  /** ISO timestamp; public link becomes active at this moment. NULL = open immediately. */
+  registrationOpensAt?: string | null;
+  /** ISO timestamp; public link closes at this moment. NULL = midnight before startDate. */
+  registrationClosesAt?: string | null;
   /** Recommended roster cap (default 12). */
   playersPerTeam?: number;
   /** 'manual' = drag-pairs flow · 'divisions' = auto VNL Oro/Plata. */

@@ -102,6 +102,14 @@ function mapRow(row: Record<string, unknown>): Tournament {
     categories: (row.categories as string[] | null | undefined) ?? [],
     ownerId: (row.owner_id as string | null) ?? undefined,
     enrollmentDeadline: normalizeDate(row.enrollment_deadline),
+    registrationOpensAt:
+      row.registration_opens_at instanceof Date
+        ? (row.registration_opens_at as Date).toISOString()
+        : (row.registration_opens_at as string | null) ?? null,
+    registrationClosesAt:
+      row.registration_closes_at instanceof Date
+        ? (row.registration_closes_at as Date).toISOString()
+        : (row.registration_closes_at as string | null) ?? null,
     playersPerTeam: (row.players_per_team as number | null) ?? undefined,
     bracketMode:
       ((row.bracket_mode as string | null) === 'divisions'
@@ -462,8 +470,8 @@ export class TournamentService {
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
         const result = await pool.query(
-          `INSERT INTO tournaments (name, slug, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority, finals_court, match_durations_by_category, city)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
+          `INSERT INTO tournaments (name, slug, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority, finals_court, match_durations_by_category, city, registration_opens_at, registration_closes_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)
            RETURNING *`,
           [
             data.name,
@@ -500,6 +508,8 @@ export class TournamentService {
             // mig 031 — tournament locality. Falsy → NULL so the
             // Hero falls back to courts[0].
             data.city?.trim() || null,
+            data.registrationOpensAt || null,
+            data.registrationClosesAt || null,
           ],
         );
         row = result.rows[0];
@@ -612,6 +622,8 @@ export class TournamentService {
       courtLocations: 'court_locations',
       categories: 'categories',
       enrollmentDeadline: 'enrollment_deadline',
+      registrationOpensAt: 'registration_opens_at',
+      registrationClosesAt: 'registration_closes_at',
       playersPerTeam: 'players_per_team',
       bracketMode: 'bracket_mode',
       goldClassifiersPerGroup: 'gold_classifiers_per_group',
@@ -725,6 +737,9 @@ export class TournamentService {
           // la columna realmente vacía en vez de un string vacío. El
           // frontend manda undefined cuando el campo no cambia (no entra
           // al loop) y null cuando lo borró explícitamente.
+          stored = rawValue === '' || rawValue == null ? null : rawValue;
+        } else if (key === 'registrationOpensAt' || key === 'registrationClosesAt') {
+          // NULL / empty string → clear the column (fallback to legacy behaviour).
           stored = rawValue === '' || rawValue == null ? null : rawValue;
         }
         values.push(stored);

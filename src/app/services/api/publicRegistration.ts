@@ -45,10 +45,14 @@ export interface PublicTournamentSummary {
 
 export interface PublicTournamentView {
   tournament: PublicTournamentSummary;
-  /** False once the cutoff has passed → show "cerrado" screen. */
+  /** False once the cutoff has passed OR the opening gate hasn't been reached yet. */
   isOpen: boolean;
-  /** ISO date the link closes on (== tournament.startDate). */
+  /** True when registrationOpensAt is in the future — show "not open yet" screen. */
+  notOpenYet: boolean;
+  /** ISO timestamp (or date) when the link closes. */
   closedAt: string;
+  /** ISO timestamp when the link opens — only present when notOpenYet is true. */
+  opensAt?: string;
   clubs: PublicClubSummary[];
 }
 

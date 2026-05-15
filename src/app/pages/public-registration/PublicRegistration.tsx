@@ -290,6 +290,23 @@ export function PublicRegistration() {
     );
   }
 
+  if (view.notOpenYet) {
+    return (
+      <CenteredCard
+        icon={<Lock className="w-7 h-7" />}
+        tone="muted"
+        title="Inscripciones aún no disponibles"
+        body={
+          <>
+            Las inscripciones para <b>{view.tournament.name}</b> abren el{' '}
+            {view.opensAt ? formatHumanDatetime(view.opensAt) : 'próximamente'}.
+            Guardá este enlace y volvé en esa fecha.
+          </>
+        }
+      />
+    );
+  }
+
   if (!view.isOpen) {
     return (
       <CenteredCard
@@ -298,9 +315,11 @@ export function PublicRegistration() {
         title="Inscripciones cerradas"
         body={
           <>
-            Las inscripciones para <b>{view.tournament.name}</b> cerraron el día
-            anterior al inicio ({formatHumanDate(view.closedAt)}). Si todavía
-            necesitás registrar a tu jugadora, contactá directamente al club.
+            Las inscripciones para <b>{view.tournament.name}</b> cerraron el{' '}
+            {view.closedAt.length > 10
+              ? formatHumanDatetime(view.closedAt)
+              : formatHumanDate(view.closedAt)}
+            . Si todavía necesitás registrar a tu jugadora, contactá directamente al club.
           </>
         }
       />
@@ -775,6 +794,30 @@ function formatHumanDate(iso: string): string {
       month: 'long',
       year: 'numeric',
     });
+  } catch {
+    return iso;
+  }
+}
+
+/**
+ * Render an ISO timestamp as "8 de mayo de 2026 a las 9:00 a. m." in Spanish.
+ * Falls back to the raw string on parse errors.
+ */
+function formatHumanDatetime(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const date = d.toLocaleDateString('es-CO', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    const time = d.toLocaleTimeString('es-CO', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+    return `${date} a las ${time}`;
   } catch {
     return iso;
   }

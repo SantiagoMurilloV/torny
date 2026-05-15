@@ -17,6 +17,24 @@ const MAX_COVER_BYTES = 10 * 1024 * 1024;
 const MAX_REGULATION_PDF_BYTES = 10 * 1024 * 1024;
 
 /**
+ * Convert an ISO timestamp (with timezone, e.g. "2026-05-20T14:00:00.000Z")
+ * to the "YYYY-MM-DDTHH:MM" shape that <input type="datetime-local"> expects.
+ * The conversion uses the browser's local timezone so the admin sees the time
+ * in their own clock — on save, the form converts back to a UTC ISO string.
+ * Returns '' when the input is empty or invalid.
+ */
+function isoToDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
+}
+
+/**
  * Encapsulates every piece of state the tournament form needs:
  *   · formData + errors + submitting flag
  *   · cover image (file, preview, upload spinner)
@@ -106,6 +124,8 @@ export function useTournamentForm({
       courts,
       categories: tournament.categories ? [...tournament.categories] : [],
       enrollmentDeadline: tournament.enrollmentDeadline ?? '',
+      registrationOpensAt: isoToDatetimeLocal(tournament.registrationOpensAt),
+      registrationClosesAt: isoToDatetimeLocal(tournament.registrationClosesAt),
       playersPerTeam: tournament.playersPerTeam ?? 12,
       bracketMode: tournament.bracketMode ?? 'manual',
       goldClassifiersPerGroup: tournament.goldClassifiersPerGroup ?? 2,
@@ -336,6 +356,12 @@ export function useTournamentForm({
         coverImage: coverImageUrl,
         categories: formData.categories,
         enrollmentDeadline: formData.enrollmentDeadline || undefined,
+        registrationOpensAt: formData.registrationOpensAt
+          ? new Date(formData.registrationOpensAt).toISOString()
+          : null,
+        registrationClosesAt: formData.registrationClosesAt
+          ? new Date(formData.registrationClosesAt).toISOString()
+          : null,
         playersPerTeam: formData.playersPerTeam,
         bracketMode: formData.bracketMode,
         // Only forward classifier counts when divisions mode is on,

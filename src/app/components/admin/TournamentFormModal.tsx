@@ -168,6 +168,33 @@ export function TournamentFormModal({
         </div>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <FormLabel>Apertura del link de inscripción</FormLabel>
+          <input
+            type="datetime-local"
+            value={form.formData.registrationOpensAt}
+            onChange={(e) => form.patch({ registrationOpensAt: e.target.value })}
+            className="w-full px-4 py-2 border-2 border-black/10 rounded-sm focus:outline-none focus:border-spk-red"
+          />
+          <p className="mt-1 text-xs text-black/50">
+            Opcional. Si se define, el link no funciona antes de esta fecha y hora.
+          </p>
+        </div>
+        <div>
+          <FormLabel>Cierre del link de inscripción</FormLabel>
+          <input
+            type="datetime-local"
+            value={form.formData.registrationClosesAt}
+            onChange={(e) => form.patch({ registrationClosesAt: e.target.value })}
+            className="w-full px-4 py-2 border-2 border-black/10 rounded-sm focus:outline-none focus:border-spk-red"
+          />
+          <p className="mt-1 text-xs text-black/50">
+            Opcional. Si no se define, el link cierra la medianoche anterior al inicio del torneo.
+          </p>
+        </div>
+      </div>
+
       <div>
         <SelectField
           label="Sistema de juego *"
