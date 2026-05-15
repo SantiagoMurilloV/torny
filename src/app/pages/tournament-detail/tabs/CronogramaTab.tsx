@@ -633,6 +633,7 @@ export function CronogramaTab({ tournament, matches }: CronogramaTabProps) {
               CATEGORY_COLORS[0]
             }
             tournament={tournament}
+            categoryName={getMatchCategory(focusedMatch)}
             onClose={() => setFocusedMatch(null)}
             onOpenDetail={() => {
               const id = focusedMatch.id;
@@ -829,6 +830,7 @@ interface FocusedMatchOverlayProps {
   match: Match;
   color: typeof CATEGORY_COLORS[0];
   tournament: Tournament;
+  categoryName: string;
   onClose: () => void;
   onOpenDetail: () => void;
 }
@@ -849,6 +851,7 @@ function FocusedMatchOverlay({
   match,
   color,
   tournament,
+  categoryName,
   onClose,
   onOpenDetail,
 }: FocusedMatchOverlayProps) {
@@ -892,6 +895,16 @@ function FocusedMatchOverlay({
         >
           <X className="w-4 h-4" />
         </button>
+
+        {/* Category title */}
+        {categoryName && (
+          <h3
+            className={`${color.text} text-sm font-black uppercase tracking-wider pr-8`}
+            style={FONT}
+          >
+            {categoryName}
+          </h3>
+        )}
 
         {/* Header — slot label + status */}
         <div className="flex items-center gap-2 flex-wrap pr-8">
