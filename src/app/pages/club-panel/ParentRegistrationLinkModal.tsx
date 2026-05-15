@@ -75,6 +75,31 @@ export function ParentRegistrationLinkModal({
 
   const formattedStart = formatHumanDate(tournament.startDate);
 
+  // Cutoff copy: prefer the explicit registrationClosesAt when the admin
+  // configured one (mig 035); fall back to the legacy "noche anterior al inicio".
+  const cutoffLine = (() => {
+    if (tournament.registrationClosesAt) {
+      return (
+        <>
+          <b>Cierre configurado:</b> El link deja de aceptar inscripciones
+          el {formatHumanDatetime(new Date(tournament.registrationClosesAt))}.
+        </>
+      );
+    }
+    return (
+      <>
+        <b>Cierre automático:</b> El link deja de aceptar inscripciones
+        el día anterior al inicio del torneo
+        {formattedStart ? ` (${formattedStart})` : ''}.
+      </>
+    );
+  })();
+
+  // Opening gate copy (mig 035): only shown when the link hasn't opened yet.
+  const notOpenYet =
+    tournament.registrationOpensAt &&
+    Date.now() < new Date(tournament.registrationOpensAt).getTime();
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/55 backdrop-blur-sm">
       <motion.div
@@ -160,6 +185,21 @@ export function ParentRegistrationLinkModal({
             </div>
           </div>
 
+          {/* Not-open-yet warning (mig 035) */}
+          {notOpenYet && (
+            <div className="flex items-start gap-2 p-3 bg-blue-50 border-l-2 border-blue-400 rounded-sm">
+              <Calendar
+                className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5"
+                aria-hidden="true"
+              />
+              <p className="text-xs text-black/75 leading-relaxed">
+                <b>Aún no disponible:</b> El link abre el{' '}
+                {formatHumanDatetime(new Date(tournament.registrationOpensAt!))}.
+                Podés compartirlo antes, pero no funcionará hasta esa fecha.
+              </p>
+            </div>
+          )}
+
           {/* Cutoff reminder */}
           <div className="flex items-start gap-2 p-3 bg-spk-gold/10 border-l-2 border-spk-gold rounded-sm">
             <Calendar
@@ -167,9 +207,7 @@ export function ParentRegistrationLinkModal({
               aria-hidden="true"
             />
             <p className="text-xs text-black/75 leading-relaxed">
-              <b>Cierre automático:</b> El link deja de aceptar
-              inscripciones el día anterior al inicio del torneo
-              {formattedStart ? ` (${formattedStart})` : ''}.
+              {cutoffLine}
             </p>
           </div>
 
@@ -222,5 +260,27 @@ function formatHumanDate(date: Date | undefined): string {
     });
   } catch {
     return '';
+  }
+}
+
+/**
+ * Render a JS Date as "8 de mayo de 2026 a las 9:00 a. m." in Spanish.
+ * Used for the mig-035 configured opens/closes timestamps.
+ */
+function formatHumanDatetime(date: Date): string {
+  try {
+    const datePart = date.toLocaleDateString('es-CO', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    const timePart = date.toLocaleTimeString('es-CO', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+    return `${datePart} a las ${timePart}`;
+  } catch {
+    return date.toISOString();
   }
 }

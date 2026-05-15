@@ -159,15 +159,28 @@ export function ClubPanel() {
     })();
   }, []);
 
-  // Open torneos = those whose start_date is in the future. Same logic
-  // the backend uses to keep the public link alive (`now < startDate`)
-  // so the UI mirrors the server's truth — the captain shouldn't see
-  // a "Generar link" CTA on a torneo whose link is already dead.
+  // Open torneos = those whose registration link is currently active.
+  // Mirrors the backend logic in publicRegistration.service.ts (mig 035):
+  //   · If registrationClosesAt is set → use that as the closing gate.
+  //   · Otherwise fall back to the legacy "day before startDate" rule.
+  //   · If registrationOpensAt is set AND is in the future → not open yet.
+  // The captain shouldn't see a "Generar link" CTA on a torneo whose link
+  // is already dead or hasn't opened yet.
   const openTournaments = useMemo(() => {
+    const nowMs = Date.now();
     const today = new Date().toISOString().slice(0, 10);
     return tournaments.filter((t) => {
-      // tournament.startDate is a Date — slice(0, 10) of ISO gives a
-      // YYYY-MM-DD string for direct lexicographic comparison.
+      // Opening gate (mig 035)
+      if (t.registrationOpensAt) {
+        const opensMs = new Date(t.registrationOpensAt).getTime();
+        if (nowMs < opensMs) return false; // not open yet
+      }
+      // Closing gate (mig 035) — if set, use it; otherwise legacy date check.
+      if (t.registrationClosesAt) {
+        const closesMs = new Date(t.registrationClosesAt).getTime();
+        return nowMs < closesMs;
+      }
+      // Legacy: tournament.startDate is a Date → ISO slice for comparison.
       const iso = t.startDate.toISOString().slice(0, 10);
       return iso > today;
     });
