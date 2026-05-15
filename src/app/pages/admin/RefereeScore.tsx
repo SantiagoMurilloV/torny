@@ -141,6 +141,8 @@ export function RefereeScore() {
               teamColor={match.team1.colors.primary}
               serving={live.serving === 'home'}
               setNumber={live.currentSetNumber}
+              storageKey={`${match.id}-home`}
+              rotationTrigger={live.rotH}
             />
           </div>
           <div className="bg-spk-black">
@@ -148,6 +150,8 @@ export function RefereeScore() {
               teamColor={match.team2.colors.primary}
               serving={live.serving === 'away'}
               setNumber={live.currentSetNumber}
+              storageKey={`${match.id}-away`}
+              rotationTrigger={live.rotA}
             />
           </div>
         </div>

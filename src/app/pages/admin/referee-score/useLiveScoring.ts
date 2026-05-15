@@ -163,12 +163,35 @@ export function useLiveScoring(matchId: string | undefined) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirtyTick, scoreH, scoreA, sets]);
 
+  // Ref síncrono del saque actual para leer en callbacks sin deps estancadas.
+  const servingRef = useRef<ServingSide>('home');
+  useEffect(() => { servingRef.current = serving; }, [serving]);
+
+  // Contadores de rotación: se incrementan SOLO cuando el equipo gana el saque
+  // al anotar (nunca cuando el saque cambia por un "-punto").
+  const [rotH, setRotH] = useState(0);
+  const [rotA, setRotA] = useState(0);
+
+  // Historial de saque por punto: registra quién tenía el saque ANTES de cada
+  // addPoint. subtractPoint lo consume para restaurar el saque correcto sin
+  // importar cuántos puntos seguidos lleva el equipo.
+  // Estructura: { side: quién anotó, prevServing: quién servía antes }
+  const serveHistory = useRef<Array<{ side: ServingSide; prevServing: ServingSide }>>([]);
+
   // Score controls
   const addPoint = useCallback(
     (side: ServingSide) => {
       pushUndo();
-      if (side === 'home') setScoreH((v) => v + 1);
-      else setScoreA((v) => v + 1);
+      const prevServing = servingRef.current;
+      // Registrar en el historial ANTES de cambiar el saque
+      serveHistory.current.push({ side, prevServing });
+      if (side === 'home') {
+        setScoreH((v) => v + 1);
+        if (prevServing !== 'home') setRotH((n) => n + 1); // ganó el saque → rota
+      } else {
+        setScoreA((v) => v + 1);
+        if (prevServing !== 'away') setRotA((n) => n + 1); // ganó el saque → rota
+      }
       setServing(side);
       markDirty();
     },
@@ -181,6 +204,21 @@ export function useLiveScoring(matchId: string | undefined) {
       pushUndo();
       if (side === 'home') setScoreH((v) => Math.max(0, v - 1));
       else setScoreA((v) => Math.max(0, v - 1));
+
+      // Buscar el último addPoint de este equipo en el historial y restaurar
+      // el saque que había ANTES de ese punto. Así:
+      //   · Si el equipo ganó el saque con ese punto → saque vuelve al otro
+      //   · Si ya tenía el saque cuando anotó → saque se queda en el mismo equipo
+      const history = serveHistory.current;
+      let restored: ServingSide = servingRef.current; // por defecto no cambia
+      for (let i = history.length - 1; i >= 0; i--) {
+        if (history[i].side === side) {
+          restored = history[i].prevServing;
+          history.splice(i, 1);
+          break;
+        }
+      }
+      setServing(restored);
       markDirty();
     },
     [scoreH, scoreA, pushUndo, markDirty],
@@ -274,6 +312,8 @@ export function useLiveScoring(matchId: string | undefined) {
     setsH,
     setsA,
     serving,
+    rotH,
+    rotA,
     seconds,
     elapsed,
     timerRunning,

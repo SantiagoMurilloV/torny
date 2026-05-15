@@ -5,7 +5,7 @@ import {
   ValidationError,
 } from '../middleware/errorHandler';
 import { BCRYPT_ROUNDS, validatePasswordStrength } from './password';
-import { encryptPassword } from './passwordRecovery';
+import { encryptPassword, decryptPassword } from './passwordRecovery';
 
 /**
  * App user. Today we have two roles:
@@ -21,6 +21,13 @@ export interface AppUser {
   assignedTournamentId?: string | null;
   /** For judges: court name they're assigned to (mig 036). */
   assignedCourt?: string | null;
+  /**
+   * Decrypted plaintext password — only present when PLATFORM_RECOVERY_KEY
+   * is set. Included in judge list / create / reset responses so the admin
+   * can always see credentials at a glance without an extra round-trip.
+   * Never logged or stored beyond this in-memory response object.
+   */
+  password?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -29,6 +36,9 @@ export interface CreateJudgeDto {
   username: string;
   password: string;
   displayName?: string;
+  /** Optional court assignment at creation time (mig 036). */
+  assignedTournamentId?: string | null;
+  assignedCourt?: string | null;
 }
 
 export interface UpdateJudgeDto {
@@ -46,6 +56,9 @@ function mapUserRow(row: Record<string, unknown>): AppUser {
     displayName: (row.display_name as string | null) ?? undefined,
     assignedTournamentId: (row.assigned_tournament_id as string | null) ?? null,
     assignedCourt: (row.assigned_court as string | null) ?? null,
+    // Decrypt stored password when recovery key is available. Never throws —
+    // decryptPassword returns null on any failure.
+    password: decryptPassword(row.password_recovery as string | null | undefined),
     createdAt: row.created_at as string | undefined,
     updatedAt: row.updated_at as string | undefined,
   };
@@ -63,7 +76,7 @@ export class UserService {
       const result = await pool.query(
         `SELECT id, username, role, display_name,
                 assigned_tournament_id, assigned_court,
-                created_at, updated_at
+                password_recovery, created_at, updated_at
          FROM users
          WHERE role = 'judge' AND created_by = $1
          ORDER BY created_at DESC`,
@@ -74,7 +87,7 @@ export class UserService {
     const result = await pool.query(
       `SELECT id, username, role, display_name,
               assigned_tournament_id, assigned_court,
-              created_at, updated_at
+              password_recovery, created_at, updated_at
        FROM users
        WHERE role = 'judge'
        ORDER BY created_at DESC`,
@@ -115,13 +128,20 @@ export class UserService {
       throw new ValidationError('Ya existe un usuario con ese nombre');
     }
 
+    const assignedTournamentId = data.assignedTournamentId ?? null;
+    const assignedCourt = data.assignedCourt ?? null;
+
     const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     const recovery = encryptPassword(password);
     const result = await pool.query(
-      `INSERT INTO users (username, password_hash, role, display_name, created_by, password_recovery)
-       VALUES ($1, $2, 'judge', $3, $4, $5)
-       RETURNING id, username, role, display_name, created_at, updated_at`,
-      [username, hash, displayName, createdBy, recovery],
+      `INSERT INTO users
+         (username, password_hash, role, display_name, created_by, password_recovery,
+          assigned_tournament_id, assigned_court)
+       VALUES ($1, $2, 'judge', $3, $4, $5, $6, $7)
+       RETURNING id, username, role, display_name,
+                 assigned_tournament_id, assigned_court,
+                 password_recovery, created_at, updated_at`,
+      [username, hash, displayName, createdBy, recovery, assignedTournamentId, assignedCourt],
     );
     return mapUserRow(result.rows[0]);
   }
@@ -142,7 +162,7 @@ export class UserService {
         WHERE id = $3 AND role = 'judge'
         RETURNING id, username, role, display_name,
                   assigned_tournament_id, assigned_court,
-                  created_at, updated_at`,
+                  password_recovery, created_at, updated_at`,
       [dto.assignedTournamentId ?? null, dto.assignedCourt ?? null, id],
     );
     if (result.rows.length === 0) {
@@ -165,23 +185,29 @@ export class UserService {
     await pool.query('DELETE FROM users WHERE id = $1', [id]);
   }
 
-  /** Reset a judge's password. Admin-only recovery flow. */
-  async resetJudgePassword(id: string, newPassword: string): Promise<void> {
+  /** Reset a judge's password. Returns the updated judge (with new decrypted password). */
+  async resetJudgePassword(id: string, newPassword: string): Promise<AppUser> {
     validatePasswordStrength(newPassword);
     const pool = getPool();
-    const result = await pool.query('SELECT id, role FROM users WHERE id = $1', [id]);
-    if (result.rows.length === 0) {
+    const check = await pool.query('SELECT id, role FROM users WHERE id = $1', [id]);
+    if (check.rows.length === 0) {
       throw new NotFoundError('Usuario');
     }
-    if (result.rows[0].role !== 'judge') {
+    if (check.rows[0].role !== 'judge') {
       throw new ValidationError('Solo se puede resetear la contraseña de usuarios juez');
     }
     const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     const recovery = encryptPassword(newPassword);
-    await pool.query(
-      'UPDATE users SET password_hash = $1, password_recovery = $2, updated_at = NOW() WHERE id = $3',
+    const result = await pool.query(
+      `UPDATE users
+          SET password_hash = $1, password_recovery = $2, updated_at = NOW()
+        WHERE id = $3
+        RETURNING id, username, role, display_name,
+                  assigned_tournament_id, assigned_court,
+                  password_recovery, created_at, updated_at`,
       [hash, recovery, id],
     );
+    return mapUserRow(result.rows[0]);
   }
 }
 
