@@ -6,6 +6,8 @@ import cors from 'cors';
 import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
+import cluster from 'node:cluster';
+import os from 'node:os';
 import multer from 'multer';
 import { checkConnection, getPool, runMigrations } from './config/database';
 import { ensureReady as ensurePushReady } from './services/push.service';
@@ -334,7 +336,9 @@ async function startServer() {
     const connected = await checkConnection();
     if (!connected) {
       console.error('No se pudo conectar a la base de datos. Iniciando sin DB...');
-    } else {
+    } else if (!cluster.isWorker) {
+      // Single-process mode: run migrations here.
+      // Clustered mode: primary already ran migrations before forking workers.
       console.log('Conexión a PostgreSQL establecida.');
       await runMigrations();
       console.log('Migraciones ejecutadas correctamente.');
@@ -351,15 +355,63 @@ async function startServer() {
   }
 
   app.listen(PORT, () => {
-    console.log(`Servidor Torny corriendo en puerto ${PORT}`);
-    // Arranca el reporter de Telegram — silencioso si TELEGRAM_BOT_TOKEN
-    // / TELEGRAM_CHAT_ID no están en env. Cron interno cada N min.
-    startPresenceReporter();
+    const label = cluster.isWorker ? `worker pid=${process.pid}` : 'single';
+    console.log(`Servidor Torny corriendo en puerto ${PORT} [${label}]`);
+    // Presence reporter runs once: in single-process mode it starts here;
+    // in clustered mode the primary already started it before forking.
+    if (!cluster.isWorker) startPresenceReporter();
   });
 }
 
-// In Vercel / Lambda-like environments we'd skip listen() and export app;
-// Railway runs this as a long-lived process so we always boot.
-startServer();
+// ── Cluster bootstrap ────────────────────────────────────────────────────────
+// Railway sets WEB_CONCURRENCY automatically on paid plans to match the number
+// of vCPUs available. On free/single-CPU plans it's unset, so we fall back to
+// os.cpus().length (typically 1) and the else branch runs single-process mode.
+// Override by setting WEB_CONCURRENCY=1 in Railway env vars to disable clustering.
+const WEB_CONCURRENCY = parseInt(
+  process.env.WEB_CONCURRENCY ?? String(os.cpus().length),
+  10,
+);
+
+if (cluster.isPrimary && WEB_CONCURRENCY > 1) {
+  // ── Primary process ──────────────────────────────────────────────────────
+  // Runs DB migrations once so every worker starts with a ready schema,
+  // then forks N HTTP workers and supervises them.
+  (async () => {
+    try {
+      const connected = await checkConnection();
+      if (connected) {
+        console.log('[primary] Conexión a PostgreSQL establecida.');
+        await runMigrations();
+        console.log('[primary] Migraciones ejecutadas correctamente.');
+        await ensurePushReady();
+        await ensureSuperAdmin();
+      } else {
+        console.error('[primary] No se pudo conectar a la base de datos.');
+      }
+    } catch (err) {
+      console.error('[primary] Error durante la inicialización:', err);
+    }
+
+    console.log(`[primary] Iniciando ${WEB_CONCURRENCY} workers.`);
+    for (let i = 0; i < WEB_CONCURRENCY; i++) cluster.fork();
+
+    // Restart a worker automatically if it dies unexpectedly.
+    cluster.on('exit', (worker, code, signal) => {
+      console.log(
+        `[cluster] Worker ${worker.process.pid} terminó (code=${code} signal=${signal}). Reiniciando…`,
+      );
+      cluster.fork();
+    });
+
+    // Presence reporter runs on primary — one reporter, not one per worker.
+    startPresenceReporter();
+  })();
+} else {
+  // ── Worker / single-process mode ─────────────────────────────────────────
+  // In Vercel / Lambda-like environments we'd skip listen() and export app;
+  // Railway runs this as a long-lived process so we always boot.
+  startServer();
+}
 
 export default app;
