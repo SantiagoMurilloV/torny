@@ -155,7 +155,7 @@ app.get('/api/health', async (_req, res) => {
     const pool = getPool();
     const client = await pool.connect();
     try {
-      await client.query('SET LOCAL statement_timeout = 2000');
+      await client.query('SET statement_timeout = 2000');
       await client.query('SELECT 1');
     } finally {
       client.release();
