@@ -14,6 +14,7 @@ import { ensureReady as ensurePushReady } from './services/push.service';
 import { ensureSuperAdmin } from './services/platformBootstrap';
 import { touchUser, touchVisitor } from './services/presence';
 import { startPresenceReporter } from './services/telegram-reporter';
+import { startAutoLive } from './services/autoLive';
 import { errorHandler } from './middleware/errorHandler';
 import { authMiddleware } from './middleware/auth';
 import authRoutes from './routes/auth.routes';
@@ -359,7 +360,10 @@ async function startServer() {
     console.log(`Servidor Torny corriendo en puerto ${PORT} [${label}]`);
     // Presence reporter runs once: in single-process mode it starts here;
     // in clustered mode the primary already started it before forking.
-    if (!cluster.isWorker) startPresenceReporter();
+    if (!cluster.isWorker) {
+      startPresenceReporter();
+      startAutoLive();
+    }
   });
 }
 
@@ -406,6 +410,8 @@ if (cluster.isPrimary && WEB_CONCURRENCY > 1) {
 
     // Presence reporter runs on primary — one reporter, not one per worker.
     startPresenceReporter();
+    // Auto-live scheduler: transitions matches to 'live' at their scheduled time.
+    startAutoLive();
   })();
 } else {
   // ── Worker / single-process mode ─────────────────────────────────────────

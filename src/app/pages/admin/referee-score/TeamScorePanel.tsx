@@ -38,17 +38,23 @@ export function TeamScorePanel({
         backgroundImage: `linear-gradient(180deg, ${team.colors.primary}22 0%, transparent 55%)`,
       }}
     >
-      <div className="relative flex items-center gap-4">
+      <div className="relative flex items-center gap-3">
         <TeamAvatar team={team} size="lg" />
         <div className="flex-1 min-w-0">
           <div
-            className="text-2xl md:text-4xl font-bold uppercase leading-none truncate"
-            style={{ ...FONT, letterSpacing: '-0.02em' }}
+            className="font-extrabold uppercase leading-[0.95]"
+            style={{
+              ...FONT,
+              fontSize: 'clamp(1.25rem, 5vw, 2.75rem)',
+              letterSpacing: '0.02em',
+              color: 'white',
+              textShadow: `0 0 20px ${team.colors.primary}88, 0 2px 8px rgba(0,0,0,0.5)`,
+            }}
           >
             {team.name}
           </div>
           {team.city && (
-            <div className="text-[11px] text-white/55 mt-1 truncate">{team.city}</div>
+            <div className="text-xs text-white/55 mt-1 truncate">{team.city}</div>
           )}
         </div>
         <button
@@ -114,16 +120,23 @@ export function TeamScorePanel({
         </button>
       </div>
 
-      <div className="relative flex items-center gap-3 bg-white/5 rounded-sm px-4 py-3">
-        <span
-          className="text-[11px] text-white/55 font-bold uppercase"
-          style={{ ...FONT, letterSpacing: '0.16em' }}
-        >
-          Sets ganados
+      <div className="relative flex items-center justify-between border-t border-white/10 px-1 pt-3">
+        <span className="flex items-center gap-2">
+          <span
+            className="text-[11px] text-white font-bold uppercase"
+            style={{ ...FONT, letterSpacing: '0.18em' }}
+          >
+            Sets ganados
+          </span>
+          <span className="text-white/50 text-sm">&rsaquo;&rsaquo;</span>
         </span>
         <span
-          className="ml-auto text-3xl md:text-4xl font-bold tabular-nums text-white"
-          style={FONT}
+          className="text-3xl md:text-4xl font-extrabold tabular-nums"
+          style={{
+            ...FONT,
+            color: 'white',
+            textShadow: `0 0 14px ${team.colors.primary}99`,
+          }}
         >
           {sets}
         </span>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
@@ -180,6 +180,56 @@ export function AdminTournamentDetail() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // ── Live-polling: refresh matches + standings + bracket every 15s ──
+  // Keeps the admin view in sync with auto-live status transitions
+  // and judge score updates without requiring a manual page reload.
+  // Paused when the browser tab is hidden to save bandwidth.
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const refreshMatchData = useCallback(async () => {
+    if (!id) return;
+    try {
+      const [freshMatches, freshBracket, freshStandings] = await Promise.all([
+        api.getTournamentMatches(id),
+        api.getTournamentBracket(id),
+        api.getTournamentStandings(id),
+      ]);
+      setMatches(freshMatches);
+      setBracketMatches(freshBracket);
+      setStandings(freshStandings);
+    } catch {
+      // Silent fail — polling errors shouldn't disrupt the UI.
+    }
+  }, [id]);
+
+  useEffect(() => {
+    const startPoll = () => {
+      if (pollRef.current) return;
+      pollRef.current = setInterval(refreshMatchData, 15_000);
+    };
+    const stopPoll = () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+    const onVisibility = () => {
+      if (document.hidden) {
+        stopPoll();
+      } else {
+        refreshMatchData();
+        startPoll();
+      }
+    };
+
+    startPoll();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stopPoll();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [refreshMatchData]);
 
   // ── Handlers — tournament ───────────────────────────────────────
 

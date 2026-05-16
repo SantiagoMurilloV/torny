@@ -13,6 +13,7 @@ import { standingsCalculator } from './standings.service';
 import { bracketGenerator } from './bracket.service';
 import { fixtureGenerator } from './fixture.service';
 import { pushService, ensureReady as ensurePushReady } from './push.service';
+import { activateNextOnCourt } from './autoLive';
 
 /**
  * Fire-and-forget helper that builds the two-team label used in push
@@ -512,6 +513,14 @@ export class MatchService {
       }
     }
 
+    // When admin completes a match, immediately activate the next match
+    // on the same court (if its time has come).
+    if (data.status === 'completed' && existing.status !== 'completed' && existing.court) {
+      activateNextOnCourt(existing.tournamentId, existing.court).catch((err) =>
+        console.warn('[auto-live] activateNextOnCourt after admin update failed:', err),
+      );
+    }
+
     // Fire a push when the admin flips a match into 'live' from here.
     // Score corrections from the admin form skip the score-push flow —
     // that belongs to the referee console where the judge drives scoring.
@@ -884,6 +893,15 @@ export class MatchService {
         }
       };
       notify().catch((err) => console.warn('[push] match dispatch failed', err));
+    }
+
+    // When a match is completed, immediately activate the next match
+    // on the same court (if its time has come). This way the judge
+    // sees the next match go live the instant they finalize the current one.
+    if (becameCompleted && existing.court) {
+      activateNextOnCourt(existing.tournamentId, existing.court).catch((err) =>
+        console.warn('[auto-live] activateNextOnCourt after score failed:', err),
+      );
     }
 
     return this.getById(id);

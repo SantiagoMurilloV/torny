@@ -109,6 +109,33 @@ export function RefereeScore() {
         scoreA={live.scoreA}
       />
 
+      {/* Action buttons — above score panels for quick access */}
+      <div className="px-4 md:px-6 py-2 bg-black/40 border-b border-white/10 flex items-center gap-2">
+        <button
+          onClick={live.undo}
+          className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-sm text-xs font-bold uppercase"
+          style={{ ...FONT, letterSpacing: '0.08em' }}
+        >
+          <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+          Corregir
+        </button>
+        <button
+          onClick={live.closeSet}
+          className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-sm text-xs font-bold uppercase"
+          style={{ ...FONT, letterSpacing: '0.08em' }}
+          title={
+            live.setIsDecidable
+              ? 'Cerrar el set con el marcador actual'
+              : 'Forzar cierre (válido para abandonos / forfeits)'
+          }
+        >
+          Cerrar set ({live.currentSetNumber})
+        </button>
+        <div className="ml-auto">
+          <SyncIndicator state={live.sync} lastSyncedAt={live.lastSyncedAt} />
+        </div>
+      </div>
+
       <div className="flex-1 flex flex-col">
         {/* Paneles de marcador */}
         <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-[2px] bg-white/10">
@@ -157,32 +184,7 @@ export function RefereeScore() {
         </div>
       </div>
 
-      <div className="px-4 md:px-6 py-3 bg-black/40 border-t border-white/10 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={live.undo}
-            className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-sm text-xs font-bold uppercase"
-            style={{ ...FONT, letterSpacing: '0.08em' }}
-          >
-            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
-            Deshacer
-          </button>
-          <button
-            onClick={live.closeSet}
-            className="inline-flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-sm text-xs font-bold uppercase"
-            style={{ ...FONT, letterSpacing: '0.08em' }}
-            title={
-              live.setIsDecidable
-                ? 'Cerrar el set con el marcador actual'
-                : 'Forzar cierre (válido para abandonos / forfeits)'
-            }
-          >
-            Cerrar set ({live.currentSetNumber})
-          </button>
-        </div>
-
-        <SyncIndicator state={live.sync} lastSyncedAt={live.lastSyncedAt} />
-
+      <div className="px-4 md:px-6 py-3 bg-black/40 border-t border-white/10 flex items-center justify-center">
         <button
           onClick={() =>
             live.finishMatch((tournamentId) =>

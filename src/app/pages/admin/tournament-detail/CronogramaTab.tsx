@@ -487,6 +487,34 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
    * can retry. The catch chains a friendly toast so the failure
    * mode is visible without a stack trace.
    */
+  const handleStatusChange = useCallback(
+    async (m: Match, newStatus: 'upcoming' | 'live' | 'completed') => {
+      if (m.status === newStatus) return;
+      if (inFlight.has(m.id)) return;
+      markInFlight([m.id], true);
+      try {
+        const updated = await api.updateMatch(m.id, {
+          tournamentId: m.tournamentId,
+          status: newStatus,
+        });
+        onMatchesPatched?.([updated]);
+        const labels: Record<string, string> = {
+          upcoming: 'Proximo',
+          live: 'En Vivo',
+          completed: 'Finalizado',
+        };
+        toast.success(
+          `${m.team1.initials || m.team1.name} vs ${m.team2.initials || m.team2.name} → ${labels[newStatus]}`,
+        );
+      } catch (err) {
+        toast.error(getErrorMessage(err, 'No se pudo cambiar el estado'));
+      } finally {
+        markInFlight([m.id], false);
+      }
+    },
+    [inFlight, markInFlight, onMatchesPatched],
+  );
+
   const handleSendSchedule = useCallback(async () => {
     if (sendingSchedule) return;
     setSendingSchedule(true);
@@ -1137,6 +1165,7 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
                     getMatchCategory={getMatchCategory}
                     onDrop={handleDrop}
                     onMoveToDay={handleMoveToDay}
+                    onStatusChange={handleStatusChange}
                     days={days}
                     selectedDay={selectedDay}
                     formatDayLabel={formatDayLabel}
@@ -1238,6 +1267,7 @@ interface CellProps {
   getMatchCategory: (m: Match) => string;
   onDrop: (dragged: Match, destCourt: string, destTime: string) => void;
   onMoveToDay: (m: Match, targetDay: string) => void;
+  onStatusChange: (m: Match, status: 'upcoming' | 'live' | 'completed') => void;
   days: string[];
   selectedDay: string;
   formatDayLabel: (iso: string) => string;
@@ -1272,6 +1302,7 @@ function Cell({
   getMatchCategory,
   onDrop,
   onMoveToDay,
+  onStatusChange,
   days,
   selectedDay,
   formatDayLabel,
@@ -1364,6 +1395,7 @@ function Cell({
               days={days}
               currentDay={selectedDay}
               onMoveToDay={onMoveToDay}
+              onStatusChange={onStatusChange}
               formatDayLabel={formatDayLabel}
               isInFlight={inFlight.has(m.id)}
               tournament={tournament}
@@ -1398,6 +1430,8 @@ interface MatchCardProps {
    * default.
    */
   tournament?: Tournament;
+  /** Callback when admin changes the match status from the card. */
+  onStatusChange?: (m: Match, status: 'upcoming' | 'live' | 'completed') => void;
 }
 
 function MatchCard({
@@ -1409,6 +1443,7 @@ function MatchCard({
   formatDayLabel,
   isInFlight,
   tournament,
+  onStatusChange,
 }: MatchCardProps) {
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
 
@@ -1454,19 +1489,69 @@ function MatchCard({
     : 60;
   const endTime = addMinutesToHHMM(match.time ?? '', durationMin);
 
+  const STATUS_OPTIONS: { value: 'upcoming' | 'live' | 'completed'; label: string; dot: string; text: string }[] = [
+    { value: 'upcoming', label: 'Proximo', dot: 'bg-black/25', text: 'text-black/40' },
+    { value: 'live', label: 'En Vivo', dot: 'bg-red-500', text: 'text-red-600' },
+    { value: 'completed', label: 'Finalizado', dot: 'bg-emerald-500', text: 'text-emerald-600' },
+  ];
+  const currentOpt = STATUS_OPTIONS.find((o) => o.value === match.status) ?? STATUS_OPTIONS[0];
+
   return (
     <div
       ref={preview as unknown as React.Ref<HTMLDivElement>}
       className={`${color.bg} ${color.border} border rounded-md px-2 py-1.5 cursor-grab active:cursor-grabbing transition-all ${opacity} h-full flex flex-col`}
     >
       <div className="flex items-center gap-1.5 mb-1">
+        {/* Drag handle — 3-column dot grid for a wide, easy grab area */}
         <span
           ref={drag as unknown as React.Ref<HTMLSpanElement>}
-          className="text-black/40 hover:text-black/70"
+          className="text-black/30 hover:text-black/70 transition-colors flex-shrink-0 cursor-grab active:cursor-grabbing grid grid-cols-3 gap-x-[2px] gap-y-[3px] p-0.5"
           aria-label="Arrastrar"
         >
-          <GripVertical className="w-3 h-3" />
+          {Array.from({ length: 9 }).map((_, i) => (
+            <span key={i} className="w-[3px] h-[3px] rounded-full bg-current" />
+          ))}
         </span>
+        {/* Inline status toggle — subtle dot + tiny label */}
+        {onStatusChange && (
+          <Select
+            value={match.status}
+            onValueChange={(val) =>
+              onStatusChange(match, val as 'upcoming' | 'live' | 'completed')
+            }
+            disabled={isInFlight}
+          >
+            <SelectTrigger
+              className="h-auto px-0 py-0 border-0 bg-transparent shadow-none gap-1 w-auto min-w-0 focus:ring-0"
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <span className="flex items-center gap-1">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${currentOpt.dot} ${
+                    match.status === 'live' ? 'animate-pulse' : ''
+                  }`}
+                />
+                <span
+                  className={`text-[8px] font-bold uppercase tracking-wider ${currentOpt.text}`}
+                  style={FONT}
+                >
+                  {currentOpt.label}
+                </span>
+              </span>
+            </SelectTrigger>
+            <SelectContent onClick={(e) => e.stopPropagation()}>
+              {STATUS_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  <span className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${opt.dot}`} />
+                    <span className={opt.text}>{opt.label}</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         {slotLabel && (
           // Bracket-stage phase labels get a pill outline so they
           // stand out as "this is Cuartos/Semi/Final"; round-robin

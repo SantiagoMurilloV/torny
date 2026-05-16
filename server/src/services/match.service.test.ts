@@ -32,6 +32,12 @@ vi.mock('./fixture.service', () => ({
   },
 }));
 
+// Mock autoLive so the fire-and-forget activateNextOnCourt call doesn't
+// drain the pool.query mock queue with extra DB queries.
+vi.mock('./autoLive', () => ({
+  activateNextOnCourt: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mock the push service so unit tests don't try to issue real HTTP pushes
 // to Google/Firefox endpoints — and don't consume extra pool.query mocks
 // via the matchHeadline lookup inside dispatch. `ensureReady` returns null
