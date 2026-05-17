@@ -83,6 +83,12 @@ export interface CreateTournamentDto {
   sponsorsSpeedSeconds?: number | null;
   /** mig 031 — torney locality string ("Armenia, Quindío"). */
   city?: string | null;
+  /**
+   * mig 037 — bracket phase buckets whose upcoming matches should
+   * drop the blur in the public schedule. Values are PhaseBucket keys:
+   * 'cuartos', 'semifinal', 'final', 'tercer-puesto'.
+   */
+  revealedPhases?: string[];
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

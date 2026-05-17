@@ -90,6 +90,9 @@ export interface BackendTournament {
    *  del contador transiente de partidos en curso (0 casi siempre
    *  hasta que arranca el día). */
   playersCount?: number;
+  /** mig 037 — bracket phases the admin has "revealed". Array of
+   *  PhaseBucket strings (e.g. 'cuartos', 'semifinal'). */
+  revealedPhases?: string[];
 }
 
 export interface BackendEnrolledTeam {

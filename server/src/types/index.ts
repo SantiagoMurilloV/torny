@@ -181,6 +181,13 @@ export interface Tournament {
    * NULL → use the FE's algorithmic fallback (looped.length × 2.5).
    */
   sponsorsSpeedSeconds?: number | null;
+  /**
+   * Bracket phase buckets whose upcoming matches should no longer be
+   * blurred in the public schedule (mig 037). Values are PhaseBucket
+   * keys: 'cuartos', 'semifinal', 'final', 'tercer-puesto'. Empty
+   * array (default) means everything stays blurred.
+   */
+  revealedPhases?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -394,6 +401,12 @@ export interface CreateTournamentDto {
    * 10-300 seconds per loop. NULL clears it (uses FE fallback).
    */
   sponsorsSpeedSeconds?: number | null;
+  /**
+   * mig 037 — bracket phase buckets whose upcoming matches should no
+   * longer be blurred in the public schedule. Values are PhaseBucket
+   * keys: 'cuartos', 'semifinal', 'final', 'tercer-puesto'.
+   */
+  revealedPhases?: string[];
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

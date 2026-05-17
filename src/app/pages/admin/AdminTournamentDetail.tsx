@@ -638,6 +638,11 @@ export function AdminTournamentDetail() {
                   return prev.map((m) => byId.get(m.id) ?? m);
                 });
               }}
+              // Phase reveal toggle — patch tournament state locally so
+              // the blur change is instant without re-fetching.
+              onTournamentUpdated={(updated) =>
+                setTournament((prev) => (prev ? { ...prev, ...updated } : prev))
+              }
             />
           )}
         </TabsContent>

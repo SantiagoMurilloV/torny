@@ -199,6 +199,12 @@ function mapRow(row: Record<string, unknown>): Tournament {
         : playersRaw != null
           ? Number(playersRaw)
           : undefined,
+    // mig 037 — revealed bracket phases. JSONB array of phase-bucket
+    // strings. Empty array (default) means every upcoming bracket match
+    // stays blurred in the public schedule.
+    revealedPhases: Array.isArray(row.revealed_phases)
+      ? (row.revealed_phases as string[])
+      : [],
     createdAt: row.created_at as string | undefined,
     updatedAt: row.updated_at as string | undefined,
   };
@@ -651,6 +657,8 @@ export class TournamentService {
       finalsCourt: 'finals_court',
       // Migration 027 — per-category match duration overrides.
       matchDurationsByCategory: 'match_durations_by_category',
+      // Migration 037 — revealed bracket phases.
+      revealedPhases: 'revealed_phases',
     };
 
     for (const [key, column] of Object.entries(columnMap)) {
@@ -732,6 +740,10 @@ export class TournamentService {
             }
           }
           stored = JSON.stringify(obj);
+        } else if (key === 'revealedPhases') {
+          // jsonb array of phase-bucket strings. Non-array / null
+          // collapses to '[]' so sending null clears all reveals.
+          stored = JSON.stringify(Array.isArray(rawValue) ? rawValue : []);
         } else if (key === 'regulationText' || key === 'regulationPdf') {
           // Normaliza '' → null para que "limpiar" desde el form deje
           // la columna realmente vacía en vez de un string vacío. El

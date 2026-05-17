@@ -262,6 +262,13 @@ export interface Tournament {
    * fallback algorítmico (longitud del strip × 2.5s).
    */
   sponsorsSpeedSeconds?: number | null;
+  /**
+   * Bracket phase buckets whose upcoming matches are no longer blurred
+   * in the public schedule (mig 037). Values are PhaseBucket keys:
+   * 'cuartos', 'semifinal', 'final', 'tercer-puesto'. Empty array
+   * (default) means everything stays blurred as before.
+   */
+  revealedPhases?: string[];
 }
 
 export interface BracketMatch {

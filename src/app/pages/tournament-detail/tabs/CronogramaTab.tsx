@@ -15,7 +15,7 @@ import {
   getMatchDurationMinutes,
   addMinutesToHHMM,
 } from '../../../lib/matchDuration';
-import { categoryOfMatch, phaseLabelOnly } from '../../../lib/phase';
+import { categoryOfMatch, phaseBucket, phaseLabelOnly } from '../../../lib/phase';
 import { useIsMobile } from '../../../components/ui/use-mobile';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
@@ -693,16 +693,15 @@ function PublicMatchCard({
   const isBracketLabel = !groupLabel && phaseLabel && phaseLabel !== 'grupos';
   const slotLabel = groupLabel || (isBracketLabel ? phaseLabel : '');
   // A bracket fixture is "unresolved" until it's actually being
-  // played. The materialiser pre-fills team1/team2 with hypothetical
-  // seeds (1°A vs 2°B → the eventual winners of those groups) but
-  // those matchups aren't real yet — they assume the group phase
-  // will close in seed order. Showing them now misleads spectators
-  // into thinking "my team plays Spike on Saturday" when the actual
-  // opponent depends on standings still in flux. So: every bracket
-  // card in `upcoming` state hides its teams + score behind a heavy
-  // blur. Only `live` and `completed` matches reveal the content,
-  // because by then the actual teams are confirmed.
-  const isUnresolved = isBracketLabel && match.status === 'upcoming';
+  // played — UNLESS the admin explicitly revealed that phase via the
+  // "Descubrir" buttons (mig 037). The materialiser pre-fills
+  // team1/team2 with hypothetical seeds, so we blur to avoid
+  // misleading spectators. When the admin clicks "Descubrir Cuartos"
+  // etc., the phase bucket lands in `tournament.revealedPhases` and
+  // the blur drops immediately for that entire bracket round.
+  const bucket = phaseLabel ? phaseBucket(phaseLabel) : null;
+  const isRevealed = bucket ? tournament.revealedPhases?.includes(bucket) : false;
+  const isUnresolved = isBracketLabel && match.status === 'upcoming' && !isRevealed;
   const durationMin = getMatchDurationMinutes(match, tournament);
   const endTime = addMinutesToHHMM(match.time ?? '', durationMin);
   const isLive = match.status === 'live';
@@ -861,7 +860,9 @@ function FocusedMatchOverlay({
   const phaseLabel = match.phase ? phaseLabelOnly(match.phase) : '';
   const isBracketLabel = !groupLabel && phaseLabel && phaseLabel !== 'grupos';
   const slotLabel = groupLabel || (isBracketLabel ? phaseLabel : '');
-  const isUnresolved = isBracketLabel && match.status === 'upcoming';
+  const bucket = phaseLabel ? phaseBucket(phaseLabel) : null;
+  const isRevealed = bucket ? tournament.revealedPhases?.includes(bucket) : false;
+  const isUnresolved = isBracketLabel && match.status === 'upcoming' && !isRevealed;
   const durationMin = getMatchDurationMinutes(match, tournament);
   const endTime = addMinutesToHHMM(match.time ?? '', durationMin);
   const isLive = match.status === 'live';

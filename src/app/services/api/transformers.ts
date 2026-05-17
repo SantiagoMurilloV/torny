@@ -183,6 +183,9 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
     enrolledCount: t.enrolledCount,
     matchesCount: t.matchesCount,
     playersCount: t.playersCount,
+    // mig 037 — revealed bracket phases. Empty fallback so the blur
+    // logic can always iterate without null checks.
+    revealedPhases: t.revealedPhases ?? [],
   };
 }
 

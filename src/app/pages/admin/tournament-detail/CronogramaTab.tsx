@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { AlertTriangle, Calendar, CalendarDays, GripVertical, Loader2, Send, Timer } from 'lucide-react';
+import { AlertTriangle, Calendar, CalendarDays, Eye, EyeOff, GripVertical, Loader2, Send, Timer } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Match, Tournament } from '../../../types';
 import { TeamAvatar } from '../../../components/TeamAvatar';
 import { getMatchDurationMinutes, addMinutesToHHMM } from '../../../lib/matchDuration';
-import { categoryOfMatch, phaseLabelOnly } from '../../../lib/phase';
+import { categoryOfMatch, phaseBucket, phaseLabelOnly, type PhaseBucket, PHASE_BUCKET_LABELS } from '../../../lib/phase';
 import {
   Select,
   SelectContent,
@@ -62,6 +62,12 @@ interface CronogramaTabProps {
    * state in one shot. Two entries for a swap, one for a plain move.
    */
   onMatchesPatched?: (patched: Match[]) => void;
+  /**
+   * Called when the admin reveals/hides a bracket phase. The parent
+   * patches its tournament state so the change is reflected app-wide
+   * without a full re-fetch.
+   */
+  onTournamentUpdated?: (updated: Partial<Tournament>) => void;
 }
 
 /**
@@ -82,19 +88,20 @@ interface CronogramaTabProps {
  * picker first, then drags. Keeps the visual structure honest about
  * what's possible in a single tap-and-drop.
  */
-export function CronogramaTab({ tournament, matches, onMatchesPatched }: CronogramaTabProps) {
+export function CronogramaTab({ tournament, matches, onMatchesPatched, onTournamentUpdated }: CronogramaTabProps) {
   return (
     <DndProvider backend={HTML5Backend}>
       <CronogramaGrid
         tournament={tournament}
         matches={matches}
         onMatchesPatched={onMatchesPatched}
+        onTournamentUpdated={onTournamentUpdated}
       />
     </DndProvider>
   );
 }
 
-function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTabProps) {
+function CronogramaGrid({ tournament, matches, onMatchesPatched, onTournamentUpdated }: CronogramaTabProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedDay, setSelectedDay] = useState<string>('');
   // Per-match in-flight set. Only matches currently mutating are
@@ -116,6 +123,55 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
   // a double-click can't trigger two pushes.
   const [sendScheduleOpen, setSendScheduleOpen] = useState(false);
   const [sendingSchedule, setSendingSchedule] = useState(false);
+  // "Descubrir fase" — tracks which toggle is in-flight so the button
+  // can show a spinner and we don't double-fire.
+  const [revealingPhase, setRevealingPhase] = useState<string | null>(null);
+
+  // Bracket phase buckets that have at least one match (regardless of
+  // status). We show a reveal/hide button for each one. The memo only
+  // recomputes when matches change — cheap because it's a flat loop.
+  const bracketPhaseBuckets = useMemo(() => {
+    const set = new Set<PhaseBucket>();
+    for (const m of matches) {
+      const groupLabel = m.group?.includes('|')
+        ? m.group.split('|').slice(1).join('|')
+        : '';
+      const pl = m.phase ? phaseLabelOnly(m.phase) : '';
+      const isBracket = !groupLabel && pl && pl !== 'grupos';
+      if (isBracket) {
+        const b = phaseBucket(pl);
+        if (b && b !== 'grupos') set.add(b);
+      }
+    }
+    // Sort by progression order: cuartos → semifinal → final → tercer-puesto
+    const order: PhaseBucket[] = ['cuartos', 'semifinal', 'final', 'tercer-puesto'];
+    return order.filter((b) => set.has(b));
+  }, [matches]);
+
+  const handleToggleReveal = useCallback(
+    async (bucket: PhaseBucket) => {
+      setRevealingPhase(bucket);
+      try {
+        const current = tournament.revealedPhases ?? [];
+        const isRevealed = current.includes(bucket);
+        const next = isRevealed
+          ? current.filter((b) => b !== bucket)
+          : [...current, bucket];
+        await api.updateTournament(tournament.id, { revealedPhases: next } as Record<string, unknown>);
+        onTournamentUpdated?.({ revealedPhases: next });
+        toast.success(
+          isRevealed
+            ? `${PHASE_BUCKET_LABELS[bucket]} oculta de nuevo`
+            : `${PHASE_BUCKET_LABELS[bucket]} descubierta`,
+        );
+      } catch (err) {
+        toast.error(getErrorMessage(err));
+      } finally {
+        setRevealingPhase(null);
+      }
+    },
+    [tournament.id, tournament.revealedPhases, onTournamentUpdated],
+  );
 
   const markInFlight = useCallback((ids: string[], on: boolean) => {
     setInFlight((prev) => {
@@ -938,6 +994,54 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched }: CronogramaTab
           </button>
         </div>
       </div>
+      {/* Reveal bracket phases — mig 037. One toggle per bracket phase
+          that has matches in the tournament. Clicking "Descubrir Cuartos"
+          stores the bucket in revealedPhases on the tournament, which
+          drops the blur in the public cronograma immediately. The admin
+          can also re-hide a phase by clicking again (the button toggles). */}
+      {bracketPhaseBuckets.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span
+            className="text-xs font-bold text-black/55 uppercase tracking-wider whitespace-nowrap"
+            style={FONT}
+          >
+            Descubrir fases
+          </span>
+          {bracketPhaseBuckets.map((bucket) => {
+            const isRevealed = tournament.revealedPhases?.includes(bucket);
+            const isLoading = revealingPhase === bucket;
+            return (
+              <button
+                key={bucket}
+                type="button"
+                onClick={() => handleToggleReveal(bucket)}
+                disabled={isLoading}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-sm transition-colors border ${
+                  isRevealed
+                    ? 'bg-emerald-100 border-emerald-400 text-emerald-800 hover:bg-emerald-200'
+                    : 'bg-white border-black/20 text-black/60 hover:bg-black/5'
+                } disabled:opacity-60 disabled:cursor-not-allowed`}
+                style={{ ...FONT, letterSpacing: '0.03em' }}
+                title={
+                  isRevealed
+                    ? `Ocultar ${PHASE_BUCKET_LABELS[bucket]} (volver a poner blur)`
+                    : `Descubrir ${PHASE_BUCKET_LABELS[bucket]} (quitar blur en la programación pública)`
+                }
+              >
+                {isLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : isRevealed ? (
+                  <Eye className="w-3.5 h-3.5" />
+                ) : (
+                  <EyeOff className="w-3.5 h-3.5" />
+                )}
+                <span className="uppercase">{PHASE_BUCKET_LABELS[bucket]}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <span className="block text-xs text-black/50">
         Arrastrá para mover, soltá en una celda ocupada para intercambiar.
         Para cambiar de día, tocá el ícono de calendario en la cartica del
@@ -1474,13 +1578,11 @@ function MatchCard({
   const isBracketLabel = !groupLabel && phaseLabel && phaseLabel !== 'grupos';
   const slotLabel = groupLabel || (isBracketLabel ? phaseLabel : '');
   // Bracket fixture is "unresolved" until it's actually live or
-  // completed. While `upcoming` the matchup is just a seed-based
-  // guess (1°A vs 2°B), so even when the placeholder team objects
-  // have names, those names don't represent guaranteed opponents.
-  // The card hides them behind a strong blur and shows only the
-  // phase label + category colour — same treatment as the public
-  // cronograma so admin + spectator views stay consistent.
-  const isUnresolved = isBracketLabel && match.status === 'upcoming';
+  // completed — UNLESS the admin revealed that phase (mig 037). When
+  // revealed, the blur drops both here and in the public cronograma.
+  const bucket = phaseLabel ? phaseBucket(phaseLabel) : null;
+  const isRevealed = bucket ? tournament?.revealedPhases?.includes(bucket) : false;
+  const isUnresolved = isBracketLabel && match.status === 'upcoming' && !isRevealed;
   // Per-category duration + end-time for the badge. Falls back to the
   // global default when no tournament is supplied (orphans banner) so
   // we still surface something useful.
