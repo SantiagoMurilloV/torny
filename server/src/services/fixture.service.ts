@@ -593,9 +593,8 @@ export class FixtureGenerator {
     const result = await pool.query(
       `SELECT s.team_id, s.points, s.sets_for, s.sets_against,
               s.points_for, s.points_against,
-              s.wins, s.position, t.name AS team_name
+              s.wins, s.position
          FROM standings s
-         JOIN teams t ON t.id = s.team_id
          WHERE s.tournament_id = $1
            AND s.group_name LIKE $2
            AND s.position = ANY($3)
@@ -608,7 +607,7 @@ export class FixtureGenerator {
            s.sets_for DESC,
            s.wins DESC,
            s.position ASC,
-           t.name ASC`,
+           s.team_id ASC`,
       [tournamentId, category ? `${category}|%` : '%', positions],
     );
     return result.rows.map((r: Record<string, unknown>) => r.team_id as string);

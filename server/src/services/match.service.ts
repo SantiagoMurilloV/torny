@@ -136,6 +136,17 @@ async function refreshTournamentState(tournamentId: string): Promise<void> {
     // swallow — auto-bracket is best-effort, never blocks a score save
   }
   try {
+    // Re-resolve after auto-generation so freshly created bracket rows
+    // get their byes advanced to the next round immediately.  Without
+    // this second pass, bye teams appear in Ronda 1 but their Cuartos
+    // slots stay empty until the next score write triggers the resolver
+    // again — causing the "pase directo" mismatch clubs see in the
+    // public bracket view.  Idempotent when no bracket was created.
+    await bracketGenerator.resolveBracketFromStandings(tournamentId);
+  } catch {
+    // swallow — best-effort
+  }
+  try {
     // Materialize playable matches for any bracket slot that just got
     // its two teams resolved (either by the standings re-resolution
     // above, or by a previous advanceWinner). Idempotent — only
