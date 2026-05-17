@@ -1537,6 +1537,36 @@ export class BracketGenerator {
           );
         }
       }
+
+      // Phase 2: re-propagate completed byes whose team may have shifted.
+      //
+      // When resolveBracketFromStandings updates a first-round bye slot's
+      // team_id (because the standings ranking changed), the next-round
+      // slot still holds the OLD team from the original advanceWinner
+      // call. Fix this by re-advancing every completed bye: advanceWinner
+      // is effectively idempotent (it overwrites winner_id + the
+      // next-round column), so calling it again with the current team is
+      // safe and cheap.
+      const completedByes = rows.filter((r) => {
+        if (r.round !== firstRound) return false;
+        if (r.status !== 'completed') return false;
+        const t1 = r.team1_id as string | null;
+        const t2 = r.team2_id as string | null;
+        return (!!t1 && !t2) || (!t1 && !!t2);
+      });
+
+      for (const row of completedByes) {
+        const winnerId = ((row.team1_id ?? row.team2_id) as string | null);
+        if (!winnerId) continue;
+        try {
+          await this.advanceWinner(row.id as string, winnerId);
+        } catch (err) {
+          console.warn(
+            `[processByesAndAdvance] re-propagate failed for ${row.id}:`,
+            err,
+          );
+        }
+      }
     }
     return advanced;
   }
