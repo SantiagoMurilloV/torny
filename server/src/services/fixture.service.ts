@@ -439,10 +439,15 @@ export class FixtureGenerator {
 
       if (tieredCount > 0 && force) {
         // Force-regen guarded against destroying progress. Bail out if
-        // any bracket-stage match has been touched already.
+        // any bracket-stage match has been touched already. Auto-advanced
+        // byes (status='completed' but one team is NULL) are excluded —
+        // they aren't real played matches, and blocking the regen on
+        // them makes it impossible to fix a corrupt bracket via
+        // "Recalcular Tabla y Bracket".
         const completedRes = await pool.query(
           `SELECT COUNT(*)::int AS n FROM bracket_matches
-             WHERE tournament_id = $1 AND round LIKE $2 AND status <> 'upcoming'`,
+             WHERE tournament_id = $1 AND round LIKE $2 AND status <> 'upcoming'
+               AND team1_id IS NOT NULL AND team2_id IS NOT NULL`,
           [tournamentId, roundPrefix],
         );
         const completedCount = (completedRes.rows[0]?.n as number) ?? 0;
