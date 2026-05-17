@@ -15,7 +15,7 @@ import {
   getMatchDurationMinutes,
   addMinutesToHHMM,
 } from '../../../lib/matchDuration';
-import { categoryOfMatch, phaseBucket, phaseLabelOnly } from '../../../lib/phase';
+import { categoryOfMatch, bracketRevealKey, phaseLabelOnly } from '../../../lib/phase';
 import { useIsMobile } from '../../../components/ui/use-mobile';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
@@ -699,8 +699,8 @@ function PublicMatchCard({
   // misleading spectators. When the admin clicks "Descubrir Cuartos"
   // etc., the phase bucket lands in `tournament.revealedPhases` and
   // the blur drops immediately for that entire bracket round.
-  const bucket = phaseLabel ? phaseBucket(phaseLabel) : null;
-  const isRevealed = bucket ? tournament.revealedPhases?.includes(bucket) : false;
+  const revealKey = phaseLabel ? bracketRevealKey(phaseLabel) : null;
+  const isRevealed = revealKey ? tournament.revealedPhases?.includes(revealKey) : false;
   const isUnresolved = isBracketLabel && match.status === 'upcoming' && !isRevealed;
   const durationMin = getMatchDurationMinutes(match, tournament);
   const endTime = addMinutesToHHMM(match.time ?? '', durationMin);
@@ -860,8 +860,8 @@ function FocusedMatchOverlay({
   const phaseLabel = match.phase ? phaseLabelOnly(match.phase) : '';
   const isBracketLabel = !groupLabel && phaseLabel && phaseLabel !== 'grupos';
   const slotLabel = groupLabel || (isBracketLabel ? phaseLabel : '');
-  const bucket = phaseLabel ? phaseBucket(phaseLabel) : null;
-  const isRevealed = bucket ? tournament.revealedPhases?.includes(bucket) : false;
+  const revealKey = phaseLabel ? bracketRevealKey(phaseLabel) : null;
+  const isRevealed = revealKey ? tournament.revealedPhases?.includes(revealKey) : false;
   const isUnresolved = isBracketLabel && match.status === 'upcoming' && !isRevealed;
   const durationMin = getMatchDurationMinutes(match, tournament);
   const endTime = addMinutesToHHMM(match.time ?? '', durationMin);

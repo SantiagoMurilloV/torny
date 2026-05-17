@@ -237,3 +237,58 @@ export function phaseBucket(phase: string): PhaseBucket | null {
   if (label.startsWith('final')) return 'final';
   return null;
 }
+
+// ── Bracket reveal keys ──────────────────────────────────────────
+//
+// Extended version of phaseBucket that also handles the generic
+// "Ronda N" rounds produced by large brackets (16+ teams). These
+// keys drive the admin "Descubrir fases" toggle buttons (mig 037).
+// Unlike PhaseBucket (a fixed union for the public filter pills),
+// reveal keys are plain strings so they can accommodate any number
+// of pre-quarterfinal rounds without changing the type.
+
+const RONDA_RE = /^ronda\s*(\d+)/i;
+
+/**
+ * Map a phase label to its reveal key. Same logic as `phaseBucket`
+ * plus "Ronda 1" → 'ronda-1', "Ronda 2 · Oro" → 'ronda-2', etc.
+ * Returns null only for group-phase labels.
+ */
+export function bracketRevealKey(phase: string): string | null {
+  // Try the standard bucket first
+  const bucket = phaseBucket(phase);
+  if (bucket && bucket !== 'grupos') return bucket;
+  if (bucket === 'grupos') return null;
+  // Check for "Ronda N" pattern (with optional tier suffix)
+  const label = phaseLabelOnly(phase);
+  const m = label.match(RONDA_RE);
+  if (m) return `ronda-${m[1]}`;
+  return null;
+}
+
+/**
+ * Human-readable label for a reveal key. Handles both standard
+ * buckets ("cuartos" → "Cuartos") and ronda keys ("ronda-1" → "Ronda 1").
+ */
+export function bracketRevealLabel(key: string): string {
+  // Standard bucket labels
+  if (key in PHASE_BUCKET_LABELS) return PHASE_BUCKET_LABELS[key as PhaseBucket];
+  // Ronda-N pattern
+  const m = key.match(/^ronda-(\d+)$/);
+  if (m) return `Ronda ${m[1]}`;
+  // Fallback: capitalize
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+/**
+ * Sort key for reveal buttons. Ronda 1 < Ronda 2 < Cuartos < Semi < Final.
+ */
+export function bracketRevealOrder(key: string): number {
+  const m = key.match(/^ronda-(\d+)$/);
+  if (m) return Number(m[1]);           // ronda-1 → 1, ronda-2 → 2
+  if (key === 'cuartos') return 100;
+  if (key === 'semifinal') return 200;
+  if (key === 'final') return 300;
+  if (key === 'tercer-puesto') return 400;
+  return 999;
+}

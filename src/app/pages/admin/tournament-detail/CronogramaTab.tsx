@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import type { Match, Tournament } from '../../../types';
 import { TeamAvatar } from '../../../components/TeamAvatar';
 import { getMatchDurationMinutes, addMinutesToHHMM } from '../../../lib/matchDuration';
-import { categoryOfMatch, phaseBucket, phaseLabelOnly, type PhaseBucket, PHASE_BUCKET_LABELS } from '../../../lib/phase';
+import { categoryOfMatch, bracketRevealKey, bracketRevealLabel, bracketRevealOrder, phaseLabelOnly } from '../../../lib/phase';
 import {
   Select,
   SelectContent,
@@ -127,11 +127,11 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched, onTournamentUpd
   // can show a spinner and we don't double-fire.
   const [revealingPhase, setRevealingPhase] = useState<string | null>(null);
 
-  // Bracket phase buckets that have at least one match (regardless of
-  // status). We show a reveal/hide button for each one. The memo only
-  // recomputes when matches change — cheap because it's a flat loop.
-  const bracketPhaseBuckets = useMemo(() => {
-    const set = new Set<PhaseBucket>();
+  // Bracket phase keys that have at least one match (regardless of
+  // status). We show a reveal/hide button for each one. Uses the
+  // extended bracketRevealKey that handles "Ronda N" rounds too.
+  const bracketPhaseKeys = useMemo(() => {
+    const set = new Set<string>();
     for (const m of matches) {
       const groupLabel = m.group?.includes('|')
         ? m.group.split('|').slice(1).join('|')
@@ -139,30 +139,29 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched, onTournamentUpd
       const pl = m.phase ? phaseLabelOnly(m.phase) : '';
       const isBracket = !groupLabel && pl && pl !== 'grupos';
       if (isBracket) {
-        const b = phaseBucket(pl);
-        if (b && b !== 'grupos') set.add(b);
+        const key = bracketRevealKey(pl);
+        if (key) set.add(key);
       }
     }
-    // Sort by progression order: cuartos → semifinal → final → tercer-puesto
-    const order: PhaseBucket[] = ['cuartos', 'semifinal', 'final', 'tercer-puesto'];
-    return order.filter((b) => set.has(b));
+    // Sort by progression: ronda-1 → ronda-2 → cuartos → semi → final → 3er puesto
+    return [...set].sort((a, b) => bracketRevealOrder(a) - bracketRevealOrder(b));
   }, [matches]);
 
   const handleToggleReveal = useCallback(
-    async (bucket: PhaseBucket) => {
-      setRevealingPhase(bucket);
+    async (key: string) => {
+      setRevealingPhase(key);
       try {
         const current = tournament.revealedPhases ?? [];
-        const isRevealed = current.includes(bucket);
+        const isRevealed = current.includes(key);
         const next = isRevealed
-          ? current.filter((b) => b !== bucket)
-          : [...current, bucket];
+          ? current.filter((b) => b !== key)
+          : [...current, key];
         await api.updateTournament(tournament.id, { revealedPhases: next } as Record<string, unknown>);
         onTournamentUpdated?.({ revealedPhases: next });
         toast.success(
           isRevealed
-            ? `${PHASE_BUCKET_LABELS[bucket]} oculta de nuevo`
-            : `${PHASE_BUCKET_LABELS[bucket]} descubierta`,
+            ? `${bracketRevealLabel(key)} oculta de nuevo`
+            : `${bracketRevealLabel(key)} descubierta`,
         );
       } catch (err) {
         toast.error(getErrorMessage(err));
@@ -999,7 +998,7 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched, onTournamentUpd
           stores the bucket in revealedPhases on the tournament, which
           drops the blur in the public cronograma immediately. The admin
           can also re-hide a phase by clicking again (the button toggles). */}
-      {bracketPhaseBuckets.length > 0 && (
+      {bracketPhaseKeys.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
           <span
             className="text-xs font-bold text-black/55 uppercase tracking-wider whitespace-nowrap"
@@ -1007,14 +1006,15 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched, onTournamentUpd
           >
             Descubrir fases
           </span>
-          {bracketPhaseBuckets.map((bucket) => {
-            const isRevealed = tournament.revealedPhases?.includes(bucket);
-            const isLoading = revealingPhase === bucket;
+          {bracketPhaseKeys.map((key) => {
+            const label = bracketRevealLabel(key);
+            const isRevealed = tournament.revealedPhases?.includes(key);
+            const isLoading = revealingPhase === key;
             return (
               <button
-                key={bucket}
+                key={key}
                 type="button"
-                onClick={() => handleToggleReveal(bucket)}
+                onClick={() => handleToggleReveal(key)}
                 disabled={isLoading}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-sm transition-colors border ${
                   isRevealed
@@ -1024,8 +1024,8 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched, onTournamentUpd
                 style={{ ...FONT, letterSpacing: '0.03em' }}
                 title={
                   isRevealed
-                    ? `Ocultar ${PHASE_BUCKET_LABELS[bucket]} (volver a poner blur)`
-                    : `Descubrir ${PHASE_BUCKET_LABELS[bucket]} (quitar blur en la programación pública)`
+                    ? `Ocultar ${label} (volver a poner blur)`
+                    : `Descubrir ${label} (quitar blur en la programación pública)`
                 }
               >
                 {isLoading ? (
@@ -1035,7 +1035,7 @@ function CronogramaGrid({ tournament, matches, onMatchesPatched, onTournamentUpd
                 ) : (
                   <EyeOff className="w-3.5 h-3.5" />
                 )}
-                <span className="uppercase">{PHASE_BUCKET_LABELS[bucket]}</span>
+                <span className="uppercase">{label}</span>
               </button>
             );
           })}
@@ -1580,8 +1580,8 @@ function MatchCard({
   // Bracket fixture is "unresolved" until it's actually live or
   // completed — UNLESS the admin revealed that phase (mig 037). When
   // revealed, the blur drops both here and in the public cronograma.
-  const bucket = phaseLabel ? phaseBucket(phaseLabel) : null;
-  const isRevealed = bucket ? tournament?.revealedPhases?.includes(bucket) : false;
+  const revealKey = phaseLabel ? bracketRevealKey(phaseLabel) : null;
+  const isRevealed = revealKey ? tournament?.revealedPhases?.includes(revealKey) : false;
   const isUnresolved = isBracketLabel && match.status === 'upcoming' && !isRevealed;
   // Per-category duration + end-time for the badge. Falls back to the
   // global default when no tournament is supplied (orphans banner) so
