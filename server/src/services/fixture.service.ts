@@ -298,6 +298,17 @@ export class FixtureGenerator {
       );
       await client.query('COMMIT');
 
+      // Advance bye slots immediately so the next-round receives the
+      // lone team before any external caller reads the bracket. Without
+      // this, bye teams appear in Ronda 1 but Cuartos stays empty
+      // until a separate resolveBracketFromStandings call — which may
+      // never happen in the same request cycle.
+      try {
+        await bracketGenerator.processByesAndAdvance(tournamentId);
+      } catch (err) {
+        console.warn('[generateBracketCrossings] processByesAndAdvance failed:', err);
+      }
+
       // Seed playable `matches` rows for any first-round slot whose
       // teams resolved cleanly from current standings. Best-effort —
       // never blocks the bracket persistence.
