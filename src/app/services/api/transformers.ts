@@ -186,6 +186,8 @@ export function toFrontendTournament(t: BackendTournament): Tournament {
     // mig 037 — revealed bracket phases. Empty fallback so the blur
     // logic can always iterate without null checks.
     revealedPhases: t.revealedPhases ?? [],
+    // mig 038 — secondary phase config. Pass through as-is (null = disabled).
+    secondaryPhase: t.secondaryPhase ?? null,
   };
 }
 

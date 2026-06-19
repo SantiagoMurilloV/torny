@@ -89,6 +89,16 @@ export interface CreateTournamentDto {
    * 'cuartos', 'semifinal', 'final', 'tercer-puesto'.
    */
   revealedPhases?: string[];
+  /**
+   * mig 038 — secondary group phase (triangulares) config. null
+   * disables the feature.
+   */
+  secondaryPhase?: {
+    enabled: boolean;
+    groupsPerDivision: number;
+    teamsPerGroup: number;
+    classifiersPerGroup: number;
+  } | null;
 }
 
 export type UpdateTournamentDto = Partial<CreateTournamentDto>;

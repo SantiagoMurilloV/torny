@@ -97,6 +97,21 @@ export function GruposTab({
   );
 }
 
+/** Returns true when the group name denotes a triangular Copa Oro group. */
+function isOroGroup(groupName: string): boolean {
+  return groupName.includes('|Oro|');
+}
+
+/** Returns true when the group name denotes a triangular Copa Plata group. */
+function isPlataGroup(groupName: string): boolean {
+  return groupName.includes('|Plata|');
+}
+
+/** Returns true when the group name is a primary group (no Oro/Plata segment). */
+function isPrimaryGroup(groupName: string): boolean {
+  return !isOroGroup(groupName) && !isPlataGroup(groupName);
+}
+
 function GroupedByCategory({
   groupNames,
   matches,
@@ -134,37 +149,125 @@ function GroupedByCategory({
 
   return (
     <div className="space-y-10">
-      {categories.map(([category, catGroupNames]) => (
-        <div key={category || '_default'}>
-          {hasMultipleCategories && category && (
-            <h2
-              className="text-2xl font-bold mb-6 pb-3 border-b-2 border-spk-red"
-              style={FONT}
-            >
-              {category.toUpperCase()}
-            </h2>
-          )}
-          <div className="space-y-8">
-            {catGroupNames.map((gName) => {
-              const groupTeamIds = new Set<string>();
-              for (const m of matches) {
-                if (m.group === gName) {
-                  groupTeamIds.add(m.team1.id);
-                  groupTeamIds.add(m.team2.id);
-                }
-              }
-              return (
-                <GroupMatrix
-                  key={gName}
-                  groupName={gName}
-                  matches={matches.filter((m) => m.group === gName)}
-                  standings={standings.filter((s) => groupTeamIds.has(s.team.id))}
-                />
-              );
-            })}
+      {categories.map(([category, catGroupNames]) => {
+        const primaryGroups = catGroupNames.filter(isPrimaryGroup);
+        const oroGroups = catGroupNames.filter(isOroGroup);
+        const plataGroups = catGroupNames.filter(isPlataGroup);
+        const hasTriangulars = oroGroups.length > 0 || plataGroups.length > 0;
+
+        return (
+          <div key={category || '_default'}>
+            {hasMultipleCategories && category && (
+              <h2
+                className="text-2xl font-bold mb-6 pb-3 border-b-2 border-spk-red"
+                style={FONT}
+              >
+                {category.toUpperCase()}
+              </h2>
+            )}
+
+            <div className="space-y-10">
+              {/* Primary groups section */}
+              {primaryGroups.length > 0 && (
+                <div>
+                  {hasTriangulars && (
+                    <div className="flex items-center gap-3 mb-6 pb-3 border-b-2 border-spk-red">
+                      <h2 className="text-2xl font-bold" style={FONT}>
+                        FASE DE GRUPOS
+                      </h2>
+                    </div>
+                  )}
+                  <div className="space-y-8">
+                    {primaryGroups.map((gName) => {
+                      const groupTeamIds = new Set<string>();
+                      for (const m of matches) {
+                        if (m.group === gName) {
+                          groupTeamIds.add(m.team1.id);
+                          groupTeamIds.add(m.team2.id);
+                        }
+                      }
+                      return (
+                        <GroupMatrix
+                          key={gName}
+                          groupName={gName}
+                          matches={matches.filter((m) => m.group === gName)}
+                          standings={standings.filter((s) => groupTeamIds.has(s.team.id))}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Copa Oro — Triangulares section */}
+              {oroGroups.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-3 mb-6 pb-3 border-b-2 border-yellow-500">
+                    <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                      🥇
+                    </div>
+                    <h2 className="text-2xl font-bold text-yellow-700" style={FONT}>
+                      COPA ORO — TRIANGULARES
+                    </h2>
+                  </div>
+                  <div className="space-y-8">
+                    {oroGroups.map((gName) => {
+                      const groupTeamIds = new Set<string>();
+                      for (const m of matches) {
+                        if (m.group === gName) {
+                          groupTeamIds.add(m.team1.id);
+                          groupTeamIds.add(m.team2.id);
+                        }
+                      }
+                      return (
+                        <GroupMatrix
+                          key={gName}
+                          groupName={gName}
+                          matches={matches.filter((m) => m.group === gName)}
+                          standings={standings.filter((s) => groupTeamIds.has(s.team.id))}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Copa Plata — Triangulares section */}
+              {plataGroups.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-3 mb-6 pb-3 border-b-2 border-gray-400">
+                    <div className="w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                      🥈
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-600" style={FONT}>
+                      COPA PLATA — TRIANGULARES
+                    </h2>
+                  </div>
+                  <div className="space-y-8">
+                    {plataGroups.map((gName) => {
+                      const groupTeamIds = new Set<string>();
+                      for (const m of matches) {
+                        if (m.group === gName) {
+                          groupTeamIds.add(m.team1.id);
+                          groupTeamIds.add(m.team2.id);
+                        }
+                      }
+                      return (
+                        <GroupMatrix
+                          key={gName}
+                          groupName={gName}
+                          matches={matches.filter((m) => m.group === gName)}
+                          standings={standings.filter((s) => groupTeamIds.has(s.team.id))}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

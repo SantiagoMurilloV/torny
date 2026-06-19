@@ -363,13 +363,20 @@ export class FixtureGenerator {
     const tournamentRes = await pool.query(
       `SELECT bracket_mode,
               gold_classifiers_per_group,
-              silver_classifiers_per_group
+              silver_classifiers_per_group,
+              secondary_phase
          FROM tournaments WHERE id = $1`,
       [tournamentId],
     );
     if (tournamentRes.rows.length === 0) return;
     const bracketMode = tournamentRes.rows[0].bracket_mode as string | null;
     if (bracketMode !== 'divisions') return;
+
+    // When a secondary phase (triangulars) is configured, skip auto-bracket
+    // generation here — the admin triggers it explicitly via
+    // POST /:id/secondary-phase/finalize after triangulars are done.
+    const secondaryPhase = tournamentRes.rows[0].secondary_phase as { enabled?: boolean } | null;
+    if (secondaryPhase?.enabled) return;
     const goldPerGroup = (tournamentRes.rows[0].gold_classifiers_per_group as number | null) ?? 2;
     const silverPerGroup = (tournamentRes.rows[0].silver_classifiers_per_group as number | null) ?? 2;
 

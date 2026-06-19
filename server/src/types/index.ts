@@ -188,6 +188,17 @@ export interface Tournament {
    * array (default) means everything stays blurred.
    */
   revealedPhases?: string[];
+  /**
+   * Secondary group phase config (mig 038). When enabled, a second
+   * round-robin phase ("triangulares") runs between the primary groups
+   * and the bracket. Stored as JSONB.
+   */
+  secondaryPhase?: {
+    enabled: boolean;
+    groupsPerDivision: number;
+    teamsPerGroup: number;
+    classifiersPerGroup: number;
+  } | null;
   createdAt?: string;
   updatedAt?: string;
 }

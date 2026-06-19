@@ -60,6 +60,9 @@ export function AdminTournaments() {
    * Click handler shared by the desktop "+ Crear Torneo" button and the
    * mobile "+" icon button. Centralises the quota check so the toast
    * copy stays in sync between the two surfaces.
+   *
+   * Creation now routes to the full-page wizard at /admin/tournaments/new.
+   * The modal (TournamentFormModal) is kept only for the EDIT flow.
    */
   const handleCreateClick = () => {
     if (atCap) {
@@ -70,7 +73,7 @@ export function AdminTournaments() {
       );
       return;
     }
-    handleCreate();
+    navigate('/admin/tournaments/new');
   };
 
   const capTooltip = atCap
@@ -138,6 +141,8 @@ export function AdminTournaments() {
         // line the form values were filled in but silently dropped
         // here, so the backend never persisted them.
         matchDurationsByCategory: tournament.matchDurationsByCategory ?? null,
+        // Migration 038 — secondary phase (triangulares) config.
+        secondaryPhase: tournament.secondaryPhase ?? null,
       };
       await updateTournament(editingTournament.id, dto);
       toast.success('Torneo actualizado correctamente');
@@ -174,6 +179,8 @@ export function AdminTournaments() {
         finalsCourt: tournament.finalsCourt ?? null,
         // Migration 027 — per-category match durations.
         matchDurationsByCategory: tournament.matchDurationsByCategory ?? null,
+        // Migration 038 — secondary phase (triangulares) config.
+        secondaryPhase: tournament.secondaryPhase ?? null,
       };
       await addTournament(dto);
       toast.success('Torneo creado correctamente');

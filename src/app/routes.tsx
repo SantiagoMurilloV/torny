@@ -71,6 +71,9 @@ const AdminDashboard = lazyWithRetry(() =>
 const AdminTournaments = lazyWithRetry(() =>
   import('./pages/admin/AdminTournaments').then((m) => ({ default: m.AdminTournaments })),
 );
+const CreateTournamentWizard = lazyWithRetry(() =>
+  import('./pages/admin/CreateTournamentWizard').then((m) => ({ default: m.CreateTournamentWizard })),
+);
 const AdminMatches = lazyWithRetry(() =>
   import('./pages/admin/AdminMatches').then((m) => ({ default: m.AdminMatches })),
 );
@@ -235,6 +238,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: withSuspense(<AdminDashboard />) },
       { path: 'tournaments', element: withSuspense(<AdminTournaments />) },
+      { path: 'tournaments/new', element: withSuspense(<CreateTournamentWizard />) },
       { path: 'tournaments/:id', element: withSuspense(<AdminTournamentDetail />) },
       { path: 'matches', element: withSuspense(<AdminMatches />) },
       { path: 'judges', element: withSuspense(<AdminJudges />) },

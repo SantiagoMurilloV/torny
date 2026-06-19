@@ -93,6 +93,13 @@ export interface BackendTournament {
   /** mig 037 — bracket phases the admin has "revealed". Array of
    *  PhaseBucket strings (e.g. 'cuartos', 'semifinal'). */
   revealedPhases?: string[];
+  /** mig 038 — secondary phase (triangulares) config. null = disabled. */
+  secondaryPhase?: {
+    enabled: boolean;
+    groupsPerDivision: number;
+    teamsPerGroup: number;
+    classifiersPerGroup: number;
+  } | null;
 }
 
 export interface BackendEnrolledTeam {

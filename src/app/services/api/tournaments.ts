@@ -25,6 +25,18 @@ import {
 } from './transformers';
 import type { CreateTournamentDto, UpdateTournamentDto } from './dtos';
 
+export interface SecondaryPhaseResult {
+  categoriesProcessed: string[];
+  oroGroupsCreated: number;
+  plataGroupsCreated: number;
+  matchesCreated: number;
+}
+
+export interface SecondaryPhaseFinalizeResult {
+  semiFinalsSeeded: number;
+  matchesMaterialized: number;
+}
+
 interface ScheduleOptions {
   startTime?: string;
   endTime?: string;
@@ -303,5 +315,31 @@ export const tournamentsApi = {
 
   async clearFixtures(tournamentId: string): Promise<void> {
     await request<void>(`/tournaments/${tournamentId}/fixtures`, { method: 'DELETE' });
+  },
+
+  // ── Secondary phase (triangulares) ──────────────────────────────
+
+  /**
+   * Generate round-robin matches for the secondary group phase
+   * (triangulares). Creates Oro + Plata triangular groups from the
+   * primary-phase standings and schedules matches after existing ones.
+   */
+  async generateSecondaryPhase(tournamentId: string): Promise<SecondaryPhaseResult> {
+    return request<SecondaryPhaseResult>(
+      `/tournaments/${tournamentId}/secondary-phase/generate`,
+      { method: 'POST' },
+    );
+  },
+
+  /**
+   * Finalize the secondary phase: read the winner of each triangular
+   * group and seed them into the bracket semifinals. Calls the bracket
+   * materializer so the semifinal matches appear in the schedule.
+   */
+  async finalizeSecondaryPhase(tournamentId: string): Promise<SecondaryPhaseFinalizeResult> {
+    return request<SecondaryPhaseFinalizeResult>(
+      `/tournaments/${tournamentId}/secondary-phase/finalize`,
+      { method: 'POST' },
+    );
   },
 };

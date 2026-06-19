@@ -269,6 +269,17 @@ export interface Tournament {
    * (default) means everything stays blurred as before.
    */
   revealedPhases?: string[];
+  /**
+   * Secondary group phase configuration (mig 038). When enabled, a
+   * second round-robin phase ("triangulares") runs between the primary
+   * groups and the bracket. null means disabled.
+   */
+  secondaryPhase?: {
+    enabled: boolean;
+    groupsPerDivision: number;
+    teamsPerGroup: number;
+    classifiersPerGroup: number;
+  } | null;
 }
 
 export interface BracketMatch {

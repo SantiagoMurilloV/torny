@@ -114,6 +114,10 @@ router.get('/:id/push-debug', requireTournamentAccess, pushDebug);
 // Sponsors (mig 033) — list is public so the Hero can paint the
 // strip; mutations are owner-gated.
 import * as sponsorCtrl from '../controllers/sponsor.controller';
+import {
+  generate as generateSecondaryPhase,
+  finalize as finalizeSecondaryPhase,
+} from '../controllers/secondary-phase.controller';
 router.get('/:id/sponsors', sponsorCtrl.list);
 router.post('/:id/sponsors', requireTournamentAccess, sponsorCtrl.create);
 router.put(
@@ -148,6 +152,12 @@ router.post('/:id/resolve-bracket', requireTournamentAccess, resolveBracket);
 
 // Bracket match update
 router.put('/:id/bracket/:matchId', requireTournamentAccess, updateBracketMatch);
+
+// Secondary phase (triangulars) — owner-gated. Generate creates round-robin
+// matches for Oro + Plata triangular groups; finalize seeds the bracket
+// semifinals from the triangular winners and materializes the match rows.
+router.post('/:id/secondary-phase/generate', requireTournamentAccess, generateSecondaryPhase);
+router.post('/:id/secondary-phase/finalize', requireTournamentAccess, finalizeSecondaryPhase);
 
 // Schedule repair — detects every team double-booking in the
 // tournament's matches and reschedules the offenders into safe slots.

@@ -156,6 +156,11 @@ const PHASE_ORDER: Record<string, number> = {
   'Fase de Grupos': 10,
   Liga: 20,
   liga: 20,
+  Triangulares: 25,
+  'Triangulares Oro': 25,
+  'Triangulares Plata': 26,
+  'Triangulares · Oro': 25,
+  'Triangulares · Plata': 26,
   Cuartos: 30,
   'Cuartos · Oro': 31,
   'Cuartos · Plata': 32,
@@ -194,6 +199,7 @@ export function phaseOrderKey(phase: string): number {
 
 export type PhaseBucket =
   | 'grupos'
+  | 'triangulares'
   | 'cuartos'
   | 'semifinal'
   | 'final'
@@ -201,6 +207,7 @@ export type PhaseBucket =
 
 export const PHASE_BUCKET_LABELS: Record<PhaseBucket, string> = {
   grupos: 'Fase de grupos',
+  triangulares: 'Copa Oro / Plata',
   cuartos: 'Cuartos',
   semifinal: 'Semifinal',
   final: 'Final',
@@ -210,6 +217,7 @@ export const PHASE_BUCKET_LABELS: Record<PhaseBucket, string> = {
 /** Ordered list for rendering pill buttons left → right. */
 export const PHASE_BUCKETS: PhaseBucket[] = [
   'grupos',
+  'triangulares',
   'cuartos',
   'semifinal',
   'final',
@@ -229,6 +237,7 @@ export const PHASE_BUCKETS: PhaseBucket[] = [
 export function phaseBucket(phase: string): PhaseBucket | null {
   const label = phaseLabelOnly(phase).toLowerCase();
   if (label === 'grupos' || label === 'liga') return 'grupos';
+  if (label.startsWith('triangulares')) return 'triangulares';
   if (label.startsWith('cuartos')) return 'cuartos';
   if (label.startsWith('semifinal')) return 'semifinal';
   if (label.startsWith('tercer puesto')) return 'tercer-puesto';
@@ -257,8 +266,8 @@ const RONDA_RE = /^ronda\s*(\d+)/i;
 export function bracketRevealKey(phase: string): string | null {
   // Try the standard bucket first
   const bucket = phaseBucket(phase);
-  if (bucket && bucket !== 'grupos') return bucket;
-  if (bucket === 'grupos') return null;
+  if (bucket && bucket !== 'grupos' && bucket !== 'triangulares') return bucket;
+  if (bucket === 'grupos' || bucket === 'triangulares') return null;
   // Check for "Ronda N" pattern (with optional tier suffix)
   const label = phaseLabelOnly(phase);
   const m = label.match(RONDA_RE);

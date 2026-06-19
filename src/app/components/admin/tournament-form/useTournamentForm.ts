@@ -143,6 +143,8 @@ export function useTournamentForm({
       // Migration 027 — empty object means "no overrides; use the
       // global matchDurationMinutes for every category".
       matchDurationsByCategory: tournament.matchDurationsByCategory ?? {},
+      city: tournament.city ?? '',
+      secondaryPhase: tournament.secondaryPhase ?? null,
     });
     setCoverFile(null);
     setCoverPreview(tournament.coverImage ?? null);
@@ -375,6 +377,7 @@ export function useTournamentForm({
           formData.bracketMode === 'divisions'
             ? formData.silverClassifiersPerGroup
             : undefined,
+        city: formData.city.trim() || undefined,
         regulationText: formData.regulationText.trim() || undefined,
         regulationPdf: regulationPdfUrl,
         matchBreakMinutes: formData.matchBreakMinutes,
@@ -409,6 +412,12 @@ export function useTournamentForm({
               val <= 600,
           ),
         ),
+        // mig 038 — secondary phase config. Only include when divisions
+        // mode is active (otherwise irrelevant and confusing to the API).
+        secondaryPhase:
+          formData.bracketMode === 'divisions' && formData.secondaryPhase?.enabled
+            ? formData.secondaryPhase
+            : null,
       };
 
       try {

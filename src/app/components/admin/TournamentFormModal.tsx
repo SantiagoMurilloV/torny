@@ -8,6 +8,7 @@ import { CourtsField } from './tournament-form/fields/CourtsField';
 import { RegulationField } from './tournament-form/fields/RegulationField';
 import { ScheduleField } from './tournament-form/fields/ScheduleField';
 import type { FieldErrors } from './tournament-form/types';
+import { TournamentAssistant } from './TournamentAssistant';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
 
@@ -54,6 +55,28 @@ export function TournamentFormModal({
           {form.errors.server}
         </div>
       )}
+
+      {!tournament && (
+        <TournamentAssistant onApplySuggestions={(patch) => form.patch(patch)} formState={form.formData} />
+      )}
+
+      <SelectField
+        label="Deporte *"
+        value={form.formData.sport}
+        onChange={(v) => form.patch({ sport: v })}
+        options={[
+          { value: 'Voleibol', label: '🏐 Voleibol' },
+          { value: 'Fútbol', label: '⚽ Fútbol' },
+          { value: 'Básketbol', label: '🏀 Básketbol' },
+          { value: 'Handball', label: '🤾 Handball' },
+          { value: 'Tenis', label: '🎾 Tenis' },
+          { value: 'Pádel', label: '🏓 Pádel' },
+          { value: 'Rugby', label: '🏉 Rugby' },
+          { value: 'Béisbol', label: '⚾ Béisbol' },
+          { value: 'Hockey', label: '🏒 Hockey' },
+          { value: 'Otro', label: '🏆 Otro' },
+        ]}
+      />
 
       <TextField
         label="Nombre del Torneo *"
@@ -279,6 +302,93 @@ export function TournamentFormModal({
                 Tip: para un cruce sin "byes", elegí valores que multipliquen tu número de grupos a una potencia de dos
                 (ej. 4 grupos × 2 = 8 → cruce de 8 limpio).
               </div>
+            </div>
+          )}
+
+          {/* Secondary phase (triangulares) — only for groups+knockout + divisions */}
+          {form.formData.format === 'groups+knockout' && form.formData.bracketMode === 'divisions' && (
+            <div className="space-y-3 p-4 bg-black/[0.03] border border-black/10 rounded-sm">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="secondaryPhaseEnabled"
+                  checked={form.formData.secondaryPhase?.enabled ?? false}
+                  onChange={(e) =>
+                    form.patch({
+                      secondaryPhase: e.target.checked
+                        ? { enabled: true, groupsPerDivision: 4, teamsPerGroup: 3, classifiersPerGroup: 1 }
+                        : null,
+                    })
+                  }
+                />
+                <label htmlFor="secondaryPhaseEnabled" className="text-sm font-bold" style={FONT}>
+                  Fase secundaria (triangulares)
+                </label>
+              </div>
+              {form.formData.secondaryPhase?.enabled && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wide text-black/60 mb-1 block" style={FONT}>
+                      Grupos por división
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={16}
+                      value={form.formData.secondaryPhase.groupsPerDivision}
+                      onChange={(e) =>
+                        form.patch({
+                          secondaryPhase: {
+                            ...form.formData.secondaryPhase!,
+                            groupsPerDivision: parseInt(e.target.value) || 4,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-black/15 rounded-sm focus:outline-none focus:border-spk-red text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wide text-black/60 mb-1 block" style={FONT}>
+                      Equipos por grupo
+                    </label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={8}
+                      value={form.formData.secondaryPhase.teamsPerGroup}
+                      onChange={(e) =>
+                        form.patch({
+                          secondaryPhase: {
+                            ...form.formData.secondaryPhase!,
+                            teamsPerGroup: parseInt(e.target.value) || 3,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-black/15 rounded-sm focus:outline-none focus:border-spk-red text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold uppercase tracking-wide text-black/60 mb-1 block" style={FONT}>
+                      Clasifican/grupo
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={4}
+                      value={form.formData.secondaryPhase.classifiersPerGroup}
+                      onChange={(e) =>
+                        form.patch({
+                          secondaryPhase: {
+                            ...form.formData.secondaryPhase!,
+                            classifiersPerGroup: parseInt(e.target.value) || 1,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-black/15 rounded-sm focus:outline-none focus:border-spk-red text-sm"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

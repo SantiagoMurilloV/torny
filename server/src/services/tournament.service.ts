@@ -205,6 +205,23 @@ function mapRow(row: Record<string, unknown>): Tournament {
     revealedPhases: Array.isArray(row.revealed_phases)
       ? (row.revealed_phases as string[])
       : [],
+    // mig 038 — secondary phase (triangulares) config. NULL when the
+    // feature is disabled for this tournament.
+    secondaryPhase: (() => {
+      const raw = row.secondary_phase as {
+        enabled?: boolean;
+        groupsPerDivision?: number;
+        teamsPerGroup?: number;
+        classifiersPerGroup?: number;
+      } | null | undefined;
+      if (!raw || typeof raw !== 'object') return null;
+      return {
+        enabled: raw.enabled === true,
+        groupsPerDivision: Number(raw.groupsPerDivision) || 4,
+        teamsPerGroup: Number(raw.teamsPerGroup) || 3,
+        classifiersPerGroup: Number(raw.classifiersPerGroup) || 1,
+      };
+    })(),
     createdAt: row.created_at as string | undefined,
     updatedAt: row.updated_at as string | undefined,
   };
@@ -475,9 +492,16 @@ export class TournamentService {
     let slugCandidate = buildTournamentSlug(data.name);
     for (let attempt = 0; attempt < 5; attempt++) {
       try {
+        // mig 038 — secondary phase config. NULL when not provided (default).
+        const secondaryPhaseRaw = (data as { secondaryPhase?: unknown }).secondaryPhase;
+        const secondaryPhase = secondaryPhaseRaw &&
+          typeof secondaryPhaseRaw === 'object' &&
+          (secondaryPhaseRaw as { enabled?: boolean }).enabled
+          ? JSON.stringify(secondaryPhaseRaw)
+          : null;
         const result = await pool.query(
-          `INSERT INTO tournaments (name, slug, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority, finals_court, match_durations_by_category, city, registration_opens_at, registration_closes_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)
+          `INSERT INTO tournaments (name, slug, sport, club, start_date, end_date, description, cover_image, logo, status, teams_count, format, courts, court_locations, categories, owner_id, enrollment_deadline, players_per_team, bracket_mode, gold_classifiers_per_group, silver_classifiers_per_group, regulation_text, regulation_pdf, match_duration_minutes, match_break_minutes, daily_schedules, max_matches_per_day, dead_time_blocks, category_priority, finals_court, match_durations_by_category, city, registration_opens_at, registration_closes_at, secondary_phase)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
            RETURNING *`,
           [
             data.name,
@@ -516,6 +540,7 @@ export class TournamentService {
             data.city?.trim() || null,
             data.registrationOpensAt || null,
             data.registrationClosesAt || null,
+            secondaryPhase,
           ],
         );
         row = result.rows[0];
@@ -659,6 +684,8 @@ export class TournamentService {
       matchDurationsByCategory: 'match_durations_by_category',
       // Migration 037 — revealed bracket phases.
       revealedPhases: 'revealed_phases',
+      // Migration 038 — secondary phase (triangulares) config.
+      secondaryPhase: 'secondary_phase',
     };
 
     for (const [key, column] of Object.entries(columnMap)) {
@@ -744,6 +771,17 @@ export class TournamentService {
           // jsonb array of phase-bucket strings. Non-array / null
           // collapses to '[]' so sending null clears all reveals.
           stored = JSON.stringify(Array.isArray(rawValue) ? rawValue : []);
+        } else if (key === 'secondaryPhase') {
+          // jsonb object or null. null / falsy = disable the feature.
+          if (
+            rawValue &&
+            typeof rawValue === 'object' &&
+            (rawValue as { enabled?: boolean }).enabled
+          ) {
+            stored = JSON.stringify(rawValue);
+          } else {
+            stored = null;
+          }
         } else if (key === 'regulationText' || key === 'regulationPdf') {
           // Normaliza '' → null para que "limpiar" desde el form deje
           // la columna realmente vacía en vez de un string vacío. El

@@ -108,6 +108,19 @@ export interface TournamentFormState {
    * blank keeps the global default for that category.
    */
   matchDurationsByCategory: Record<string, number>;
+  /** City / locality shown in the public tournament Hero (migration 031). */
+  city: string;
+  /**
+   * Secondary phase (triangulares) config (migration 038). null when
+   * disabled. Only relevant when format === 'groups+knockout' AND
+   * bracketMode === 'divisions'.
+   */
+  secondaryPhase: {
+    enabled: boolean;
+    groupsPerDivision: number;
+    teamsPerGroup: number;
+    classifiersPerGroup: number;
+  } | null;
 }
 
 export const DEFAULT_COURTS: CourtEntry[] = [
@@ -144,5 +157,7 @@ export function emptyForm(): TournamentFormState {
     categoryPriority: [],
     finalsCourt: '',
     matchDurationsByCategory: {},
+    city: '',
+    secondaryPhase: null,
   };
 }

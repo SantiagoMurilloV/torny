@@ -26,6 +26,7 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useIdleTimeout, useActivePresence } from '../hooks/useIdleTimeout';
 import { IdleWarningDialog } from './admin/IdleWarningDialog';
+import { TornyIAFloating } from './admin/TornyIAFloating';
 import { isAdmin } from '../lib/roles';
 
 // Idle auto-logout — admin only. Judges deliberately stay on the
@@ -501,6 +502,7 @@ export function AdminLayout() {
           handleLogout();
         }}
       />
+      <TornyIAFloating />
     </div>
   );
 }

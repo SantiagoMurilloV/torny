@@ -28,6 +28,7 @@ import adminRoutes from './routes/admin.routes';
 import platformRoutes from './routes/platform.routes';
 import clubRoutes from './routes/club.routes';
 import publicRoutes from './routes/public.routes';
+import aiRoutes from './routes/ai.routes';
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
@@ -327,6 +328,7 @@ app.use('/api/clubs', clubRoutes);
 // bypasses POST /api/public/* by path prefix so this mount must stay at
 // `/api/public` (NOT `/public`, NOT `/api/parent-registration`).
 app.use('/api/public', publicRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Error handler — must be last. Registering it up here (outside startServer)
 // ensures it catches errors even if boot-time migration fails.
