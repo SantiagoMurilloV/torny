@@ -20,8 +20,10 @@ const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
  */
 export function Header({
   tournamentName,
+  tournamentId,
 }: {
   tournamentName: string;
+  tournamentId?: string;
 }) {
   const navigate = useNavigate();
   const [scrolled, setScrolled] = useState(false);
@@ -82,7 +84,7 @@ export function Header({
               {tournamentName}
             </motion.div>
 
-            <NotificationBell variant="public" theme="dark" />
+            <NotificationBell variant="public" theme="dark" tournamentId={tournamentId} />
           </div>
         </div>
       </div>

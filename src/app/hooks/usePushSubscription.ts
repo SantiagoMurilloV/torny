@@ -49,7 +49,10 @@ export type PushPermission = 'unsupported' | 'default' | 'granted' | 'denied';
  *      to drop the row. Permission stays `granted` so re-enabling
  *      doesn't prompt again.
  */
-export function usePushSubscription(): {
+export function usePushSubscription(
+  /** Tournament ID for per-tournament subscriptions. Omit for global (club captains). */
+  tournamentId?: string | null,
+): {
   permission: PushPermission;
   subscribed: boolean;
   loading: boolean;
@@ -131,9 +134,9 @@ export function usePushSubscription(): {
         });
       }
       // 3) Persist server-side. The backend reads role + clubId from
-      //    the JWT so unauthenticated public visitors land in the
-      //    `sendToAll` bucket, club captains in `sendToClub`.
-      await api.subscribePush(sub);
+      //    the JWT. Per-tournament subscriptions (mig 039) pass tournamentId
+      //    so spectators only get notifs for the tournament they opted into.
+      await api.subscribePush(sub, tournamentId ?? undefined);
       setSubscribed(true);
       return 'granted';
     } catch (err) {

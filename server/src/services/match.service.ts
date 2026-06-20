@@ -20,7 +20,7 @@ import { activateNextOnCourt } from './autoLive';
  * titles. Falls back to "Partido" when we couldn't join the team
  * rows (shouldn't happen but a push should never fail a match write).
  */
-async function matchHeadline(matchId: string): Promise<{ title: string; url: string }> {
+async function matchHeadline(matchId: string): Promise<{ title: string; url: string; tournamentId: string }> {
   const pool = getPool();
   const result = await pool.query(
     `SELECT m.id, m.tournament_id,
@@ -33,13 +33,14 @@ async function matchHeadline(matchId: string): Promise<{ title: string; url: str
     [matchId],
   );
   if (result.rows.length === 0) {
-    return { title: 'Partido', url: '/' };
+    return { title: 'Partido', url: '/', tournamentId: '' };
   }
   const row = result.rows[0];
   const team1 = (row.t1_name as string) || (row.t1_initials as string) || 'Equipo 1';
   const team2 = (row.t2_name as string) || (row.t2_initials as string) || 'Equipo 2';
   return {
     title: `${team1} vs ${team2}`,
+    tournamentId: row.tournament_id as string,
     url: `/match/${matchId}`,
   };
 }
@@ -539,14 +540,14 @@ export class MatchService {
       ensurePushReady()
         .then((keys) => {
           if (!keys) return;
-          return matchHeadline(id).then(({ title, url }) =>
-            pushService.sendToAll({
+          return matchHeadline(id).then(({ title, url, tournamentId: tId }) =>
+            tId ? pushService.sendToTournament(tId, {
               title: `${title} · En vivo`,
               body: '¡El partido acaba de comenzar!',
               url,
               tag: `match-live-${id}`,
               data: { matchId: id, type: 'match-live' },
-            }),
+            }) : Promise.resolve(),
           );
         })
         .catch((err) => console.warn('[push] match-live dispatch failed', err));
@@ -845,21 +846,18 @@ export class MatchService {
       const notify = async () => {
         const keys = await ensurePushReady();
         if (!keys) return;
-        const { title, url } = await matchHeadline(id);
+        const { title, url, tournamentId: tId } = await matchHeadline(id);
         if (becameCompleted) {
           const setsH = (score.sets ?? []).filter((s) => s.team1Points > s.team2Points).length;
           const setsA = (score.sets ?? []).filter((s) => s.team2Points > s.team1Points).length;
-          await pushService.sendToAll({
+          // Notify only spectators who subscribed to THIS tournament (mig 039)
+          if (tId) await pushService.sendToTournament(tId, {
             title: `${title} · Final`,
             body: `Resultado ${setsH}–${setsA}. Tocá para ver el detalle.`,
             url,
             tag: `match-final-${id}`,
             data: { matchId: id, type: 'match-completed' },
           });
-          // Same final, narrower audience: the two clubs get a
-          // captain-specific notif. Done inside the same promise
-          // chain so the `tag` collision isn't a concern (the
-          // public tag and the club tag differ).
           await dispatchClubsForMatch(id, {
             title: `${title} · Final`,
             body: `Resultado ${setsH}–${setsA}. Tocá para ver el detalle.`,
@@ -872,7 +870,7 @@ export class MatchService {
           const last = score.sets[score.sets.length - 1];
           const setsH = score.sets.filter((s) => s.team1Points > s.team2Points).length;
           const setsA = score.sets.filter((s) => s.team2Points > s.team1Points).length;
-          await pushService.sendToAll({
+          if (tId) await pushService.sendToTournament(tId, {
             title: `${title} · Set ${score.sets.length} cerrado`,
             body: `${last.team1Points}–${last.team2Points} · Sets ${setsH}–${setsA}`,
             url,
@@ -888,7 +886,7 @@ export class MatchService {
           return;
         }
         if (becameLive) {
-          await pushService.sendToAll({
+          if (tId) await pushService.sendToTournament(tId, {
             title: `${title} · En vivo`,
             body: '¡El partido acaba de comenzar!',
             url,

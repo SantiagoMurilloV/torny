@@ -11,10 +11,17 @@ export const pushApi = {
     return request<{ publicKey: string }>('/push/vapid-public-key');
   },
 
-  async subscribePush(subscription: PushSubscription): Promise<void> {
+  async subscribePush(
+    subscription: PushSubscription,
+    /** Tournament ID for per-tournament subscriptions (mig 039). Omit for global. */
+    tournamentId?: string,
+  ): Promise<void> {
     await request<void>('/push/subscribe', {
       method: 'POST',
-      body: JSON.stringify({ subscription: subscription.toJSON() }),
+      body: JSON.stringify({
+        subscription: subscription.toJSON(),
+        ...(tournamentId ? { tournamentId } : {}),
+      }),
     });
   },
 

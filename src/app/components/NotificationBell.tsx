@@ -29,6 +29,7 @@ export function NotificationBell({
   size = 'md',
   variant = 'public',
   theme = 'light',
+  tournamentId,
 }: {
   size?: 'sm' | 'md';
   /**
@@ -46,8 +47,13 @@ export function NotificationBell({
    * pop is intentional.
    */
   theme?: 'light' | 'dark';
+  /**
+   * Per-tournament subscription (mig 039). When provided, subscribing
+   * only sends notifications for this specific tournament.
+   */
+  tournamentId?: string;
 }) {
-  const { permission, subscribed, loading, enable, disable } = usePushSubscription();
+  const { permission, subscribed, loading, enable, disable } = usePushSubscription(tournamentId);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (permission === 'unsupported') {

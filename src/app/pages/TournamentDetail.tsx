@@ -15,6 +15,7 @@ import { BracketTab } from './tournament-detail/tabs/BracketTab';
 import { InfoTab } from './tournament-detail/tabs/InfoTab';
 import { CronogramaTab } from './tournament-detail/tabs/CronogramaTab';
 import type { TabDescriptor, TabId } from './tournament-detail/tabs/types';
+import { NotificationPrompt } from '../components/NotificationPrompt';
 
 /**
  * Public tournament-detail page. Orchestrates the data hook + 5 tab
@@ -121,7 +122,7 @@ export function TournamentDetail() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Header tournamentName={tournament.name} />
+      <Header tournamentName={tournament.name} tournamentId={tournament.id} />
 
       <Hero
         tournament={tournament}
@@ -177,6 +178,12 @@ export function TournamentDetail() {
       </div>
 
       <Footer />
+
+      {/* Per-tournament notification prompt — only asks for THIS tournament (mig 039) */}
+      <NotificationPrompt
+        tournamentId={tournament.id}
+        tournamentName={tournament.name}
+      />
 
       <style>{`
         .hide-scrollbar::-webkit-scrollbar {

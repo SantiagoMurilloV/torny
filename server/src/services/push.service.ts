@@ -129,6 +129,12 @@ interface SubscriptionInput extends StoredSubscription {
   clubId?: string | null;
   role?: string | null;
   userAgent?: string | null;
+  /**
+   * Tournament id when the spectator is subscribing to a specific tournament
+   * (mig 039). NULL = global subscription (club captains, admins).
+   * A device can have one global subscription AND one per tournament.
+   */
+  tournamentId?: string | null;
 }
 
 export interface PushPayload {
@@ -146,27 +152,54 @@ export class PushService {
   /** Persist or refresh a browser subscription. */
   async save(sub: SubscriptionInput): Promise<void> {
     const pool = getPool();
-    await pool.query(
-      `INSERT INTO push_subscriptions (user_id, club_id, endpoint, p256dh, auth, role, user_agent, last_used_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-       ON CONFLICT (endpoint) DO UPDATE
-       SET user_id = EXCLUDED.user_id,
+    const tournamentId = sub.tournamentId ?? null;
+
+    if (tournamentId) {
+      // Per-tournament subscription (mig 039): unique on (endpoint, tournament_id)
+      await pool.query(
+        `INSERT INTO push_subscriptions (user_id, club_id, tournament_id, endpoint, p256dh, auth, role, user_agent, last_used_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+         ON CONFLICT (endpoint, tournament_id) WHERE tournament_id IS NOT NULL
+         DO UPDATE SET
+           p256dh = EXCLUDED.p256dh,
+           auth = EXCLUDED.auth,
+           last_used_at = NOW()`,
+        [
+          sub.userId ?? null,
+          sub.clubId ?? null,
+          tournamentId,
+          sub.endpoint,
+          sub.keys.p256dh,
+          sub.keys.auth,
+          sub.role ?? null,
+          sub.userAgent ?? null,
+        ],
+      );
+    } else {
+      // Global subscription (club captains, admins): unique on endpoint WHERE tournament_id IS NULL
+      await pool.query(
+        `INSERT INTO push_subscriptions (user_id, club_id, tournament_id, endpoint, p256dh, auth, role, user_agent, last_used_at)
+         VALUES ($1, $2, NULL, $3, $4, $5, $6, $7, NOW())
+         ON CONFLICT (endpoint) WHERE tournament_id IS NULL
+         DO UPDATE SET
+           user_id = EXCLUDED.user_id,
            club_id = EXCLUDED.club_id,
            p256dh = EXCLUDED.p256dh,
            auth = EXCLUDED.auth,
            role = EXCLUDED.role,
            user_agent = EXCLUDED.user_agent,
            last_used_at = NOW()`,
-      [
-        sub.userId ?? null,
-        sub.clubId ?? null,
-        sub.endpoint,
-        sub.keys.p256dh,
-        sub.keys.auth,
-        sub.role ?? null,
-        sub.userAgent ?? null,
-      ],
-    );
+        [
+          sub.userId ?? null,
+          sub.clubId ?? null,
+          sub.endpoint,
+          sub.keys.p256dh,
+          sub.keys.auth,
+          sub.role ?? null,
+          sub.userAgent ?? null,
+        ],
+      );
+    }
   }
 
   /** Remove one subscription (e.g. user revoked permission). */
@@ -250,6 +283,23 @@ export class PushService {
         }
       }),
     );
+  }
+
+  /**
+   * Send a push only to spectators who explicitly subscribed to this tournament.
+   * Replaces sendToAll() for match/score events so subscribers of Tournament A
+   * don't receive notifications for Tournament B.
+   */
+  async sendToTournament(tournamentId: string, payload: PushPayload): Promise<void> {
+    const keys = await ensureReady();
+    if (!keys) return;
+    const pool = getPool();
+    const result = await pool.query<{ endpoint: string; p256dh: string; auth: string }>(
+      'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE tournament_id = $1',
+      [tournamentId],
+    );
+    if (result.rows.length === 0) return; // nobody subscribed to this tournament yet
+    await this.dispatchToRows(result.rows, payload);
   }
 
   /** Send a push to every active subscription. */

@@ -32,6 +32,8 @@ export async function subscribe(
     const body = req.body as {
       subscription?: StoredSubscription;
       role?: string;
+      /** Per-tournament subscription (mig 039). Omit for global (club captains). */
+      tournamentId?: string;
     };
     const sub = body.subscription;
     if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) {
@@ -48,6 +50,8 @@ export async function subscribe(
       clubId: req.user?.clubId ?? null,
       role: body.role ?? req.user?.role ?? null,
       userAgent: (req.headers['user-agent'] as string) ?? null,
+      // Tournament-scoped subscription (mig 039): spectator follows a specific tournament.
+      tournamentId: body.tournamentId ?? null,
     });
     res.status(204).send();
   } catch (err) {

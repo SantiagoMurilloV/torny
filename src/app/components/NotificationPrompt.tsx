@@ -22,10 +22,23 @@ const DISMISS_KEY = 'spk.notifications.dismissed';
  * permission request succeeds but no SW push is delivered — we still show
  * the prompt because the user might install the PWA next.
  */
-export function NotificationPrompt() {
+export function NotificationPrompt({
+  tournamentId,
+  tournamentName,
+}: {
+  /** Per-tournament subscription. When provided, only get notifs for this tournament. */
+  tournamentId?: string;
+  tournamentName?: string;
+}) {
   const [status, setStatus] = useState<NotificationStatus>('default');
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // Per-tournament dismiss key so a user can dismiss for one tournament
+  // without affecting others.
+  const dismissKey = tournamentId
+    ? `spk.notifications.dismissed.${tournamentId}`
+    : DISMISS_KEY;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -36,26 +49,20 @@ export function NotificationPrompt() {
     const perm = Notification.permission as NotificationStatus;
     setStatus(perm);
 
-    const dismissed = localStorage.getItem(DISMISS_KEY) === '1';
-    // Show only if the user hasn't decided yet AND hasn't dismissed the
-    // card this session/install.
+    const dismissed = localStorage.getItem(dismissKey) === '1';
+    // Show only if the user hasn't decided yet AND hasn't dismissed the card.
     if (perm === 'default' && !dismissed) {
-      // Delay a beat so the card doesn't clash with the first paint.
       const t = setTimeout(() => setVisible(true), 1500);
       return () => clearTimeout(t);
     }
-  }, []);
+  }, [dismissKey]);
 
-  // Kick off the subscribe flow if the user previously granted permission
-  // but we don't yet have a stored subscription (e.g. cleared browser data
-  // or a fresh PWA install). Idempotent on the backend (upsert).
+  // Re-subscribe on mount if permission already granted (e.g. cleared data).
   useEffect(() => {
     if (status === 'granted') {
-      subscribeToPush().catch(() => {
-        // silent — we'll retry next time they visit
-      });
+      subscribeToPush(tournamentId).catch(() => {});
     }
-  }, [status]);
+  }, [status, tournamentId]);
 
   const request = async () => {
     if (busy) return;
@@ -64,7 +71,7 @@ export function NotificationPrompt() {
       const res = await Notification.requestPermission();
       setStatus(res as NotificationStatus);
       if (res === 'granted') {
-        await subscribeToPush();
+        await subscribeToPush(tournamentId);
       }
       if (res !== 'default') setVisible(false);
     } catch {
@@ -78,7 +85,7 @@ export function NotificationPrompt() {
   const dismiss = () => {
     setVisible(false);
     try {
-      localStorage.setItem(DISMISS_KEY, '1');
+      localStorage.setItem(dismissKey, '1');
     } catch {
       // ignore — private-mode Safari throws on localStorage.setItem
     }
@@ -119,11 +126,14 @@ export function NotificationPrompt() {
                   className="text-sm font-bold uppercase text-white"
                   style={{ fontFamily: 'Barlow Condensed, sans-serif', letterSpacing: '0.08em' }}
                 >
-                  Activá las notificaciones
+                  {tournamentName
+                    ? `Seguir ${tournamentName}`
+                    : 'Activá las notificaciones'}
                 </h3>
                 <p className="text-[11px] text-white/70 mt-1 leading-relaxed">
-                  Te avisamos cuando un partido arranca, cuando cambia el
-                  marcador y cuando se define un resultado.
+                  {tournamentName
+                    ? `Te avisamos de los partidos en vivo, marcadores y resultados de este torneo. Solo recibirás notificaciones de ${tournamentName}.`
+                    : 'Te avisamos cuando un partido arranca, cuando cambia el marcador y cuando se define un resultado.'}
                 </p>
                 <div className="mt-3 flex items-center gap-2">
                   <button
@@ -163,7 +173,7 @@ export function NotificationPrompt() {
  * the backend (in case the server lost it) without going through the full
  * pushManager.subscribe flow, which can prompt on some platforms.
  */
-async function subscribeToPush(): Promise<void> {
+async function subscribeToPush(tournamentId?: string): Promise<void> {
   if (typeof navigator === 'undefined') return;
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
@@ -178,7 +188,7 @@ async function subscribeToPush(): Promise<void> {
       applicationServerKey: urlBase64ToUint8Array(publicKey),
     });
   }
-  await api.subscribePush(subscription);
+  await api.subscribePush(subscription, tournamentId);
 }
 
 /** Convert the VAPID base64url public key into the Uint8Array subscribe expects. */
