@@ -833,6 +833,21 @@ export class TournamentService {
       }
     }
 
+    // When a tournament is marked completed, remove all per-tournament push
+    // subscriptions so spectators stop receiving notifications for a finished event.
+    if (data.status === 'completed') {
+      try {
+        await pool.query(
+          'DELETE FROM push_subscriptions WHERE tournament_id = $1',
+          [id],
+        );
+        console.log(`[tournament.update] push subscriptions cleared for completed tournament ${id}`);
+      } catch (err) {
+        // Non-fatal: the tournament update succeeded; just log the cleanup failure.
+        console.warn('[tournament.update] push cleanup failed for completed tournament:', err);
+      }
+    }
+
     return mapRow(result.rows[0]);
   }
 
