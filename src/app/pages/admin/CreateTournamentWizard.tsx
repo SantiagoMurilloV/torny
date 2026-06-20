@@ -26,6 +26,7 @@ import { api, type CreateTournamentDto } from '../../services/api';
 import { useData } from '../../context/DataContext';
 import { TournamentAssistant } from '../../components/admin/TournamentAssistant';
 import type { TournamentFormState } from '../../components/admin/tournament-form/types';
+import { CATEGORIES, CATEGORY_BASES, GENDERS } from '../../lib/categories';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -961,8 +962,6 @@ function Step5Courts({
 
 // ─── Step 6 — Categorías y reglamento ────────────────────────────────────────
 
-const COMMON_CATEGORIES = ['Sub-12', 'Sub-14', 'Sub-16', 'Sub-18', 'Sub-21', 'Senior', 'Mayores', 'Masters'];
-
 function Step6Categories({
   state,
   onChange,
@@ -982,6 +981,9 @@ function Step6Categories({
     onChange({ categories: state.categories.filter((c) => c !== cat) });
   };
 
+  const toggle = (cat: string) =>
+    state.categories.includes(cat) ? removeCategory(cat) : addCategory(cat);
+
   return (
     <div className="flex flex-col gap-6 py-6 px-4 max-w-2xl mx-auto w-full">
       <div>
@@ -991,31 +993,68 @@ function Step6Categories({
         <p className="text-black/60 text-sm mt-1">Todo opcional — podés completarlo después</p>
       </div>
 
-      {/* Categories */}
+      {/* Categories — grouped by age base */}
       <div>
-        <label className="block text-xs font-bold uppercase text-black/50 mb-2" style={FONT}>
-          Categorías
+        <label className="block text-xs font-bold uppercase text-black/50 mb-3" style={FONT}>
+          Categorías del sistema
         </label>
-        <div className="flex flex-wrap gap-2 mb-3">
-          {COMMON_CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() =>
-                state.categories.includes(cat) ? removeCategory(cat) : addCategory(cat)
-              }
-              className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${
-                state.categories.includes(cat)
-                  ? 'border-spk-red bg-spk-red text-white'
-                  : 'border-black/10 text-black/50 hover:border-spk-red/40'
-              }`}
-              style={FONT}
-            >
-              {cat}
-            </button>
+
+        {/* Ramas por edad */}
+        <div className="space-y-2">
+          {CATEGORY_BASES.map((base) => (
+            <div key={base} className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-bold uppercase text-black/40 w-28 flex-shrink-0" style={FONT}>
+                {base}
+              </span>
+              {GENDERS.map((g) => {
+                const cat = `${base} ${g}`;
+                const selected = state.categories.includes(cat);
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => toggle(cat)}
+                    className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${
+                      selected
+                        ? 'border-spk-red bg-spk-red text-white'
+                        : 'border-black/10 text-black/50 hover:border-spk-red/40'
+                    }`}
+                    style={FONT}
+                  >
+                    {g}
+                  </button>
+                );
+              })}
+            </div>
           ))}
+          {/* Mixto */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-bold uppercase text-black/40 w-28 flex-shrink-0" style={FONT}>
+              Mixto
+            </span>
+            {['Mixto'].map((cat) => {
+              const selected = state.categories.includes(cat);
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => toggle(cat)}
+                  className={`px-3 py-1 rounded-full text-xs font-bold border-2 transition-all ${
+                    selected
+                      ? 'border-spk-red bg-spk-red text-white'
+                      : 'border-black/10 text-black/50 hover:border-spk-red/40'
+                  }`}
+                  style={FONT}
+                >
+                  {cat}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="flex gap-2">
+
+        {/* Custom category */}
+        <div className="flex gap-2 mt-3">
           <input
             type="text"
             value={newCategory}
