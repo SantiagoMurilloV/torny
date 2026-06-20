@@ -1133,12 +1133,15 @@ function Step7Summary({
 }) {
   const typeInfo = TOURNAMENT_TYPES.find((t) => t.id === state.tournamentTypeId);
 
-  const formatLabel = {
-    groups: 'Solo Grupos',
-    knockout: 'Solo Eliminatoria',
-    'groups+knockout': 'Grupos + Eliminatoria',
-    league: 'Liga',
-  }[state.format] ?? state.format;
+  // Show the tournament type name when available, otherwise fall back to format label
+  const formatLabel = typeInfo
+    ? typeInfo.name
+    : ({
+        groups: 'Solo Grupos',
+        knockout: 'Solo Eliminatoria',
+        'groups+knockout': 'Grupos + Eliminatoria',
+        league: 'Liga',
+      }[state.format] ?? state.format);
 
   return (
     <div className="flex flex-col gap-6 py-6 px-4 max-w-2xl mx-auto w-full">
@@ -1151,16 +1154,13 @@ function Step7Summary({
 
       <div className="rounded-xl border-2 border-black/10 overflow-hidden shadow-sm">
         {/* Header */}
-        <div className="h-32 bg-gradient-to-br from-[#003087] to-spk-red flex items-center justify-center relative">
-          <Trophy className="w-14 h-14 text-white/40" />
+        <div className="h-32 bg-gradient-to-br from-[#003087] to-spk-red flex flex-col items-center justify-center relative gap-2">
+          <Trophy className="w-10 h-10 text-white/40" />
           {typeInfo && (
-            <span
-              className="absolute top-3 right-3 flex items-center gap-1.5 px-2 py-1 bg-white/20 backdrop-blur-sm text-white text-xs font-bold rounded-lg"
-              style={FONT}
-            >
-              <typeInfo.Icon className="w-3.5 h-3.5" />
-              {typeInfo.name}
-            </span>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full">
+              <typeInfo.Icon className={`w-4 h-4 ${typeInfo.iconColor} bg-white/90 rounded-full p-0.5`} />
+              <span className="text-white text-sm font-bold" style={FONT}>{typeInfo.name}</span>
+            </div>
           )}
         </div>
 
@@ -1203,7 +1203,23 @@ function Step7Summary({
                 {state.categories.join(', ')}
               </SummaryItem>
             )}
+            {state.bracketMode === 'divisions' && (
+              <SummaryItem icon={<Award className="w-4 h-4 text-yellow-600" />} label="Divisiones">
+                Copa Oro ({state.goldClassifiersPerGroup}/grupo) · Copa Plata ({state.silverClassifiersPerGroup}/grupo)
+              </SummaryItem>
+            )}
           </div>
+
+          {/* Secondary phase banner */}
+          {state.secondaryPhase?.enabled && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800" style={FONT}>
+              <Award className="w-4 h-4 text-yellow-600 flex-shrink-0" />
+              <span className="font-bold uppercase tracking-wide">Fase de triangulares activada</span>
+              <span className="text-yellow-600">
+                · {state.secondaryPhase.groupsPerDivision} grupos de {state.secondaryPhase.teamsPerGroup} equipos por copa · Clasifica 1 por grupo
+              </span>
+            </div>
+          )}
 
           {state.description && (
             <p className="text-sm text-black/60 border-t border-black/5 pt-3">{state.description}</p>
