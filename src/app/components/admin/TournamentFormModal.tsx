@@ -1,4 +1,4 @@
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Award, GitBranch, Zap, BarChart3, SlidersHorizontal } from 'lucide-react';
 import type { Tournament } from '../../types';
 import { motion } from 'motion/react';
 import { useTournamentForm } from './tournament-form/useTournamentForm';
@@ -7,10 +7,71 @@ import { CoverImageField } from './tournament-form/fields/CoverImageField';
 import { CourtsField } from './tournament-form/fields/CourtsField';
 import { RegulationField } from './tournament-form/fields/RegulationField';
 import { ScheduleField } from './tournament-form/fields/ScheduleField';
-import type { FieldErrors } from './tournament-form/types';
+import type { FieldErrors, TournamentFormState } from './tournament-form/types';
 import { TournamentAssistant } from './TournamentAssistant';
 
 const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
+
+// ── Tournament type presets (same as wizard) ──────────────────────────────────
+const TOURNAMENT_TYPES_FORM = [
+  {
+    id: 'copa-triangulares',
+    name: 'Copa con Triangulares',
+    Icon: Award,
+    iconColor: 'text-yellow-600',
+    preset: {
+      format: 'groups+knockout' as const,
+      bracketMode: 'divisions' as const,
+      goldClassifiersPerGroup: 2,
+      silverClassifiersPerGroup: 2,
+      secondaryPhase: { enabled: true, groupsPerDivision: 4, teamsPerGroup: 3, classifiersPerGroup: 1 },
+    },
+  },
+  {
+    id: 'grupos-eliminatoria',
+    name: 'Grupos + Eliminatoria',
+    Icon: GitBranch,
+    iconColor: 'text-blue-600',
+    preset: {
+      format: 'groups+knockout' as const,
+      bracketMode: 'divisions' as const,
+      goldClassifiersPerGroup: 2,
+      silverClassifiersPerGroup: 2,
+      secondaryPhase: null,
+    },
+  },
+  {
+    id: 'eliminatoria',
+    name: 'Solo Eliminatoria',
+    Icon: Zap,
+    iconColor: 'text-orange-600',
+    preset: { format: 'knockout' as const, secondaryPhase: null },
+  },
+  {
+    id: 'liga',
+    name: 'Liga',
+    Icon: BarChart3,
+    iconColor: 'text-green-600',
+    preset: { format: 'league' as const, secondaryPhase: null },
+  },
+  {
+    id: 'personalizado',
+    name: 'Personalizado',
+    Icon: SlidersHorizontal,
+    iconColor: 'text-purple-600',
+    preset: {},
+  },
+];
+
+/** Detect which type matches the current form state */
+function detectTournamentType(formData: TournamentFormState): string | null {
+  if (formData.secondaryPhase?.enabled) return 'copa-triangulares';
+  if (formData.format === 'groups+knockout' && formData.bracketMode === 'divisions') return 'grupos-eliminatoria';
+  if (formData.format === 'knockout') return 'eliminatoria';
+  if (formData.format === 'league') return 'liga';
+  if (formData.format === 'groups') return 'personalizado';
+  return null;
+}
 
 interface TournamentFormModalProps {
   isOpen: boolean;
@@ -218,24 +279,39 @@ export function TournamentFormModal({
         </div>
       </div>
 
+      {/* Tipo de torneo */}
       <div>
-        <SelectField
-          label="Sistema de juego *"
-          value={form.formData.format}
-          onChange={(v) =>
-            form.patch({
-              format: v as 'groups' | 'knockout' | 'groups+knockout' | 'league',
-            })
-          }
-          options={[
-            { value: 'groups', label: 'Solo Grupos' },
-            { value: 'knockout', label: 'Solo Eliminatoria' },
-            { value: 'groups+knockout', label: 'Grupos + Eliminatoria' },
-            { value: 'league', label: 'Liga' },
-          ]}
-        />
+        <label className="block text-sm font-bold mb-2" style={FONT}>
+          Tipo de torneo *
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {TOURNAMENT_TYPES_FORM.map((type) => {
+            const current = detectTournamentType(form.formData);
+            const isSelected = current === type.id;
+            return (
+              <button
+                key={type.id}
+                type="button"
+                onClick={() => {
+                  const patch = type.preset as Partial<TournamentFormState>;
+                  form.patch({ ...patch });
+                }}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-sm border-2 text-left transition-all ${
+                  isSelected
+                    ? 'border-spk-red bg-spk-red/5'
+                    : 'border-black/10 hover:border-spk-red/40'
+                }`}
+              >
+                <type.Icon className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-spk-red' : type.iconColor}`} />
+                <span className={`text-sm font-bold ${isSelected ? 'text-spk-red' : 'text-black/70'}`} style={FONT}>
+                  {type.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
         <p className="mt-1 text-xs text-black/50">
-          Define cómo se generan los partidos (grupos, llaves, liga). El reglamento que comuniquen los espectadores se configura más abajo.
+          Seleccionar un tipo aplica automáticamente el formato y configuración correspondiente.
         </p>
       </div>
 
