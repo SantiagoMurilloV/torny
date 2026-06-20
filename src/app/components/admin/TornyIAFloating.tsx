@@ -86,15 +86,19 @@ export function TornyIAFloating() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
 
-  // Auto-send welcome on first open
+  // Auto-send welcome on first open — small delay to ensure auth token is loaded
   useEffect(() => {
     if (open && !hasOpened && user?.username) {
       setHasOpened(true);
-      void sendMessage(`Hola, soy ${user.username}. ¿En qué estado están mis torneos?`);
+      // Small delay so the panel animation finishes and auth is fully ready
+      const t = setTimeout(() => {
+        void sendMessage(`Hola, soy ${user.username}. ¿En qué estado están mis torneos?`);
+      }, 400);
+      return () => clearTimeout(t);
     }
-    if (open) setTimeout(() => inputRef.current?.focus(), 300);
+    if (open) setTimeout(() => inputRef.current?.focus(), 500);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, user?.username]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -121,17 +125,28 @@ export function TornyIAFloating() {
             id: crypto.randomUUID(),
             role: 'assistant',
             content: result.message,
-            actions: result.actionsExecuted?.length > 0 ? result.actionsExecuted : undefined,
+            actions: result.actionsExecuted && result.actionsExecuted.length > 0
+              ? result.actionsExecuted
+              : undefined,
           },
         ]);
         setTimeout(scrollToBottom, 80);
-      } catch {
+      } catch (err) {
+        console.error('[TornyIA] sendAgentChat error:', err);
+        // Show the actual error message if available
+        const errMsg = err instanceof Error
+          ? err.message
+          : (typeof err === 'object' && err !== null && 'message' in err)
+            ? String((err as { message: unknown }).message)
+            : null;
         setMessages((prev) => [
           ...prev,
           {
             id: crypto.randomUUID(),
             role: 'assistant',
-            content: 'Lo siento, tuve un problema al procesar su solicitud. Por favor intente de nuevo.',
+            content: errMsg && errMsg.length < 200
+              ? `Tuve un inconveniente: ${errMsg}. Por favor intente de nuevo.`
+              : 'Tuve un inconveniente al procesar su solicitud. Por favor intente de nuevo.',
           },
         ]);
         setTimeout(scrollToBottom, 80);

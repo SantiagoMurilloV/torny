@@ -31,6 +31,7 @@ export async function agentChat(req: Request, res: Response, next: NextFunction)
     const result = await runAgentLoop(userId, username, messages, currentPage);
     res.json(result);
   } catch (err) {
+    console.error('[AgentController] Error:', err instanceof Error ? err.message : err);
     next(err);
   }
 }

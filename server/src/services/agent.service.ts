@@ -390,24 +390,34 @@ export async function runAgentLoop(
 
   // Agentic loop — max MAX_TOOL_ITERATIONS rounds
   for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
-    const res = await fetch(DEEPSEEK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: dsMessages,
-        tools: TOOLS,
-        tool_choice: 'auto',
-        temperature: 0.4,
-        max_tokens: 1500,
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000); // 30s timeout
+
+    let res: Response;
+    try {
+      res = await fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: dsMessages,
+          tools: TOOLS,
+          tool_choice: 'auto',
+          temperature: 0.4,
+          max_tokens: 1500,
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!res.ok) {
-      const err = await res.text();
+      const err = await res.text().catch(() => `HTTP ${res.status}`);
+      console.error(`[AgentLoop iter=${iter}] DeepSeek error ${res.status}:`, err);
       throw new Error(`DeepSeek API ${res.status}: ${err}`);
     }
 

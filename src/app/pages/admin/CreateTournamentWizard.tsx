@@ -131,7 +131,8 @@ const TOURNAMENT_TYPES = [
   },
 ];
 
-const STEP_LABELS = ['Método', 'Tipo', 'Info', 'Fechas', 'Canchas', 'Cat.', 'Resumen'];
+// Step order: 0=Método, 1=Deporte, 2=Tipo, 3=Info, 4=Fechas, 5=Canchas, 6=Cat., 7=Resumen
+const STEP_LABELS = ['Método', 'Deporte', 'Tipo', 'Info', 'Fechas', 'Canchas', 'Cat.', 'Resumen'];
 
 // ─── Wizard State ────────────────────────────────────────────────────────────
 
@@ -352,6 +353,46 @@ function Step1Method({
   );
 }
 
+// ─── Step Sport — Selección de deporte ───────────────────────────────────────
+
+function StepSport({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-col gap-6 py-6 px-4 max-w-2xl mx-auto w-full">
+      <div className="text-center">
+        <h2 className="text-3xl sm:text-4xl font-bold uppercase" style={FONT}>
+          ¿Cuál es el deporte?
+        </h2>
+        <p className="text-black/60 mt-2 text-sm">Seleccioná el deporte del torneo</p>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {SPORTS.map((sport) => {
+          const isSelected = value === sport.label;
+          return (
+            <button
+              key={sport.label}
+              type="button"
+              onClick={() => onChange(sport.label)}
+              className={`relative flex items-center gap-3 p-4 rounded-xl border-2 text-left transition-all ${
+                isSelected
+                  ? 'border-spk-red bg-spk-red text-white shadow-lg'
+                  : 'border-black/10 hover:border-spk-red/40 bg-white text-black/70'
+              }`}
+            >
+              <Activity className={`w-5 h-5 flex-shrink-0 ${isSelected ? 'text-white' : 'text-black/30'}`} />
+              <span className="font-bold uppercase text-sm" style={FONT}>
+                {sport.label}
+              </span>
+              {isSelected && (
+                <CheckCircle2 className="w-4 h-4 text-white absolute top-2 right-2" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Step 2 — Tipo de torneo ─────────────────────────────────────────────────
 
 function Step2Type({
@@ -464,9 +505,11 @@ function Step2AI({
 function Step3Info({
   state,
   onChange,
+  hideSport = false,
 }: {
   state: WizardState;
   onChange: (patch: Partial<WizardState>) => void;
+  hideSport?: boolean;
 }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 py-6 px-4 max-w-4xl mx-auto w-full">
@@ -479,30 +522,14 @@ function Step3Info({
           <p className="text-black/60 text-sm mt-1">Los datos principales de tu torneo</p>
         </div>
 
-        {/* Sport */}
-        <div>
-          <label className="block text-xs font-bold uppercase text-black/50 mb-1.5" style={FONT}>
-            Deporte
-          </label>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            {SPORTS.map((sport) => (
-              <button
-                key={sport.label}
-                type="button"
-                onClick={() => onChange({ sport: sport.label })}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg border-2 text-xs font-bold transition-all ${
-                  state.sport === sport.label
-                    ? 'border-spk-red bg-spk-red text-white'
-                    : 'border-black/10 hover:border-black/30 text-black/60'
-                }`}
-                style={FONT}
-              >
-                <Activity className={`w-3.5 h-3.5 flex-shrink-0 ${state.sport === sport.label ? 'text-white' : 'text-black/40'}`} />
-                <span className="uppercase text-[10px] leading-tight truncate">{sport.label}</span>
-              </button>
-            ))}
+        {/* Sport badge — read-only when hideSport (already selected in previous step) */}
+        {state.sport && (
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-spk-red" />
+            <span className="text-sm font-bold text-spk-red uppercase" style={FONT}>{state.sport}</span>
+            {!hideSport && <span className="text-xs text-black/40">(seleccionado antes)</span>}
           </div>
-        </div>
+        )}
 
         {/* Name */}
         <div>
@@ -1278,34 +1305,50 @@ export function CreateTournamentWizard() {
     });
   };
 
-  // Step navigation — use AI step as step 1 variant when creationMethod === 'ai'
+  // Step navigation
+  // Manual flow: 0=Método, 1=Deporte, 2=Tipo, 3=Info, 4=Fechas, 5=Canchas, 6=Cat., 7=Resumen
+  // AI flow:     0=Método, 1=IA Chat, 2=Info, 3=Fechas, 4=Canchas, 5=Cat., 6=Resumen
   const isAiFlow = state.creationMethod === 'ai';
 
-  // Effective step count and labels
-  // Steps: 0=Method, 1=Type or AI chat, 2=Info, 3=Dates, 4=Courts, 5=Categories, 6=Summary
-  const totalSteps = 7;
+  const totalSteps = isAiFlow ? 7 : 8;
 
   const canAdvance = (): boolean => {
-    if (step === 0) return state.creationMethod !== null;
-    if (step === 1) {
-      if (isAiFlow) return aiApplied;
-      return state.tournamentTypeId !== null;
+    if (isAiFlow) {
+      if (step === 0) return state.creationMethod !== null;
+      if (step === 1) return aiApplied;
+      if (step === 2) return state.name.trim() !== '' && state.club.trim() !== '';
+      if (step === 3) return state.startDate !== '' && state.endDate !== '' && state.teamsCount >= 4;
+      if (step === 4) return state.courts.length > 0 && state.courts[0].name.trim() !== '';
+      return true;
     }
-    if (step === 2) return state.name.trim() !== '' && state.club.trim() !== '';
-    if (step === 3) return state.startDate !== '' && state.endDate !== '' && state.teamsCount >= 4;
-    if (step === 4) return state.courts.length > 0 && state.courts[0].name.trim() !== '';
+    // Manual flow
+    if (step === 0) return state.creationMethod !== null;
+    if (step === 1) return state.sport !== '';
+    if (step === 2) return state.tournamentTypeId !== null;
+    if (step === 3) return state.name.trim() !== '' && state.club.trim() !== '';
+    if (step === 4) return state.startDate !== '' && state.endDate !== '' && state.teamsCount >= 4;
+    if (step === 5) return state.courts.length > 0 && state.courts[0].name.trim() !== '';
     return true;
   };
 
   const next = () => {
     if (!canAdvance()) {
-      const msgs: Record<number, string> = {
+      const manualMsgs: Record<number, string> = {
         0: 'Seleccioná un método de creación',
-        1: isAiFlow ? 'Aplicá las sugerencias de la IA primero' : 'Seleccioná un tipo de torneo',
+        1: 'Seleccioná el deporte del torneo',
+        2: 'Seleccioná un tipo de torneo',
+        3: 'Completá el nombre y el club del torneo',
+        4: 'Completá las fechas y la cantidad de equipos',
+        5: 'Agregá al menos una cancha',
+      };
+      const aiMsgs: Record<number, string> = {
+        0: 'Seleccioná un método de creación',
+        1: 'Aplicá las sugerencias de la IA primero',
         2: 'Completá el nombre y el club del torneo',
         3: 'Completá las fechas y la cantidad de equipos',
         4: 'Agregá al menos una cancha',
       };
+      const msgs = isAiFlow ? aiMsgs : manualMsgs;
       toast.error(msgs[step] ?? 'Completá los campos requeridos');
       return;
     }
@@ -1326,95 +1369,97 @@ export function CreateTournamentWizard() {
 
     setIsSubmitting(true);
     try {
-      // Build dailySchedules from global start/end times and the date range
+      // Build dailySchedules from global start/end times across the date range
       const dailySchedules: Record<string, { start: string; end: string }> = {};
       if (state.startDate && state.endDate) {
-        const start = new Date(state.startDate + 'T00:00:00');
-        const end = new Date(state.endDate + 'T00:00:00');
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        // Use noon to avoid timezone shifting the date
+        const start = new Date(state.startDate + 'T12:00:00');
+        const end   = new Date(state.endDate   + 'T12:00:00');
+        for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
           const key = d.toISOString().split('T')[0];
           dailySchedules[key] = { start: state.dailyStartTime, end: state.dailyEndTime };
         }
       }
 
+      const validCourts = state.courts
+        .map((c) => ({ name: c.name.trim(), location: c.location.trim() }))
+        .filter((c) => c.name !== '');
+
       const dto: CreateTournamentDto = {
         name: state.name.trim(),
-        sport: state.sport,
+        sport: state.sport || 'Voleibol',
         club: state.club.trim(),
+        // Send as ISO date strings — backend accepts both Date objects and strings
         startDate: state.startDate,
         endDate: state.endDate,
-        description: state.description.trim() || undefined,
+        description: state.description.trim() || 'Torneo organizado en Torny',
         status: 'upcoming',
         teamsCount: state.teamsCount,
         format: state.format,
-        courts: state.courts.filter((c) => c.name.trim()).map((c) => c.name.trim()),
-        courtLocations: state.courts.reduce(
-          (acc, c) => {
-            if (c.name.trim() && c.location.trim()) acc[c.name.trim()] = c.location.trim();
-            return acc;
-          },
+        courts: validCourts.map((c) => c.name),
+        courtLocations: validCourts.reduce(
+          (acc, c) => { if (c.location) acc[c.name] = c.location; return acc; },
           {} as Record<string, string>,
         ),
         categories: state.categories.length > 0 ? state.categories : undefined,
-        enrollmentDeadline: state.enrollmentDeadline || null,
+        enrollmentDeadline: state.enrollmentDeadline || undefined,
         playersPerTeam: state.playersPerTeam,
         bracketMode: state.bracketMode,
         goldClassifiersPerGroup: state.goldClassifiersPerGroup,
         silverClassifiersPerGroup: state.silverClassifiersPerGroup,
-        regulationText: state.regulationText || null,
+        regulationText: state.regulationText || undefined,
         matchDurationMinutes: state.matchDurationMinutes,
         matchBreakMinutes: state.matchBreakMinutes,
         dailySchedules,
         maxMatchesPerDay: 0,
         deadTimeBlocks: [],
         categoryPriority: state.categories.length > 0 ? state.categories : [],
-        city: state.city.trim() || null,
-        secondaryPhase: state.secondaryPhase ?? null,
+        city: state.city.trim() || undefined,
+        secondaryPhase: state.secondaryPhase ?? undefined,
       };
 
       const newTournament = await addTournament(dto);
-      toast.success('¡Torneo creado correctamente!');
+      toast.success(`¡Torneo "${newTournament.name}" creado correctamente!`);
       navigate(`/admin/tournaments/${newTournament.id}`);
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'Error al crear el torneo';
+      console.error('[CreateTournamentWizard] submit error:', err);
+      const msg = err instanceof Error ? err.message : 'Error al crear el torneo. Verificá los campos.';
       toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Compute which summary step index is (last step)
+  const summaryStep = totalSteps - 1;
+
+  // Step that has "Ver resumen" label instead of "Siguiente" (second to last)
+  const previewStep = totalSteps - 2;
+
   const stepContent = () => {
+    if (isAiFlow) {
+      // AI flow: 0=Método, 1=IA, 2=Info, 3=Fechas, 4=Canchas, 5=Cat., 6=Resumen
+      switch (step) {
+        case 0: return <Step1Method value={state.creationMethod} onChange={(v) => update({ creationMethod: v })} />;
+        case 1: return <Step2AI formState={aiFormState} onApply={handleAiApply} onContinue={next} hasSuggestions={aiApplied} />;
+        case 2: return <Step3Info state={state} onChange={update} hideSport />;
+        case 3: return <Step4Dates state={state} onChange={update} />;
+        case 4: return <Step5Courts state={state} onChange={update} />;
+        case 5: return <Step6Categories state={state} onChange={update} />;
+        case 6: return <Step7Summary state={state} onSubmit={handleSubmit} isSubmitting={isSubmitting} />;
+        default: return null;
+      }
+    }
+    // Manual flow: 0=Método, 1=Deporte, 2=Tipo, 3=Info, 4=Fechas, 5=Canchas, 6=Cat., 7=Resumen
     switch (step) {
-      case 0:
-        return (
-          <Step1Method
-            value={state.creationMethod}
-            onChange={(v) => update({ creationMethod: v })}
-          />
-        );
-      case 1:
-        if (isAiFlow) {
-          return (
-            <Step2AI
-              formState={aiFormState}
-              onApply={handleAiApply}
-              onContinue={next}
-              hasSuggestions={aiApplied}
-            />
-          );
-        }
-        return <Step2Type value={state.tournamentTypeId} onChange={handleTypeSelect} />;
-      case 2:
-        return <Step3Info state={state} onChange={update} />;
-      case 3:
-        return <Step4Dates state={state} onChange={update} />;
-      case 4:
-        return <Step5Courts state={state} onChange={update} />;
-      case 5:
-        return <Step6Categories state={state} onChange={update} />;
-      case 6:
-        return <Step7Summary state={state} onSubmit={handleSubmit} isSubmitting={isSubmitting} />;
+      case 0: return <Step1Method value={state.creationMethod} onChange={(v) => update({ creationMethod: v })} />;
+      case 1: return <StepSport value={state.sport} onChange={(v) => update({ sport: v })} />;
+      case 2: return <Step2Type value={state.tournamentTypeId} onChange={handleTypeSelect} />;
+      case 3: return <Step3Info state={state} onChange={update} hideSport />;
+      case 4: return <Step4Dates state={state} onChange={update} />;
+      case 5: return <Step5Courts state={state} onChange={update} />;
+      case 6: return <Step6Categories state={state} onChange={update} />;
+      case 7: return <Step7Summary state={state} onSubmit={handleSubmit} isSubmitting={isSubmitting} />;
       default:
         return null;
     }
@@ -1459,9 +1504,8 @@ export function CreateTournamentWizard() {
         <div className="min-h-full">{stepContent()}</div>
       </main>
 
-      {/* Footer navigation */}
-      {/* Don't show footer nav on AI step (it has its own CTA) and on summary (submit is inline) */}
-      {step !== 6 && !(isAiFlow && step === 1) && (
+      {/* Footer navigation — hidden on summary (submit is inline) and AI chat step */}
+      {step !== summaryStep && !(isAiFlow && step === 1) && (
         <footer className="border-t-2 border-black/5 bg-white px-4 py-3 flex items-center justify-between sticky bottom-0 z-10">
           <button
             type="button"
@@ -1484,13 +1528,13 @@ export function CreateTournamentWizard() {
             className="flex items-center gap-1.5 px-5 py-2.5 bg-spk-red hover:bg-spk-red-dark disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-bold transition-all"
             style={FONT}
           >
-            {step === 5 ? 'Ver resumen' : 'Siguiente'}
+            {step === previewStep ? 'Ver resumen' : 'Siguiente'}
             <ChevronRight className="w-4 h-4" />
           </button>
         </footer>
       )}
 
-      {/* Special footer for AI step — only "Cancelar" / "Volver" with no Next */}
+      {/* Special footer for AI step */}
       {isAiFlow && step === 1 && (
         <footer className="border-t-2 border-black/5 bg-white px-4 py-3 flex items-center justify-between sticky bottom-0 z-10">
           <button
