@@ -59,14 +59,64 @@ function addDays(dateStr: string, days: number): string {
 // So group 0 gets [seed1, seed(G+1), seed(2G+1), ...]
 //                          — the same pot-spread used by FIVB / UEFA.
 
-function distributeIntoPots(
-  teamIds: string[],
+// Snake seeding with same-group avoidance:
+//   Round 1 →  A B C D   (positions 0..G-1)
+//   Round 2 ←  D C B A   (snake: G-1..0)
+//   Round 3 →  A B C D   ...
+// Ensures each triangular has one strong + one mid + one weaker team.
+// After seeding, swaps are applied to avoid two teams from the same
+// primary group ending up in the same triangular.
+
+interface RankedTeam {
+  teamId: string;
+  sourceGroupName: string; // primary-phase group_name e.g. "Mayores Femenino|A"
+}
+
+function snakeDistribute(
+  teams: RankedTeam[],
   groupsPerDivision: number,
-): string[][] {
-  const groups: string[][] = Array.from({ length: groupsPerDivision }, () => []);
-  for (let i = 0; i < teamIds.length; i++) {
-    groups[i % groupsPerDivision].push(teamIds[i]);
+): RankedTeam[][] {
+  const groups: RankedTeam[][] = Array.from({ length: groupsPerDivision }, () => []);
+
+  for (let i = 0; i < teams.length; i++) {
+    const round = Math.floor(i / groupsPerDivision);
+    const pos   = i % groupsPerDivision;
+    const gi    = round % 2 === 0 ? pos : groupsPerDivision - 1 - pos;
+    groups[gi].push(teams[i]);
   }
+
+  // Conflict resolution: if two teams from the same primary group land
+  // in the same triangular, try to swap one with a team from another
+  // triangular that doesn't create a new conflict.
+  for (let gi = 0; gi < groups.length; gi++) {
+    for (let ti = 0; ti < groups[gi].length; ti++) {
+      const teamA = groups[gi][ti];
+      const conflict = groups[gi].some(
+        (other, j) => j !== ti && other.sourceGroupName === teamA.sourceGroupName,
+      );
+      if (!conflict) continue;
+
+      let swapped = false;
+      for (let gj = 0; gj < groups.length && !swapped; gj++) {
+        if (gj === gi) continue;
+        for (let tj = 0; tj < groups[gj].length && !swapped; tj++) {
+          const teamB = groups[gj][tj];
+          const wouldConflictInGi = groups[gi].some(
+            (t, k) => k !== ti && t.sourceGroupName === teamB.sourceGroupName,
+          );
+          const wouldConflictInGj = groups[gj].some(
+            (t, k) => k !== tj && t.sourceGroupName === teamA.sourceGroupName,
+          );
+          if (!wouldConflictInGi && !wouldConflictInGj) {
+            groups[gi][ti] = teamB;
+            groups[gj][tj] = teamA;
+            swapped = true;
+          }
+        }
+      }
+    }
+  }
+
   return groups;
 }
 
@@ -203,32 +253,61 @@ export async function generateSecondaryPhase(
           ? Array.from({ length: silverPerGroup }, (_, i) => goldPerGroup + i + 1)
           : [];
 
-      // Get ranked team IDs for each division
-      const oroTeamIds = await computeCumulativeRanking(
-        tournamentId,
-        category,
-        goldPositions,
-      );
-      const plataTeamIds =
-        silverPositions.length > 0
-          ? await computeCumulativeRanking(tournamentId, category, silverPositions)
-          : [];
+      // Get ranked teams WITH their source primary group (for snake seeding)
+      // We query standings directly instead of computeCumulativeRanking so we
+      // can retain the group_name for same-group conflict avoidance.
+      const getRankedTeams = async (positions: number[]): Promise<RankedTeam[]> => {
+        const res = await client.query(
+          `SELECT team_id, group_name, position, played, wins,
+                  sets_for, sets_against, points_for, points_against, points
+             FROM standings
+             WHERE tournament_id = $1
+               AND group_name LIKE $2
+               AND position = ANY($3)
+               AND played > 0
+               AND group_name NOT LIKE $4`,
+          [tournamentId, `${category}|%`, positions, `${category}|%|%`],
+        );
+        // Sort by cumulative performance (same criteria as computeCumulativeRanking)
+        const rows = res.rows as Array<Record<string, unknown>>;
+        rows.sort((a, b) => {
+          const wins = (Number(b.wins) || 0) - (Number(a.wins) || 0);
+          if (wins !== 0) return wins;
+          const setDiff = ((Number(b.sets_for)||0)-(Number(b.sets_against)||0))
+                        - ((Number(a.sets_for)||0)-(Number(a.sets_against)||0));
+          if (setDiff !== 0) return setDiff;
+          const ptDiff = ((Number(b.points_for)||0)-(Number(b.points_against)||0))
+                       - ((Number(a.points_for)||0)-(Number(a.points_against)||0));
+          if (ptDiff !== 0) return ptDiff;
+          return (Number(a.position)||99) - (Number(b.position)||99);
+        });
+        return rows.map((r) => ({
+          teamId: r.team_id as string,
+          sourceGroupName: r.group_name as string,
+        }));
+      };
 
-      // Distribute into groups (pot-based)
+      const oroRanked  = await getRankedTeams(goldPositions);
+      const plataRanked = silverPositions.length > 0
+        ? await getRankedTeams(silverPositions)
+        : [];
+
+      // Distribute into groups using snake seeding + same-group avoidance
       const { groupsPerDivision } = config;
 
       const processGroups = async (
-        teamIds: string[],
+        ranked: RankedTeam[],
         division: 'Oro' | 'Plata',
       ): Promise<number> => {
-        if (teamIds.length < 2) return 0;
+        if (ranked.length < 2) return 0;
 
-        const groups = distributeIntoPots(teamIds, groupsPerDivision);
+        const groups = snakeDistribute(ranked, groupsPerDivision);
         let groupsCreated = 0;
 
         for (let gi = 0; gi < groups.length; gi++) {
-          const groupTeamIds = groups[gi];
-          if (groupTeamIds.length < 2) continue; // skip empty/singleton groups
+          const groupRanked = groups[gi];
+          if (groupRanked.length < 2) continue;
+          const groupTeamIds = groupRanked.map((t) => t.teamId);
 
           const groupLetter = String.fromCharCode(65 + gi); // A, B, C, D...
           const groupName = `${category}|${division}|${groupLetter}`;
@@ -241,7 +320,7 @@ export async function generateSecondaryPhase(
                FROM teams WHERE id = ANY($1)`,
             [groupTeamIds],
           );
-          // Preserve pot ordering
+          // Preserve snake-seeding order
           const teamMap = new Map<string, Team>(
             (teamsRes.rows as Array<Record<string, unknown>>).map((r) => [
               r.id as string,
@@ -287,8 +366,8 @@ export async function generateSecondaryPhase(
         return groupsCreated;
       };
 
-      const oroGroupsMade = await processGroups(oroTeamIds, 'Oro');
-      const plataGroupsMade = await processGroups(plataTeamIds, 'Plata');
+      const oroGroupsMade = await processGroups(oroRanked, 'Oro');
+      const plataGroupsMade = await processGroups(plataRanked, 'Plata');
 
       oroGroupsTotal += oroGroupsMade;
       plataGroupsTotal += plataGroupsMade;
