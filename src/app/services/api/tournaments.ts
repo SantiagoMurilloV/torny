@@ -25,6 +25,24 @@ import {
 } from './transformers';
 import type { CreateTournamentDto, UpdateTournamentDto } from './dtos';
 
+export interface ScheduleAdviceResult {
+  analysis: {
+    totalMatches: number;
+    days: number;
+    courts: number;
+    overlaps: Array<{ kind: 'equipo' | 'cancha'; subject: string; date: string; a: string; b: string }>;
+    restViolations: Array<{ team: string; date: string; gapMin: number; between: string }>;
+    longIdleGaps: Array<{ team: string; date: string; gapMin: number }>;
+    heavyDays: Array<{ team: string; date: string; count: number }>;
+    courtLoad: Array<{ court: string; count: number }>;
+    counts: { overlaps: number; restViolations: number; longIdleGaps: number; heavyDays: number };
+  };
+  summary: string;
+  recommendations: Array<{ priority: 'alta' | 'media' | 'baja'; issue: string; suggestion: string }>;
+  source: 'groq' | 'metrics-only';
+  model?: string;
+}
+
 export interface SecondaryPhaseResult {
   categoriesProcessed: string[];
   /** Divisions mode — Oro triangular groups created. */
@@ -144,6 +162,17 @@ export const tournamentsApi = {
    * Idempotent — re-running it on a clean tournament returns
    * conflictsDetected: 0 and changes nothing.
    */
+  /**
+   * AI schedule advisor — deterministic metrics + Groq recommendations.
+   * Read-only; never moves matches. Returns metrics-only when the server
+   * has no GROQ_API_KEY configured.
+   */
+  async getScheduleAdvice(id: string): Promise<ScheduleAdviceResult> {
+    return request<ScheduleAdviceResult>(`/tournaments/${id}/schedule-advice`, {
+      method: 'POST',
+    });
+  },
+
   async repairTournamentConflicts(id: string): Promise<{
     conflictsDetected: number;
     matchesMoved: number;

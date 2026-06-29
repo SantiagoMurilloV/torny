@@ -156,6 +156,21 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'analyze_schedule',
+      description:
+        'Analiza el cronograma de un torneo y devuelve un diagnóstico con recomendaciones: detecta partidos solapados, equipos sin descanso entre partidos, equipos con demasiados partidos en un día, esperas largas y desbalance de canchas. Úsalo cuando el admin pida revisar/mejorar la programación.',
+      parameters: {
+        type: 'object',
+        properties: {
+          tournament_id: { type: 'string', description: 'ID del torneo' },
+        },
+        required: ['tournament_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'recalculate_standings',
       description: 'Recalcula la tabla de posiciones y los cruces del torneo.',
       parameters: {
@@ -316,6 +331,21 @@ async function executeTool(
       return { label: `Tabla recalculada en "${own.rows[0].name}"`, result: { success: true } };
     }
 
+    case 'analyze_schedule': {
+      const { tournament_id } = args;
+      const own = await pool.query(
+        'SELECT id, name FROM tournaments WHERE id = $1 AND owner_id = $2',
+        [tournament_id, userId],
+      );
+      if (!own.rows.length) return { label: 'Sin acceso', result: { error: 'No autorizado' } };
+      const { adviseSchedule } = await import('./schedule-advisor.service');
+      const advice = await adviseSchedule(tournament_id);
+      return {
+        label: `Cronograma analizado en "${own.rows[0].name}" (${advice.analysis.counts.overlaps} solapamientos, ${advice.analysis.counts.restViolations} sin descanso)`,
+        result: advice,
+      };
+    }
+
     default:
       return { label: `Tool desconocida: ${toolName}`, result: { error: 'Tool no implementada' } };
   }
@@ -346,6 +376,7 @@ HERRAMIENTAS DISPONIBLES:
 - Finalizar triangulares y generar semifinales
 - Ver tabla de posiciones
 - Recalcular tabla y cruces
+- Analizar el cronograma (detectar solapamientos, falta de descanso, sobrecarga, etc.) y recomendar mejoras
 
 REGLAS ESTRICTAS:
 1. Solo tienes acceso a los torneos de ESTE administrador

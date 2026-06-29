@@ -79,3 +79,4 @@ export type {
   CreatePlatformUserDto,
   UpdatePlatformUserDto,
 } from './api/dtos';
+export type { ScheduleAdviceResult, SecondaryPhaseResult } from './api/tournaments';

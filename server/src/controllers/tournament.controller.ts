@@ -831,6 +831,33 @@ export async function repairConflicts(
   }
 }
 
+/**
+ * POST /api/tournaments/:id/schedule-advice
+ *
+ * AI-assisted schedule review. Computes deterministic schedule metrics
+ * (overlaps, rest violations, per-team load, court balance) and asks Groq
+ * to interpret them with sport/business judgment, returning a prioritized
+ * set of recommendations. Degrades to metrics-only when GROQ_API_KEY is
+ * unset, so it never 500s just because the LLM is unavailable.
+ *
+ * Owner-gated at the route level by requireTournamentAccess.
+ */
+export async function scheduleAdvice(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    validateUUID(id, 'ID de torneo');
+    const { adviseSchedule } = await import('../services/schedule-advisor.service');
+    const result = await adviseSchedule(id);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getBracket(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const id = req.params.id as string;
