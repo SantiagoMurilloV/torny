@@ -206,14 +206,21 @@ async function firePush(matchId: string): Promise<void> {
   const title = `${team1} vs ${team2}`;
   const url = `/match/${matchId}`;
 
-  // Global notification
-  await pushService.sendToAll({
-    title: `${title} · En vivo`,
-    body: '¡El partido acaba de comenzar!',
-    url,
-    tag: `match-live-${matchId}`,
-    data: { matchId, type: 'match-live' },
-  });
+  // Per-tournament notification (mig 039). The manual "set live" path in
+  // match.service.ts already uses sendToTournament; this auto-live path
+  // was still on sendToAll, so an auto-started match in Tournament A was
+  // pinging every device subscribed to ANY tournament. Scope it so only
+  // the spectators who opted into THIS tournament get the push.
+  const tournamentId = (row.tournament_id as string | null) ?? null;
+  if (tournamentId) {
+    await pushService.sendToTournament(tournamentId, {
+      title: `${title} · En vivo`,
+      body: '¡El partido acaba de comenzar!',
+      url,
+      tag: `match-live-${matchId}`,
+      data: { matchId, type: 'match-live' },
+    });
+  }
 
   // Club-specific notification
   try {
