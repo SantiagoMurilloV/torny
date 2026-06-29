@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MatchService } from './match.service';
+import { MatchService, intervalsOverlap } from './match.service';
 import { CreateMatchDto } from '../types';
 
 // Mock the database module
@@ -110,6 +110,34 @@ function sampleSetRow(overrides: Record<string, unknown> = {}): Record<string, u
     ...overrides,
   };
 }
+
+describe('intervalsOverlap (schedule anti-overlap primitive)', () => {
+  // Minutes-from-midnight. A 60-min match at 14:00 = [840, 900).
+  it('detects two matches starting at the same time', () => {
+    expect(intervalsOverlap(840, 900, 840, 900)).toBe(true);
+  });
+
+  it('detects a partial overlap between matches of different durations', () => {
+    // 90-min at 14:00 = [840, 930) vs 60-min at 15:00 = [900, 960).
+    // Exact-time matching would MISS this (different start minute); the
+    // interval check catches it — the core fix for mixed-duration overlap.
+    expect(intervalsOverlap(840, 930, 900, 960)).toBe(true);
+  });
+
+  it('allows back-to-back matches (touching endpoints do not overlap)', () => {
+    // 60-min at 14:00 = [840, 900) then 14:00+60 = [900, 960).
+    expect(intervalsOverlap(840, 900, 900, 960)).toBe(false);
+  });
+
+  it('allows matches separated by a gap', () => {
+    expect(intervalsOverlap(840, 900, 915, 975)).toBe(false);
+  });
+
+  it('detects full containment (a long match swallowing a short one)', () => {
+    // 120-min at 14:00 = [840, 960) contains a 30-min at 14:30 = [870, 900).
+    expect(intervalsOverlap(840, 960, 870, 900)).toBe(true);
+  });
+});
 
 describe('MatchService.validateData', () => {
   beforeEach(() => {

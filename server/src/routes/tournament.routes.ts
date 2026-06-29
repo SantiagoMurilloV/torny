@@ -30,6 +30,7 @@ import {
   clearFixtures,
   resolveBracket,
   repairConflicts,
+  scheduleAdvice,
 } from '../controllers/tournament.controller';
 
 const router = Router();
@@ -166,6 +167,11 @@ router.post('/:id/secondary-phase/finalize', requireTournamentAccess, finalizeSe
 // rate-limited because it's manual + idempotent: re-running it on a
 // repaired tournament returns conflictsDetected=0 immediately.
 router.post('/:id/repair-conflicts', requireTournamentAccess, repairConflicts);
+
+// AI schedule advisor — deterministic metrics + Groq interpretation.
+// Owner-gated; read-only (never mutates the schedule), so it's safe to
+// call repeatedly. Returns metrics-only when GROQ_API_KEY is unset.
+router.post('/:id/schedule-advice', requireTournamentAccess, scheduleAdvice);
 
 // Diagnostic endpoint — public-readable summary of the bracket vs
 // matches state. Useful to debug "the bracket has teams but Partidos

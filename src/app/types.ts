@@ -279,6 +279,12 @@ export interface Tournament {
     groupsPerDivision: number;
     teamsPerGroup: number;
     classifiersPerGroup: number;
+    /**
+     * Seeding for the second group stage. 'balanced' (default) builds
+     * pools mixing one team per finishing position from different
+     * primary groups; 'divisions' keeps the legacy Copa Oro / Plata.
+     */
+    seedingMode?: 'balanced' | 'divisions';
   } | null;
 }
 

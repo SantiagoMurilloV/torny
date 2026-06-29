@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Trophy, Filter, Edit, MapPin, Pencil, Search, X, Wrench, Loader2 } from 'lucide-react';
+import { Trophy, Filter, Edit, MapPin, Pencil, Search, X, Wrench, Loader2, Sparkles, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import {
   Popover,
   PopoverContent,
@@ -20,7 +20,7 @@ import { CategorySection } from '../../../components/admin/CategorySection';
 import { ScoreSetsEditor } from '../../../components/admin/ScoreSetsEditor';
 import { MatchFormModal } from '../../../components/admin/MatchFormModal';
 import { TeamAvatar } from '../../../components/TeamAvatar';
-import { api, type UpdateMatchDto } from '../../../services/api';
+import { api, type UpdateMatchDto, type ScheduleAdviceResult } from '../../../services/api';
 import { categoryOfMatchPhase } from '../../../lib/phase';
 import { matchStatusLabel } from '../../../lib/status';
 import { formatShortDate } from '../../../lib/format';
@@ -80,6 +80,9 @@ export function MatchesTab({
   // only needs to know about the result via onMatchesReplaced.
   const [repairConfirmOpen, setRepairConfirmOpen] = useState(false);
   const [repairing, setRepairing] = useState(false);
+  // AI schedule advisor — read-only analysis, so no confirm dialog needed.
+  const [analyzing, setAnalyzing] = useState(false);
+  const [advice, setAdvice] = useState<ScheduleAdviceResult | null>(null);
   const effectiveTournamentId = tournamentId ?? matches[0]?.tournamentId;
 
   const normalize = (s: string): string =>
@@ -103,6 +106,43 @@ export function MatchesTab({
    * "no conflicts found" response we still toast a friendly nothing-to-do
    * message so the admin knows the click was acknowledged.
    */
+  /**
+   * AI schedule review. Read-only: never moves a match — it surfaces
+   * deterministic problems (overlaps, no-rest, overload, court imbalance)
+   * and Groq's prioritized recommendations. When the server has no Groq
+   * key the response still carries the metrics (source: 'metrics-only').
+   */
+  const handleAnalyzeSchedule = async () => {
+    if (!effectiveTournamentId) {
+      toast.error('No se pudo determinar el torneo');
+      return;
+    }
+    setAnalyzing(true);
+    try {
+      const result = await api.getScheduleAdvice(effectiveTournamentId);
+      setAdvice(result);
+      const c = result.analysis.counts;
+      const clean = c.overlaps + c.restViolations + c.heavyDays === 0;
+      if (result.source === 'metrics-only') {
+        toast.info(
+          clean
+            ? 'Cronograma analizado: sin problemas detectados. (IA no configurada — solo métricas.)'
+            : `Cronograma analizado: ${c.overlaps} solapamientos, ${c.restViolations} sin descanso. (IA no configurada.)`,
+        );
+      } else {
+        toast.success(
+          clean
+            ? 'La IA revisó el cronograma: se ve bien.'
+            : 'La IA revisó el cronograma y dejó recomendaciones.',
+        );
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Error al analizar el cronograma'));
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   const handleRepairConfirm = async () => {
     if (!effectiveTournamentId) {
       toast.error('No se pudo determinar el torneo');
@@ -431,7 +471,30 @@ export function MatchesTab({
             )}
           </button>
         )}
+
+        {/* AI schedule advisor — read-only, safe to run anytime. */}
+        <button
+          type="button"
+          onClick={handleAnalyzeSchedule}
+          disabled={analyzing || !effectiveTournamentId || matches.length === 0}
+          title="Analizar el cronograma con IA — detecta solapamientos, falta de descanso, sobrecarga y recomienda mejoras"
+          className="flex-shrink-0 inline-flex items-center gap-2 px-3 h-10 border border-purple-500/40 text-purple-700 hover:bg-purple-500/10 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ fontFamily: 'Barlow Condensed, sans-serif' }}
+        >
+          {analyzing ? (
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <Sparkles className="w-4 h-4" aria-hidden="true" />
+          )}
+          <span className="text-sm font-bold uppercase tracking-wide hidden sm:inline">
+            {analyzing ? 'Analizando…' : 'Analizar cronograma (IA)'}
+          </span>
+        </button>
       </div>
+
+      {advice && (
+        <ScheduleAdvicePanel advice={advice} onClose={() => setAdvice(null)} />
+      )}
 
       {filteredMatches.length === 0 ? (
         <div className="text-center py-12">
@@ -685,6 +748,122 @@ function MatchCard({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+const FONT = { fontFamily: 'Barlow Condensed, sans-serif' };
+
+const PRIORITY_STYLE: Record<'alta' | 'media' | 'baja', string> = {
+  alta: 'bg-red-100 text-red-700',
+  media: 'bg-amber-100 text-amber-700',
+  baja: 'bg-slate-100 text-slate-600',
+};
+
+/** Read-only results panel for the AI schedule advisor. */
+function ScheduleAdvicePanel({
+  advice,
+  onClose,
+}: {
+  advice: ScheduleAdviceResult;
+  onClose: () => void;
+}) {
+  const { analysis, summary, recommendations, source, model } = advice;
+  const c = analysis.counts;
+  const chips: Array<{ label: string; value: number }> = [
+    { label: 'Solapamientos', value: c.overlaps },
+    { label: 'Sin descanso', value: c.restViolations },
+    { label: 'Esperas largas', value: c.longIdleGaps },
+    { label: 'Días cargados', value: c.heavyDays },
+  ];
+  const allClean = chips.every((ch) => ch.value === 0);
+
+  return (
+    <div className="mb-5 rounded-sm border-2 border-purple-200 bg-purple-50/40 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-purple-100/60 border-b border-purple-200">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-purple-600" />
+          <span className="text-sm font-bold uppercase tracking-wide text-purple-800" style={FONT}>
+            Análisis del cronograma
+          </span>
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white text-purple-600 uppercase">
+            {source === 'groq' ? `IA · ${model ?? 'groq'}` : 'Solo métricas'}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="p-1 text-purple-500 hover:text-purple-800 transition-colors"
+          aria-label="Cerrar análisis"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* Headline metric chips */}
+        <div className="flex flex-wrap gap-2">
+          {chips.map((ch) => (
+            <span
+              key={ch.label}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-sm text-xs font-bold ${
+                ch.value > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+              }`}
+              style={FONT}
+            >
+              {ch.value > 0 ? (
+                <AlertTriangle className="w-3.5 h-3.5" />
+              ) : (
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              )}
+              {ch.label}: {ch.value}
+            </span>
+          ))}
+          <span className="inline-flex items-center px-2.5 py-1 rounded-sm text-xs font-medium bg-black/5 text-black/60" style={FONT}>
+            {analysis.totalMatches} partidos · {analysis.days} día(s) · {analysis.courts} cancha(s)
+          </span>
+        </div>
+
+        {/* AI summary */}
+        {summary && (
+          <p className="text-sm text-black/75 leading-relaxed border-l-2 border-purple-300 pl-3">
+            {summary}
+          </p>
+        )}
+
+        {/* Recommendations */}
+        {recommendations.length > 0 ? (
+          <ul className="space-y-2">
+            {recommendations.map((r, i) => (
+              <li key={i} className="flex gap-2.5 items-start">
+                <span
+                  className={`flex-shrink-0 mt-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase ${PRIORITY_STYLE[r.priority]}`}
+                  style={FONT}
+                >
+                  {r.priority}
+                </span>
+                <div className="text-sm">
+                  <p className="font-bold text-black/80">{r.issue}</p>
+                  <p className="text-black/60">{r.suggestion}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          allClean && (
+            <p className="text-sm text-green-700 font-medium flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4" /> No se detectaron problemas en la programación.
+            </p>
+          )
+        )}
+
+        {source === 'metrics-only' && (
+          <p className="text-xs text-black/45">
+            Las recomendaciones de IA no están disponibles (falta configurar GROQ_API_KEY en el
+            servidor). Arriba ves las métricas determinísticas.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -269,6 +269,14 @@ export function AdminTournamentDetail() {
       registrationClosesAt: updated.registrationClosesAt ?? null,
       playersPerTeam: updated.playersPerTeam,
       bracketMode: updated.bracketMode,
+      // Divisions config — without these the form let the admin set
+      // "Clasificados a Oro/Plata por grupo" and the triangulares phase,
+      // but the DTO dropped them, so editing anything from Ajustes
+      // Generales silently wiped the type/config chosen at creation.
+      goldClassifiersPerGroup: updated.goldClassifiersPerGroup,
+      silverClassifiersPerGroup: updated.silverClassifiersPerGroup,
+      // mig 038 — secondary phase (triangulares) config. null clears it.
+      secondaryPhase: updated.secondaryPhase ?? null,
       regulationText: updated.regulationText ?? null,
       regulationPdf: updated.regulationPdf ?? null,
       // Schedule defaults — persist whatever the form holds so the

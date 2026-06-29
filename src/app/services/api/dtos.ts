@@ -35,6 +35,12 @@ export interface CreateTournamentDto {
    *  VNL Oro/Plata driven by the standings table. Defaults to 'manual'
    *  on the server. */
   bracketMode?: 'manual' | 'divisions';
+  /** Divisions-only (mig 019) — top N of each group go to Oro, the next M
+   *  go to Plata (0 disables Plata). The backend maps these to
+   *  gold_classifiers_per_group / silver_classifiers_per_group and clamps
+   *  them to 1..8 / 0..8. Undefined leaves the column untouched on PATCH. */
+  goldClassifiersPerGroup?: number;
+  silverClassifiersPerGroup?: number;
   /** Reglamento del torneo en texto plano. null para borrar; undefined para no tocar. */
   regulationText?: string | null;
   /** Reglamento como PDF data URL. null para borrar; undefined para no tocar. */
@@ -98,6 +104,8 @@ export interface CreateTournamentDto {
     groupsPerDivision: number;
     teamsPerGroup: number;
     classifiersPerGroup: number;
+    /** 'balanced' (default) = cross-position pools; 'divisions' = Oro/Plata. */
+    seedingMode?: 'balanced' | 'divisions';
   } | null;
 }
 

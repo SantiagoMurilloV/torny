@@ -683,11 +683,14 @@ export async function notifyClubs(
 }
 
 /**
- * Free-form broadcast to EVERY subscriber (public spectators +
- * captains). Same shape as `notifyClubs` but uses `sendToAll`
- * under the hood — admins use this for tournament-wide
- * announcements (postponed games, weather, etc.) that everyone
- * watching the event should see, not just the clubes.
+ * Free-form broadcast to everyone following THIS tournament (public
+ * spectators who opted in + captains). Same shape as `notifyClubs` but
+ * reaches the tournament's spectators too — admins use this for
+ * tournament-wide announcements (postponed games, weather, etc.).
+ *
+ * Scoped to the tournament via `sendToTournament` (mig 039): an
+ * announcement for Tournament A no longer reaches spectators who only
+ * follow Tournament B.
  *
  * Required body: `{ title: string, body: string, url?: string }`.
  * Owner-gated by `requireTournamentAccess` at the route.
@@ -724,18 +727,19 @@ export async function notifyAll(
     }
     const tournament = tournRes.rows[0];
 
-    // Count active push subscriptions so the response gives the
-    // admin a realistic "alcance estimado". Doesn't gate the send —
-    // sendToAll loops over the table anyway.
+    // Count the push subscriptions that follow THIS tournament so the
+    // response gives the admin a realistic "alcance estimado". Scoped to
+    // tournament_id to match what sendToTournament actually dispatches to.
     const countRes = await pool.query<{ count: number }>(
-      `SELECT COUNT(*)::int AS count FROM push_subscriptions`,
+      `SELECT COUNT(*)::int AS count FROM push_subscriptions WHERE tournament_id = $1`,
+      [id],
     );
     const totalSubscriptions = countRes.rows[0]?.count ?? 0;
 
     const pushService = (await import('../services/push.service')).pushService;
     const tag = `tournament-${id}-all-${Date.now()}`;
     try {
-      await pushService.sendToAll({
+      await pushService.sendToTournament(id, {
         title: title.trim(),
         body: body.trim(),
         url: tournament.slug ? `/torneo/${tournament.slug}` : finalUrl,
@@ -821,6 +825,33 @@ export async function repairConflicts(
     const id = req.params.id as string;
     validateUUID(id, 'ID de torneo');
     const result = await matchService.repairTeamConflicts(id);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/tournaments/:id/schedule-advice
+ *
+ * AI-assisted schedule review. Computes deterministic schedule metrics
+ * (overlaps, rest violations, per-team load, court balance) and asks Groq
+ * to interpret them with sport/business judgment, returning a prioritized
+ * set of recommendations. Degrades to metrics-only when GROQ_API_KEY is
+ * unset, so it never 500s just because the LLM is unavailable.
+ *
+ * Owner-gated at the route level by requireTournamentAccess.
+ */
+export async function scheduleAdvice(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = req.params.id as string;
+    validateUUID(id, 'ID de torneo');
+    const { adviseSchedule } = await import('../services/schedule-advisor.service');
+    const result = await adviseSchedule(id);
     res.json(result);
   } catch (error) {
     next(error);

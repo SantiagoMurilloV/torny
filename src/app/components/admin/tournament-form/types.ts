@@ -120,6 +120,12 @@ export interface TournamentFormState {
     groupsPerDivision: number;
     teamsPerGroup: number;
     classifiersPerGroup: number;
+    /**
+     * 'balanced' (default) — pools mixing one team per finishing
+     * position from different primary groups. 'divisions' — legacy
+     * Copa Oro / Copa Plata triangulars.
+     */
+    seedingMode?: 'balanced' | 'divisions';
   } | null;
 }
 

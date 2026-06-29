@@ -121,6 +121,11 @@ export function AdminTournaments() {
         registrationClosesAt: tournament.registrationClosesAt ?? null,
         playersPerTeam: tournament.playersPerTeam,
         bracketMode: tournament.bracketMode,
+        // Divisions config — the form sets these when bracketMode is
+        // 'divisions'; forwarding them keeps the Oro/Plata classifier
+        // counts from being wiped on edit.
+        goldClassifiersPerGroup: tournament.goldClassifiersPerGroup,
+        silverClassifiersPerGroup: tournament.silverClassifiersPerGroup,
         regulationText: tournament.regulationText ?? null,
         regulationPdf: tournament.regulationPdf ?? null,
         // Persisted schedule defaults — drives both initial generation

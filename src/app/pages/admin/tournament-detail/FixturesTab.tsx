@@ -317,8 +317,12 @@ export function FixturesTab({
         bracket,
       );
       toast.success(
-        `Triangulares generados: ${result.matchesCreated} partidos, ` +
-          `${result.oroGroupsCreated} grupos Oro, ${result.plataGroupsCreated} grupos Plata`,
+        result.seedingMode === 'divisions'
+          ? `Triangulares generados: ${result.matchesCreated} partidos, ` +
+              `${result.oroGroupsCreated} grupos Oro, ${result.plataGroupsCreated} grupos Plata`
+          : `Segunda fase generada: ${result.poolsCreated} grupo${
+              result.poolsCreated === 1 ? '' : 's'
+            } balanceado${result.poolsCreated === 1 ? '' : 's'}, ${result.matchesCreated} partidos`,
       );
     } catch (err) {
       toast.error(getErrorMessage(err, 'Error al generar triangulares'));
