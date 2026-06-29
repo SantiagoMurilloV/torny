@@ -16,6 +16,21 @@ import { pushService, ensureReady as ensurePushReady } from './push.service';
 import { activateNextOnCourt } from './autoLive';
 
 /**
+ * True when two half-open time intervals [aStart, aEnd) and [bStart, bEnd)
+ * overlap. Touching endpoints (one ends exactly when the other starts) do
+ * NOT count as an overlap, so back-to-back matches are allowed. Exported
+ * for the schedule-repair unit tests.
+ */
+export function intervalsOverlap(
+  aStart: number,
+  aEnd: number,
+  bStart: number,
+  bEnd: number,
+): boolean {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+/**
  * Fire-and-forget helper that builds the two-team label used in push
  * titles. Falls back to "Partido" when we couldn't join the team
  * rows (shouldn't happen but a push should never fail a match write).
@@ -1011,6 +1026,7 @@ export class MatchService {
       max_matches_per_day: number | null;
       dead_time_blocks: Array<{ start: string; end: string }> | null;
       category_priority: string[] | null;
+      match_durations_by_category: Record<string, number> | null;
     }>(
       `SELECT
          start_date::text AS start_date,
@@ -1021,7 +1037,8 @@ export class MatchService {
          daily_schedules,
          max_matches_per_day,
          dead_time_blocks,
-         category_priority
+         category_priority,
+         match_durations_by_category
        FROM tournaments WHERE id = $1`,
       [tournamentId],
     );
@@ -1041,7 +1058,18 @@ export class MatchService {
     const matchDurationMinutes = tRes.rows[0].match_duration_minutes ?? 60;
     const matchBreakMinutes = tRes.rows[0].match_break_minutes ?? 15;
     const dailySchedules = tRes.rows[0].daily_schedules ?? {};
+    // Per-category duration overrides (mig 027). A category not present
+    // here falls back to the global match_duration_minutes. Critical for
+    // overlap detection: two categories with different durations can
+    // collide at NON-identical start times, which exact-time matching
+    // would miss — we resolve each match's real length below.
+    const matchDurationsByCategory: Record<string, number> =
+      (tRes.rows[0].match_durations_by_category as Record<string, number> | null) ?? {};
     const SLOT_MIN = matchDurationMinutes + matchBreakMinutes;
+    const durationForCategory = (category: string): number => {
+      const d = matchDurationsByCategory[category];
+      return typeof d === 'number' && d > 0 ? d : matchDurationMinutes;
+    };
     // Migration 025 constraints. 0 / empty means "no constraint" so the
     // repair falls back to the historic greedy behaviour when the admin
     // hasn't configured anything.
@@ -1098,8 +1126,11 @@ export class MatchService {
       const e = parseHHMM(block.end, -1);
       if (s >= 0 && e > s) deadRanges.push({ startMin: s, endMin: e });
     }
-    const slotIntersectsDeadTime = (slotStartMin: number): boolean => {
-      const slotEndMin = slotStartMin + matchDurationMinutes;
+    const slotIntersectsDeadTime = (
+      slotStartMin: number,
+      durationMinutes: number = matchDurationMinutes,
+    ): boolean => {
+      const slotEndMin = slotStartMin + durationMinutes;
       for (const r of deadRanges) {
         if (slotStartMin < r.endMin && slotEndMin > r.startMin) return true;
       }
@@ -1146,16 +1177,67 @@ export class MatchService {
     );
     const rows = allRes.rows;
 
-    // Maps to track what's claimed:
-    //   teamSlot   → "team|date|time"  → matchId
-    //   courtSlot  → "court|date|time" → matchId
-    const teamSlot = new Map<string, string>();
-    const courtSlot = new Map<string, string>();
-    const slotKey = (date: string, time: string) => `${date}|${time}`;
-    const teamKey = (teamId: string, date: string, time: string) =>
-      `${teamId}|${slotKey(date, time)}`;
-    const courtKey = (court: string, date: string, time: string) =>
-      `${court}|${slotKey(date, time)}`;
+    // Category of a match — drives the per-category duration lookup and
+    // the priority reorder pass. Defined up here so the interval-based
+    // conflict detector below can resolve each match's real length.
+    const extractCategory = (r: Row): string => {
+      const raw = r.group_name || r.phase || '';
+      const pipeIdx = raw.indexOf('|');
+      return pipeIdx > 0 ? raw.slice(0, pipeIdx) : raw;
+    };
+
+    // ── Interval-based occupancy tracking ─────────────────────────────
+    // The old detector keyed on the EXACT (date, time) start, so it only
+    // caught matches starting at the identical minute. Two matches of
+    // DIFFERENT durations (e.g. a 90-min category overlapping a 60-min
+    // one) collide at non-identical starts — invisible to exact keys.
+    // We now track busy [start, end) intervals per resource per day and
+    // test real interval overlap, so no two matches sharing a team or a
+    // court can ever overlap in time.
+    type Busy = { start: number; end: number; matchId: string };
+    const teamBusy = new Map<string, Busy[]>(); // key: `${teamId}|${date}`
+    const courtBusy = new Map<string, Busy[]>(); // key: `${court}|${date}`
+    const resKey = (resource: string, date: string) => `${resource}|${date}`;
+    const overlaps = (list: Busy[] | undefined, s: number, e: number): boolean =>
+      !!list && list.some((b) => intervalsOverlap(s, e, b.start, b.end));
+    const teamBusyAt = (teamId: string, date: string, s: number, e: number) =>
+      overlaps(teamBusy.get(resKey(teamId, date)), s, e);
+    const courtBusyAt = (court: string, date: string, s: number, e: number) =>
+      overlaps(courtBusy.get(resKey(court, date)), s, e);
+    const pushBusy = (map: Map<string, Busy[]>, key: string, b: Busy) => {
+      const list = map.get(key);
+      if (list) list.push(b);
+      else map.set(key, [b]);
+    };
+    const claimSlot = (
+      team1Id: string,
+      team2Id: string,
+      court: string,
+      date: string,
+      s: number,
+      e: number,
+      matchId: string,
+    ) => {
+      pushBusy(teamBusy, resKey(team1Id, date), { start: s, end: e, matchId });
+      pushBusy(teamBusy, resKey(team2Id, date), { start: s, end: e, matchId });
+      pushBusy(courtBusy, resKey(court, date), { start: s, end: e, matchId });
+    };
+    const releaseSlot = (
+      team1Id: string,
+      team2Id: string,
+      court: string,
+      date: string,
+      matchId: string,
+    ) => {
+      for (const [key, resource] of [
+        [resKey(team1Id, date), teamBusy],
+        [resKey(team2Id, date), teamBusy],
+        [resKey(court, date), courtBusy],
+      ] as const) {
+        const list = resource.get(key);
+        if (list) resource.set(key, list.filter((b) => b.matchId !== matchId));
+      }
+    };
 
     // Two failure modes to detect, both surface the same way (the
     // match needs to move):
@@ -1176,11 +1258,21 @@ export class MatchService {
     let courtConflicts = 0;
     let outOfRange = 0;
     for (const r of rows) {
-      const k1 = teamKey(r.team1_id, r.date, r.time);
-      const k2 = teamKey(r.team2_id, r.date, r.time);
-      const ck = courtKey(r.court, r.date, r.time);
-      const teamHit = teamSlot.has(k1) || teamSlot.has(k2);
-      const courtHit = courtSlot.has(ck);
+      const matchMin = parseHHMM(r.time, -1);
+      // Resolve THIS match's real length from its category so overlap is
+      // measured against actual intervals, not a uniform slot grid.
+      const dur = durationForCategory(extractCategory(r));
+      const startMin = matchMin;
+      const endMin = matchMin + dur;
+      // Interval overlap (not exact-time): a team/court is "hit" when this
+      // match's [start, end) intersects any interval already claimed for
+      // the same team or court on the same date.
+      const teamHit =
+        matchMin >= 0 &&
+        (teamBusyAt(r.team1_id, r.date, startMin, endMin) ||
+          teamBusyAt(r.team2_id, r.date, startMin, endMin));
+      const courtHit =
+        matchMin >= 0 && courtBusyAt(r.court, r.date, startMin, endMin);
       // Plain string comparison works because all three values are in
       // YYYY-MM-DD form (lexicographic order matches calendar order).
       const dateOutOfRange =
@@ -1190,15 +1282,12 @@ export class MatchService {
       // day whose dailySchedules entry says 08:00–14:00. Counts as out
       // of range so the repair pulls it back into a valid slot.
       const win = windowForDate(r.date);
-      const matchMin = parseHHMM(r.time, -1);
       const timeOutOfWindow =
-        matchMin >= 0 &&
-        (matchMin < win.startMin || matchMin + matchDurationMinutes > win.endMin);
+        matchMin >= 0 && (matchMin < win.startMin || endMin > win.endMin);
       // Match landed inside a configured dead-time block (e.g. 12:00
       // lunch) — treat the same as a window violation so the repair
       // pulls it out and finds a clean slot.
-      const inDeadTime =
-        matchMin >= 0 && slotIntersectsDeadTime(matchMin);
+      const inDeadTime = matchMin >= 0 && slotIntersectsDeadTime(matchMin, dur);
       const outsideWindow = dateOutOfRange || timeOutOfWindow || inDeadTime;
       if (teamHit || courtHit || outsideWindow) {
         conflictMatches.push(r);
@@ -1207,9 +1296,7 @@ export class MatchService {
         if (outsideWindow) outOfRange++;
         continue;
       }
-      teamSlot.set(k1, r.id);
-      teamSlot.set(k2, r.id);
-      courtSlot.set(ck, r.id);
+      claimSlot(r.team1_id, r.team2_id, r.court, r.date, startMin, endMin, r.id);
       matchesByDay.set(r.date, (matchesByDay.get(r.date) ?? 0) + 1);
     }
 
@@ -1270,6 +1357,7 @@ export class MatchService {
     const findFreeSlot = (
       team1Id: string,
       team2Id: string,
+      durationMinutes: number,
     ): { date: string; time: string; court: string } | null => {
       const cursor = new Date(startDate + 'T00:00:00');
       const MAX_DAYS = 365;
@@ -1288,28 +1376,30 @@ export class MatchService {
         // Each day's active window comes from the tournament's
         // `daily_schedules` map (with the historic 08:00–18:00 default
         // when the day isn't in the map). The match must FIT entirely
-        // within that window, so the upper bound check uses the
-        // tournament's configured match duration, not the slot stride.
+        // within that window using ITS OWN duration (categories can
+        // differ), not a uniform slot length.
         const { startMin, endMin } = windowForDate(dateStr);
         for (
           let mins = startMin;
-          mins + matchDurationMinutes <= endMin;
+          mins + durationMinutes <= endMin;
           mins += SLOT_MIN
         ) {
+          const candEnd = mins + durationMinutes;
           // Dead-time skip (migration 025). Slots whose body intersects
           // any configured block (lunch, ceremony, etc.) are unusable
           // regardless of team / court availability.
-          if (slotIntersectsDeadTime(mins)) continue;
-          const time = formatHHMM(mins);
+          if (slotIntersectsDeadTime(mins, durationMinutes)) continue;
+          // Neither team may already be playing in an overlapping interval.
           if (
-            teamSlot.has(teamKey(team1Id, dateStr, time)) ||
-            teamSlot.has(teamKey(team2Id, dateStr, time))
+            teamBusyAt(team1Id, dateStr, mins, candEnd) ||
+            teamBusyAt(team2Id, dateStr, mins, candEnd)
           ) {
             continue;
           }
+          // Pick the first court whose interval is free for the whole match.
           for (const court of courts) {
-            if (!courtSlot.has(courtKey(court, dateStr, time))) {
-              return { date: dateStr, time, court };
+            if (!courtBusyAt(court, dateStr, mins, candEnd)) {
+              return { date: dateStr, time: formatHHMM(mins), court };
             }
           }
         }
@@ -1342,11 +1432,6 @@ export class MatchService {
      * scored right now or already locked in a referee's history.
      * Reshuffling them would surprise the judge console mid-set.
      */
-    const extractCategory = (r: Row): string => {
-      const raw = r.group_name || r.phase || '';
-      const pipeIdx = raw.indexOf('|');
-      return pipeIdx > 0 ? raw.slice(0, pipeIdx) : raw;
-    };
     let priorityReordered = 0;
     if (categoryPriority.length > 0) {
       const priorityIndex = (cat: string): number => {
@@ -1374,8 +1459,8 @@ export class MatchService {
       });
       // Walk the two lists in lockstep: any match that should sit on
       // a different slot than its current one is added to conflicts.
-      // We also remove its busy markers from teamSlot/courtSlot so
-      // findFreeSlot can hand its slot to a higher-priority match.
+      // We also release its busy intervals so findFreeSlot can hand its
+      // slot to a higher-priority match.
       for (let i = 0; i < upcomingPlaced.length; i++) {
         const inPlace = upcomingPlaced[i].id;
         const expected = sortedByPriority[i].id;
@@ -1385,12 +1470,7 @@ export class MatchService {
           // counter) so the move loop can re-place it AND re-place
           // whatever should sit here instead.
           const r = upcomingPlaced[i];
-          const k1 = teamKey(r.team1_id, r.date, r.time);
-          const k2 = teamKey(r.team2_id, r.date, r.time);
-          const ck = courtKey(r.court, r.date, r.time);
-          if (teamSlot.get(k1) === r.id) teamSlot.delete(k1);
-          if (teamSlot.get(k2) === r.id) teamSlot.delete(k2);
-          if (courtSlot.get(ck) === r.id) courtSlot.delete(ck);
+          releaseSlot(r.team1_id, r.team2_id, r.court, r.date, r.id);
           const dayCount = matchesByDay.get(r.date) ?? 0;
           if (dayCount > 0) matchesByDay.set(r.date, dayCount - 1);
           conflictMatches.push(r);
@@ -1413,7 +1493,8 @@ export class MatchService {
     }> = [];
     let unresolved = 0;
     for (const r of conflictMatches) {
-      const slot = findFreeSlot(r.team1_id, r.team2_id);
+      const dur = durationForCategory(extractCategory(r));
+      const slot = findFreeSlot(r.team1_id, r.team2_id, dur);
       if (!slot) {
         unresolved++;
         continue;
@@ -1424,9 +1505,8 @@ export class MatchService {
          WHERE id = $4`,
         [slot.date, slot.time, slot.court, r.id],
       );
-      teamSlot.set(teamKey(r.team1_id, slot.date, slot.time), r.id);
-      teamSlot.set(teamKey(r.team2_id, slot.date, slot.time), r.id);
-      courtSlot.set(courtKey(slot.court, slot.date, slot.time), r.id);
+      const placedStart = parseHHMM(slot.time, 0);
+      claimSlot(r.team1_id, r.team2_id, slot.court, slot.date, placedStart, placedStart + dur, r.id);
       // Track per-day count so subsequent findFreeSlot calls respect
       // the migration-025 cap. Without this bump, every conflict
       // could pile onto the same day even if the cap was set to 1.
