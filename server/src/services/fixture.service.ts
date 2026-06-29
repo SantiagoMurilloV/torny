@@ -97,6 +97,15 @@ export class FixtureGenerator {
     const matchFixtures: MatchFixture[] = [];
     const bracketFixtures: BracketFixture[] = [];
 
+    // When a secondary phase (triangulares / balanced pools) is enabled,
+    // the playoff bracket is seeded later by finalizeSecondaryPhase from
+    // the pool winners — NOT here from the initial draw. Pre-creating a
+    // group-based bracket now would leave orphan rounds that fight the
+    // finalize bracket (the tournament never finishes cleanly). So we
+    // generate ONLY the group stage and let finalize own the bracket.
+    const sp = tournament.secondary_phase as { enabled?: boolean } | null;
+    const skipBracket = !!(sp && sp.enabled);
+
     for (const { category, teams: enrolledTeams } of teamsByCategory) {
       const teams = enrolledTeams.map((et) => et.team);
       if (teams.length < 2) continue;
@@ -104,7 +113,7 @@ export class FixtureGenerator {
       const shuffled = shuffleTeams(teams);
       const { matches, bracket } = fixturesForFormat(format, shuffled, category);
       matchFixtures.push(...matches);
-      bracketFixtures.push(...bracket);
+      if (!skipBracket) bracketFixtures.push(...bracket);
     }
 
     return this.commit(

@@ -1144,11 +1144,23 @@ export class BracketGenerator {
 
     // Tournament metadata so we know which strategy to apply.
     const tournRes = await pool.query(
-      'SELECT bracket_mode FROM tournaments WHERE id = $1',
+      'SELECT bracket_mode, secondary_phase FROM tournaments WHERE id = $1',
       [tournamentId],
     );
     if (tournRes.rows.length === 0) return 0;
     const bracketMode = (tournRes.rows[0].bracket_mode as string | null) ?? 'manual';
+
+    // When a secondary phase (triangulares / balanced pools) is enabled,
+    // the playoff bracket is OWNED by finalizeSecondaryPhase — it's seeded
+    // from the pool winners, not from the primary-group standings. Letting
+    // this group-driven auto-resolve run would fight the finalize bracket:
+    // every score recalc would re-seed a parallel group bracket, leaving
+    // duplicate/stale rounds and a tournament that never finishes cleanly.
+    // So we bail out here and let finalize be the single source of truth.
+    const sp = tournRes.rows[0].secondary_phase as { enabled?: boolean } | null;
+    if (sp && sp.enabled) {
+      return 0;
+    }
 
     const standingsResult = await pool.query(
       `SELECT team_id, group_name, position, played, wins,
