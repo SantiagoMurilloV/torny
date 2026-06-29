@@ -65,8 +65,9 @@ const TOURNAMENT_TYPES = [
       secondaryPhase: {
         enabled: true,
         groupsPerDivision: 4,
-        teamsPerGroup: 3,
+        teamsPerGroup: 4,
         classifiersPerGroup: 1,
+        seedingMode: 'balanced' as const,
       },
     },
   },
@@ -173,6 +174,7 @@ interface WizardState {
     groupsPerDivision: number;
     teamsPerGroup: number;
     classifiersPerGroup: number;
+    seedingMode?: 'balanced' | 'divisions';
   } | null;
 }
 
@@ -1214,10 +1216,21 @@ function Step7Summary({
           {state.secondaryPhase?.enabled && (
             <div className="flex items-center gap-2 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800" style={FONT}>
               <Award className="w-4 h-4 text-yellow-600 flex-shrink-0" />
-              <span className="font-bold uppercase tracking-wide">Fase de triangulares activada</span>
-              <span className="text-yellow-600">
-                · {state.secondaryPhase.groupsPerDivision} grupos de {state.secondaryPhase.teamsPerGroup} equipos por copa · Clasifica 1 por grupo
-              </span>
+              {(state.secondaryPhase.seedingMode ?? 'balanced') === 'balanced' ? (
+                <>
+                  <span className="font-bold uppercase tracking-wide">Segunda fase de grupos</span>
+                  <span className="text-yellow-600">
+                    · pools balanceados de {state.secondaryPhase.teamsPerGroup} equipos (1° a {state.secondaryPhase.teamsPerGroup}° mezclados de grupos distintos)
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="font-bold uppercase tracking-wide">Triangulares Oro / Plata</span>
+                  <span className="text-yellow-600">
+                    · {state.secondaryPhase.groupsPerDivision} grupos de {state.secondaryPhase.teamsPerGroup} equipos por copa · Clasifica 1 por grupo
+                  </span>
+                </>
+              )}
             </div>
           )}
 

@@ -11,13 +11,28 @@ export interface SecondaryPhaseConfig {
   groupsPerDivision: number; // e.g. 4
   teamsPerGroup: number;     // e.g. 3
   classifiersPerGroup: number; // e.g. 1
+  /**
+   * Seeding strategy for the second group stage:
+   *   · 'balanced' (default) — one set of pools, each mixing one team
+   *     from every finishing position (1st, 2nd, 3rd, 4th…) drawn from
+   *     DIFFERENT primary groups. No Oro/Plata split.
+   *   · 'divisions' — legacy Copa Oro / Copa Plata triangulars (top
+   *     positions cluster in Oro, the rest in Plata).
+   */
+  seedingMode?: 'balanced' | 'divisions';
 }
 
 export interface SecondaryPhaseResult {
   categoriesProcessed: string[];
+  /** Divisions mode only — Oro triangular groups created. */
   oroGroupsCreated: number;
+  /** Divisions mode only — Plata triangular groups created. */
   plataGroupsCreated: number;
+  /** Balanced mode — total balanced pools created across categories. */
+  poolsCreated: number;
   matchesCreated: number;
+  /** Which seeding strategy actually ran. */
+  seedingMode: 'balanced' | 'divisions';
 }
 
 export interface FinalizeResult {
@@ -120,6 +135,89 @@ function snakeDistribute(
   return groups;
 }
 
+// ── Balanced pools (cross-position redistribution) ────────────────────
+//
+// Build one set of pools where each pool mixes teams of DIFFERENT
+// finishing positions (1st, 2nd, 3rd, 4th…) drawn from DIFFERENT primary
+// groups — e.g. Pool 1 = {1°A, 2°B, 3°C, 4°D}. This is a Latin-square
+// rotation: pool k draws position p from primary group (k + p) mod G.
+//
+//   primaryGroups = [A, B, C, D]   (sorted), G = 4
+//   positions     = [1, 2, 3, 4]   (P = teamsPerGroup)
+//
+//   Pool A: 1°A · 2°B · 3°C · 4°D
+//   Pool B: 1°B · 2°C · 3°D · 4°A
+//   Pool C: 1°C · 2°D · 3°A · 4°B
+//   Pool D: 1°D · 2°A · 3°B · 4°C
+//
+// Guarantees (when P ≤ G): every pool has exactly one team per position
+// and no two teams from the same primary group. When P > G the rotation
+// wraps and some origins repeat — unavoidable, but rare.
+export interface PositionedTeam {
+  teamId: string;
+  primaryGroup: string; // e.g. "Mayores Femenino|A"
+  position: number;     // finishing position within the primary group
+}
+
+export function buildBalancedPools(
+  /** Map: primary group_name → (position → teamId). */
+  teamByGroupAndPosition: Map<string, Map<number, string>>,
+  /** Sorted primary group names (A, B, C, …). */
+  primaryGroups: string[],
+  /** How many positions to combine per pool (= teamsPerGroup). */
+  positionsPerPool: number,
+): PositionedTeam[][] {
+  const G = primaryGroups.length;
+  if (G === 0) return [];
+  const pools: PositionedTeam[][] = Array.from({ length: G }, () => []);
+
+  for (let k = 0; k < G; k++) {
+    for (let p = 1; p <= positionsPerPool; p++) {
+      const originGroup = primaryGroups[(k + (p - 1)) % G];
+      const teamId = teamByGroupAndPosition.get(originGroup)?.get(p);
+      if (teamId) {
+        pools[k].push({ teamId, primaryGroup: originGroup, position: p });
+      }
+    }
+  }
+
+  return pools;
+}
+
+// ── Local bracket-round helpers ───────────────────────────────────────
+//
+// Mirrors getRounds / getMatchCountForRound in bracket.service.ts so the
+// balanced finalize can lay out a properly-sized, NON-tiered bracket
+// (rounds "Category|semifinal", "Category|final") that the existing
+// advanceWinner + materializePendingBracketMatches handle unchanged.
+function roundsForTeamCount(teamCount: number): string[] {
+  if (teamCount < 2) return [];
+  const totalRounds = Math.ceil(Math.log2(teamCount));
+  const rounds: string[] = [];
+  for (let i = 0; i < totalRounds; i++) {
+    const fromEnd = totalRounds - 1 - i;
+    if (fromEnd === 0) rounds.push('final');
+    else if (fromEnd === 1) rounds.push('semifinal');
+    else if (fromEnd === 2) rounds.push('cuartos');
+    else rounds.push(`ronda-${i + 1}`);
+  }
+  return rounds;
+}
+
+function matchCountForRound(round: string, teamCount: number): number {
+  const rounds = roundsForTeamCount(teamCount);
+  const roundIndex = rounds.indexOf(round);
+  if (roundIndex === -1) return 0;
+  let matches = Math.floor(teamCount / 2);
+  for (let i = 0; i < roundIndex; i++) matches = Math.floor(matches / 2);
+  return matches;
+}
+
+/** Group_name token that marks a balanced second-phase pool. */
+const BALANCED_POOL_TOKEN = 'F2';
+/** Phase label for balanced pool round-robin matches. */
+const SECONDARY_PHASE_LABEL = 'Triangulares';
+
 // ── Main generate function ───────────────────────────────────────────
 
 export async function generateSecondaryPhase(
@@ -150,6 +248,10 @@ export async function generateSecondaryPhase(
     groupsPerDivision: Number(spRaw.groupsPerDivision) || 4,
     teamsPerGroup: Number(spRaw.teamsPerGroup) || 3,
     classifiersPerGroup: Number(spRaw.classifiersPerGroup) || 1,
+    // Default to balanced pools — the cross-position redistribution.
+    // Legacy tournaments without the field opt into the new behavior;
+    // set seedingMode:'divisions' explicitly to keep Oro/Plata.
+    seedingMode: spRaw.seedingMode === 'divisions' ? 'divisions' : 'balanced',
   };
 
   const categories: string[] = (tournament.categories as string[] | null) ?? [];
@@ -240,11 +342,27 @@ export async function generateSecondaryPhase(
   let matchesCreated = 0;
   let oroGroupsTotal = 0;
   let plataGroupsTotal = 0;
+  let poolsTotal = 0;
 
   try {
     await client.query('BEGIN');
 
     for (const category of categories) {
+      // ── Balanced pools (default): one cross-position redistribution ──
+      if (config.seedingMode === 'balanced') {
+        poolsTotal += await generateBalancedPoolsForCategory({
+          client,
+          tournamentId,
+          category,
+          positionsPerPool: config.teamsPerGroup,
+          nextSlot,
+          nextCourt,
+          onMatchCreated: () => { matchesCreated++; },
+        });
+        continue;
+      }
+
+      // ── Divisions (legacy): Copa Oro + Copa Plata triangulars ──
       // Gold positions: 1..goldPerGroup
       const goldPositions = Array.from({ length: goldPerGroup }, (_, i) => i + 1);
       // Silver positions: goldPerGroup+1..goldPerGroup+silverPerGroup
@@ -385,8 +503,111 @@ export async function generateSecondaryPhase(
     categoriesProcessed: categories,
     oroGroupsCreated: oroGroupsTotal,
     plataGroupsCreated: plataGroupsTotal,
+    poolsCreated: poolsTotal,
     matchesCreated,
+    seedingMode: config.seedingMode ?? 'balanced',
   };
+}
+
+// ── Balanced pools: per-category generation ──────────────────────────
+//
+// Reads the primary-phase standings, takes the top `positionsPerPool`
+// teams from each primary group, and redistributes them via the
+// Latin-square rotation in buildBalancedPools(). Each pool plays a
+// round-robin; matches are scheduled through the caller's nextSlot /
+// nextCourt cursors so they slot in right after the existing fixtures.
+// Returns the number of pools created.
+async function generateBalancedPoolsForCategory(opts: {
+  client: import('pg').PoolClient;
+  tournamentId: string;
+  category: string;
+  positionsPerPool: number;
+  nextSlot: () => { date: string; time: string };
+  nextCourt: () => string;
+  onMatchCreated: () => void;
+}): Promise<number> {
+  const { client, tournamentId, category, positionsPerPool, nextSlot, nextCourt, onMatchCreated } = opts;
+
+  // Pull every primary-group standing for this category. Primary groups
+  // are 2-segment group_names ("Category|A"); we exclude any 3-segment
+  // secondary group ("Category|F2|A" / "Category|Oro|A").
+  const standRes = await client.query(
+    `SELECT team_id, group_name, position
+       FROM standings
+       WHERE tournament_id = $1
+         AND group_name LIKE $2
+         AND group_name NOT LIKE $3
+         AND played > 0
+         AND position BETWEEN 1 AND $4`,
+    [tournamentId, `${category}|%`, `${category}|%|%`, positionsPerPool],
+  );
+  const standRows = standRes.rows as Array<{ team_id: string; group_name: string; position: number }>;
+  if (standRows.length < 2) return 0;
+
+  // Build: primaryGroup → (position → teamId), and the sorted group list.
+  const teamByGroupAndPosition = new Map<string, Map<number, string>>();
+  const primaryGroupSet = new Set<string>();
+  for (const row of standRows) {
+    primaryGroupSet.add(row.group_name);
+    if (!teamByGroupAndPosition.has(row.group_name)) {
+      teamByGroupAndPosition.set(row.group_name, new Map());
+    }
+    teamByGroupAndPosition.get(row.group_name)!.set(Number(row.position), row.team_id);
+  }
+  const primaryGroups = [...primaryGroupSet].sort();
+
+  const pools = buildBalancedPools(teamByGroupAndPosition, primaryGroups, positionsPerPool);
+
+  let poolsCreated = 0;
+  for (let pi = 0; pi < pools.length; pi++) {
+    const poolTeams = pools[pi];
+    if (poolTeams.length < 2) continue;
+
+    const poolLetter = String.fromCharCode(65 + pi); // A, B, C, …
+    const groupName = `${category}|${BALANCED_POOL_TOKEN}|${poolLetter}`;
+    const phase = `${SECONDARY_PHASE_LABEL}|${category}`;
+    const teamIds = poolTeams.map((t) => t.teamId);
+
+    const teamsRes = await client.query(
+      `SELECT id, name, initials, logo, primary_color AS "primaryColor",
+              secondary_color AS "secondaryColor"
+         FROM teams WHERE id = ANY($1)`,
+      [teamIds],
+    );
+    const teamMap = new Map<string, Team>(
+      (teamsRes.rows as Array<Record<string, unknown>>).map((r) => [
+        r.id as string,
+        {
+          id: r.id as string,
+          name: r.name as string,
+          initials: r.initials as string,
+          logo: r.logo as string | undefined,
+          primaryColor: r.primaryColor as string,
+          secondaryColor: r.secondaryColor as string,
+        },
+      ]),
+    );
+    // Preserve rotation order (1st, 2nd, 3rd, … of distinct groups).
+    const teams: Team[] = teamIds
+      .map((id) => teamMap.get(id))
+      .filter((t): t is Team => !!t);
+    if (teams.length < 2) continue;
+
+    const fixtures = generateRoundRobin(teams, groupName);
+    for (const fixture of fixtures) {
+      const slot = nextSlot();
+      const court = nextCourt();
+      await client.query(
+        `INSERT INTO matches (tournament_id, team1_id, team2_id, date, time, court, status, phase, group_name)
+         VALUES ($1, $2, $3, $4, $5, $6, 'upcoming', $7, $8)`,
+        [tournamentId, fixture.team1Id, fixture.team2Id, slot.date, slot.time, court, phase, groupName],
+      );
+      onMatchCreated();
+    }
+    poolsCreated++;
+  }
+
+  return poolsCreated;
 }
 
 // ── Finalize function ────────────────────────────────────────────────
@@ -417,6 +638,8 @@ export async function finalizeSecondaryPhase(
   }
 
   const categories: string[] = (tournament.categories as string[] | null) ?? [];
+  const seedingMode: 'balanced' | 'divisions' =
+    spRaw.seedingMode === 'divisions' ? 'divisions' : 'balanced';
 
   // Helper: compute a simple standing for a set of matches within a group_name.
   // Returns team IDs sorted by wins desc, then set diff desc.
@@ -488,6 +711,70 @@ export async function finalizeSecondaryPhase(
     await client.query('BEGIN');
 
     for (const category of categories) {
+      // ── Balanced pools: seed a single NON-tiered bracket ──────────
+      if (seedingMode === 'balanced') {
+        // Find this category's balanced pools, in letter order.
+        const poolsRes = await client.query(
+          `SELECT DISTINCT group_name FROM matches
+             WHERE tournament_id = $1 AND group_name LIKE $2
+             ORDER BY group_name`,
+          [tournamentId, `${category}|${BALANCED_POOL_TOKEN}|%`],
+        );
+        const poolNames = (poolsRes.rows as Array<{ group_name: string }>)
+          .map((r) => r.group_name)
+          .sort();
+        if (poolNames.length === 0) continue;
+
+        // One classifier per pool (the pool winner), in pool order.
+        const winners: string[] = [];
+        for (const gn of poolNames) {
+          const w = await getGroupWinner(gn);
+          if (w) winners.push(w);
+        }
+        if (winners.length < 2) continue;
+
+        // Clean slate: drop any prior NON-tiered bracket for this category
+        // (2-segment rounds like "Category|semifinal"), leaving tiered
+        // Oro/Plata rows — if any — untouched.
+        await client.query(
+          `DELETE FROM bracket_matches
+             WHERE tournament_id = $1
+               AND round LIKE $2
+               AND round NOT LIKE $3
+               AND round NOT LIKE $4`,
+          [tournamentId, `${category}|%`, `${category}|gold|%`, `${category}|silver|%`],
+        );
+
+        // Lay out a properly-sized single-elimination bracket. First
+        // round is seeded (seed i vs seed N-1-i); later rounds start
+        // empty and fill as winners advance. materialize + advanceWinner
+        // handle byes and propagation for non-tiered rounds already.
+        const N = winners.length;
+        const rounds = roundsForTeamCount(N);
+        for (const round of rounds) {
+          const count = matchCountForRound(round, N);
+          for (let position = 1; position <= count; position++) {
+            let t1: string | null = null;
+            let t2: string | null = null;
+            if (round === rounds[0]) {
+              const s1 = position - 1;
+              const s2 = N - position;
+              if (s1 < winners.length) t1 = winners[s1];
+              if (s2 < winners.length && s2 !== s1) t2 = winners[s2];
+            }
+            await client.query(
+              `INSERT INTO bracket_matches
+                 (tournament_id, round, position, team1_id, team2_id, status)
+               VALUES ($1, $2, $3, $4, $5, 'upcoming')`,
+              [tournamentId, `${category}|${round}`, position, t1, t2],
+            );
+            if (round === rounds[0]) semiFinalsSeeded++;
+          }
+        }
+        continue;
+      }
+
+      // ── Divisions (legacy): Copa Oro + Copa Plata brackets ─────────
       for (const division of ['Oro', 'Plata'] as const) {
         const tier = division === 'Oro' ? 'gold' : 'silver';
 

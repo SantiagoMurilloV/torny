@@ -27,9 +27,15 @@ import type { CreateTournamentDto, UpdateTournamentDto } from './dtos';
 
 export interface SecondaryPhaseResult {
   categoriesProcessed: string[];
+  /** Divisions mode — Oro triangular groups created. */
   oroGroupsCreated: number;
+  /** Divisions mode — Plata triangular groups created. */
   plataGroupsCreated: number;
+  /** Balanced mode — total balanced pools created. */
+  poolsCreated: number;
   matchesCreated: number;
+  /** Which seeding strategy ran. */
+  seedingMode: 'balanced' | 'divisions';
 }
 
 export interface SecondaryPhaseFinalizeResult {

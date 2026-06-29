@@ -24,7 +24,7 @@ const TOURNAMENT_TYPES_FORM = [
       bracketMode: 'divisions' as const,
       goldClassifiersPerGroup: 2,
       silverClassifiersPerGroup: 2,
-      secondaryPhase: { enabled: true, groupsPerDivision: 4, teamsPerGroup: 3, classifiersPerGroup: 1 },
+      secondaryPhase: { enabled: true, groupsPerDivision: 4, teamsPerGroup: 4, classifiersPerGroup: 1, seedingMode: 'balanced' as const },
     },
   },
   {
@@ -392,17 +392,40 @@ export function TournamentFormModal({
                   onChange={(e) =>
                     form.patch({
                       secondaryPhase: e.target.checked
-                        ? { enabled: true, groupsPerDivision: 4, teamsPerGroup: 3, classifiersPerGroup: 1 }
+                        ? { enabled: true, groupsPerDivision: 4, teamsPerGroup: 4, classifiersPerGroup: 1, seedingMode: 'balanced' }
                         : null,
                     })
                   }
                 />
                 <label htmlFor="secondaryPhaseEnabled" className="text-sm font-bold" style={FONT}>
-                  Fase secundaria (triangulares)
+                  Fase secundaria (segunda fase de grupos)
                 </label>
               </div>
               {form.formData.secondaryPhase?.enabled && (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-3">
+                  <SelectField
+                    label="Cómo se arman los grupos *"
+                    value={form.formData.secondaryPhase.seedingMode ?? 'balanced'}
+                    onChange={(v) =>
+                      form.patch({
+                        secondaryPhase: {
+                          ...form.formData.secondaryPhase!,
+                          seedingMode: v as 'balanced' | 'divisions',
+                        },
+                      })
+                    }
+                    options={[
+                      { value: 'balanced', label: 'Pools balanceados (1°+2°+3°+4° de grupos distintos)' },
+                      { value: 'divisions', label: 'Copa Oro + Plata (clásico)' },
+                    ]}
+                  />
+                  <p className="text-xs text-black/50">
+                    {(form.formData.secondaryPhase.seedingMode ?? 'balanced') === 'balanced'
+                      ? 'Cada grupo nuevo mezcla un equipo de cada posición (1°, 2°, 3°…) de grupos distintos. Se crea un grupo por cada grupo de la fase 1.'
+                      : 'Los mejores van a Copa Oro y el resto a Copa Plata, en triangulares separados por nivel.'}
+                  </p>
+                  <div className="grid grid-cols-3 gap-3">
+                  {(form.formData.secondaryPhase.seedingMode ?? 'balanced') === 'divisions' && (
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wide text-black/60 mb-1 block" style={FONT}>
                       Grupos por división
@@ -423,9 +446,12 @@ export function TournamentFormModal({
                       className="w-full px-3 py-2 border border-black/15 rounded-sm focus:outline-none focus:border-spk-red text-sm"
                     />
                   </div>
+                  )}
                   <div>
                     <label className="text-xs font-bold uppercase tracking-wide text-black/60 mb-1 block" style={FONT}>
-                      Equipos por grupo
+                      {(form.formData.secondaryPhase.seedingMode ?? 'balanced') === 'balanced'
+                        ? 'Equipos por grupo (posiciones)'
+                        : 'Equipos por grupo'}
                     </label>
                     <input
                       type="number"
@@ -462,6 +488,7 @@ export function TournamentFormModal({
                       }
                       className="w-full px-3 py-2 border border-black/15 rounded-sm focus:outline-none focus:border-spk-red text-sm"
                     />
+                  </div>
                   </div>
                 </div>
               )}
