@@ -1159,6 +1159,20 @@ export class BracketGenerator {
     // So we bail out here and let finalize be the single source of truth.
     const sp = tournRes.rows[0].secondary_phase as { enabled?: boolean } | null;
     if (sp && sp.enabled) {
+      // Don't SEED the bracket from group standings — finalizeSecondaryPhase
+      // owns the bracket (seeded from pool/triangular winners). BUT we must
+      // still re-materialize: when a semifinal is played, advanceWinner has
+      // already pushed the winner into the next bracket_matches round, and
+      // materialize is what copies that into the FINAL's match row so it
+      // becomes playable. Skipping this entirely left finals stuck with no
+      // teams (the tournament couldn't reach a champion). We deliberately do
+      // NOT run processByesAndAdvance here so a final waiting on its second
+      // semifinalist isn't mistaken for a bye and auto-advanced early.
+      try {
+        await this.materializePendingBracketMatches(tournamentId);
+      } catch (e) {
+        console.warn('[resolveBracketFromStandings] secondary-phase materialize failed:', e);
+      }
       return 0;
     }
 
